@@ -803,15 +803,33 @@ const eff_shadow_weave: AbilityDef = {
 
 // Infuser (canon T4 vitality active): a burst of spirit power and spirit
 // lifesteal. TCG: your Active gains +3 Spirit Power for 2 turns and heals 3.
+// Infuser (canon Vitality T4 active: Spirit Power and spirit lifesteal).
+// Since 2026-11-16 (Patrick, from the items-cover-heroes review: Mo & Krill's
+// and Warden's drains for anyone) the lifesteal is real: Infused, the Active's
+// spirit damage from a skill, spell or ultimate heals it that much (damage.ts).
+// It was a flat heal of 3.
 const eff_infuser: AbilityDef = {
   id: 'eff_infuser', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Infuser — your Active gains +3 Spirit Power and heals 3.',
-  base: 3,
+  prompt: 'Infuser — your Active gains +3 Spirit Power, and its spirit damage heals it.',
+  base: 4,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
     addStatus(G, mine, 'spirit_power', 3, 2);
-    healUnit(G, mine, 3, 'Infuser');
+    addStatus(G, mine, 'infused', 1, 2);
+  },
+};
+
+// Magic Carpet (canon Spirit T4 active: summon a carpet that flies you away).
+// Patrick, 2026-11-16: Vindicta's dodge for anyone. The Active is Flying (the
+// status her Flight gives) for 2 turns.
+const eff_magic_carpet: AbilityDef = {
+  id: 'eff_magic_carpet', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Magic Carpet — your Active flies for 2 turns.',
+  base: 3,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (mine) addStatus(G, mine, 'flying', 1, 2);
   },
 };
 
@@ -2878,7 +2896,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_knockdown, eff_cast_metal_skin,
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
-  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_witchmail, eff_witchmail_proc, eff_refresher, eff_colossus_cast,
+  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_witchmail, eff_witchmail_proc, eff_magic_carpet, eff_refresher, eff_colossus_cast,
   eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,

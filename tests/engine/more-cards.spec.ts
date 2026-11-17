@@ -269,13 +269,28 @@ describe('New active items', () => {
     expect(attackTargets(G, '1')).toEqual([]);
   });
 
-  it('Infuser gives your Active +3 Spirit Power for 2 turns and heals it 3', () => {
+  // Since 2026-11-16 Infuser's heal is Deadlock's spirit lifesteal: Infused, the Active's spirit
+  // damage from a skill, spell or ultimate heals it that much (it was a flat heal of 3).
+  it('Infuser gives your Active +3 Spirit Power for 2 turns, and its spirit hits heal it that much', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 20; haze.hp = 10;
     useItem(G, '0', 'infuser');
     expect(status(haze, 'spirit_power')).toMatchObject({ value: 3, duration: 2 });
-    expect(haze.hp).toBe(13);
+    expect(status(haze, 'infused')).toMatchObject({ duration: 2 });
+    expect(haze.hp).toBe(10); // nothing healed until it deals spirit damage
+    const foe = G.players['1'].active!;
+    foe.hp = foe.hpMax = 30;
+    useItem(G, '0', 'cold_front', foe.iid); // 2 + its Spirit 3 = 5 spirit damage
+    expect(foe.hp).toBe(25);
+    expect(haze.hp).toBe(15);
+  });
+
+  it('Magic Carpet: your Active is Flying for 2 turns (Vindicta\'s dodge, for anyone)', () => {
+    const G = freshReadyGame();
+    const haze = G.players['0'].active!;
+    useItem(G, '0', 'magic_carpet');
+    expect(status(haze, 'flying')).toMatchObject({ duration: 2 });
   });
 
   it('Arctic Blast hits every enemy for 2 + Spirit and stuns only the enemy Active', () => {

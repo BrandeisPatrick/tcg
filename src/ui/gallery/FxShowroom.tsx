@@ -201,6 +201,7 @@ export const GROUPS: Group[] = [
       { label: 'Invulnerable (Unstoppable)', events: [status('y0', 'invulnerable', 1, 1, false)] },
       // The Cube since 2026-11-16: encased (no damage, no status, no action) until its side's next turn.
       { label: 'The Cube (encased)', events: [status('y0', 'cube', 1, 1, false)] },
+      { label: 'Infused (Infuser)', events: [status('y0', 'infused', 1, 2, false)] },
       { label: 'Channeling (Seven)', events: [status('r2', 'casting', 2, 3, false)] },
       { label: '+Heal 2', events: [status('y0', 'healing_boost', 2, 999, false)] },
       { label: 'Healing blocked', events: [status('r0', 'healing_boost_down', 1, 2, true)] },

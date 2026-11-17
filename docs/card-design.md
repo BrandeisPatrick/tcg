@@ -949,6 +949,25 @@ the effects they lack; Patrick picked these. None was simulated.
   segment a stack, with no number, as Djinn's Mark's now does. Worn 4 turns:
   about 2.8 swings, so 0.93 bursts × (4 + about 3 Bullet Power) = **6.5**, in
   its band (6–12). (It was Bleed 2 a swing, stacking to 3.)
+- **Items carry the heroes' mechanics** (Patrick, 2026-11-16: "items should
+  cover the heroes' utility … so if we don't pick that hero we can still build
+  that direction"). From the review of every hero kit against the items:
+  - **Infuser** (Vitality T4 spell, 4; it was 3): "Your Active gains +3 Spirit
+    Power for 2 turns, and its spirit damage in those turns heals it that
+    much." Canon: Spirit Power and spirit lifesteal. Mo & Krill's and Warden's
+    drains, for anyone. The Infused status heals the Active the spirit damage
+    its skill, spell or ultimate deals. One play: +3 Spirit 3 × 0.7 × 2 = 4.2;
+    about 7 healed in 2 turns at an aimed heal's 0.8 × 0.5 = 2.8 → 7.0, under
+    half its 16, so it prints 4 (its value ÷ 2, rounded up). It was a flat heal
+    of 3.
+  - **Magic Carpet** (Spirit T4 spell, 3, new): "Your Active is Flying for 2
+    turns." Canon: summon a carpet and fly away. Vindicta's Flight for anyone:
+    1 hit in 3 on it misses, and its attacks add 1 spirit damage plus its
+    Spirit. One play: a third of about 2 hits a rival turn of 3.5 over 2 turns,
+    4.7 prevented × 0.5 = 2.3; 2 × 0.85 swings × 2 turns = 3.4 → 5.7, so it
+    prints 3.
+  - **Not yet** (Patrick): Close Quarters for a bonus on low-HP targets
+    (Drifter's Bloodscent, Haze's Fixation).
 - **Next to on the board** (Mystic Expansion): the board as it is drawn. A
   side's bench is a row of three slots; its Active stands in the lane in the
   column of one of them (the human seat's under its bench slot 2, the other

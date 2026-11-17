@@ -70,6 +70,8 @@ export const STATUSES: StatusDef[] = [
   // made a hero untouchable (Unstoppable, Prism Blast) give both.
   { id: 'unstoppable',   title: 'Unstoppable',   desc: "Can't be stunned, put to sleep, rooted, silenced or disarmed. Cleanses them when it lands.", hvalue: 2 },
   { id: 'invulnerable',  title: 'Invulnerable',  desc: 'Takes no damage.',                                         hvalue: 2 },
+  // Infuser (2026-11-16): Deadlock's spirit lifesteal, on the hero's own spirit hits.
+  { id: 'infused',       title: 'Infused',       desc: 'The spirit damage its skill, spell or ultimate deals heals it that much.', hvalue: 2 },
   // The Cube (Viscous, 2026-11-16): encased until its side's next turn.
   { id: 'cube',          title: 'Cube',          desc: 'Encased until your next turn: takes no damage and gains no status, and cannot attack, Retreat or use abilities.', hvalue: 2, blocks: ['attack', 'skill', 'pulse', 'move'] },
   { id: 'healing_boost', title: 'Healing Boost', desc: '+<value> to all healing received.',                           hvalue:  1 },
