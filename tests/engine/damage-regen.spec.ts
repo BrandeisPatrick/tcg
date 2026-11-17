@@ -275,7 +275,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     expect(drifter.hp).toBe(drifter.hpMax - 3);
   });
 
-  it('Kelvin Frost Grenade (ally heal half)', () => {
+  it('Kelvin Frost Grenade (its heal on Kelvin)', () => {
     const G = freshG();
     const kelvin = G.players['0'].active!;
     const enemy = G.players['1'].active!;
@@ -283,8 +283,8 @@ describe('heal sources: all respect Healing Blocked', () => {
     addStatus(G, kelvin, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['skill_kelvin'].run(G, { movingPlayer: '0' }, { source: kelvin, target: enemy });
     expect(kelvin.hp).toBe(kelvin.hpMax - 3); // heal blocked
-    // damage still went through though (V1: 1 spirit dmg base)
-    expect(enemy.hp).toBe(enemy.hpMax - 1);
+    // the damage still goes through: {sp:3}, 3 at Spirit 0
+    expect(enemy.hp).toBe(enemy.hpMax - 3);
   });
 
   it('Dynamo Rejuvenating Aurora (ally skill heal)', () => {

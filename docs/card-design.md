@@ -495,7 +495,9 @@ Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
 - **The four skills' worth**, by the rates above: Serrated Knives 1 + Bleed 1 ×
   2 turns × 0.75 = 2.5; Lightning Ball 1 × 3.2 enemies = 3.2; Frost Grenade
   3.2 + a team heal of 1 × 4 heroes × 0.5 × 0.4 = 4.0; Kinetic Pulse 3.2 + a
-  Disarm 1.0 = 4.2.
+  Disarm 1.0 = 4.2. (Since 2026-11-17 Frost Grenade is 3✦ on the enemy Active
+  and a heal of 3✦ on Kelvin, 3.75 (hero-design.md, Kelvin): the mean moves
+  little and the prices stand.)
 - **Bands.** Tier 1 is 1.5–3 and Extra Charge sits at its top; tier 3 is 6–12
   and Rapid Recharge sits at its bottom. Both are worth nothing on a hero
   whose skill holds no charges, as in Deadlock, so neither is given more.

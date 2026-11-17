@@ -8,8 +8,13 @@
  * - Cultist Sacrifice: "you play it, and you get a burst of souls next turn."
  * (Silence Wave and Vortex Web are in control-spells.spec and new-cards.spec.)
  */
-import { describe, it, expect } from 'vitest';
-import { itemCard } from '@/cards';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
+import { CARDS_BY_ID, itemCard } from '@/cards';
+import type { HeroCard } from '@/engine/types';
+import type { HeroAbilityDef } from '@/abilities';
+import { registerAbilities } from '@/engine/registry';
+import { liveBoardCards, otherPlayer } from '@/engine/query';
+import { damageUnit } from '@/engine/damage';
 import { INVALID, perform } from '@/engine/engine';
 import { beginTurn } from '@/engine/actions/turn';
 import { laneIncome } from '@/engine/bank';
@@ -19,6 +24,22 @@ import { LANE_INCOME } from '@/engine/constants';
 import { freshReadyGame, giveCard, giveItem, makeHero } from './_helpers';
 
 /** P0's Active made Lady Geist (Essence Bomb: 4 spirit to the enemy Active, Spirit 0), every enemy tough. */
+/** A throwaway hero whose one skill hits every enemy for 1: the roster has none since 2026-11-17. */
+const AREA_HERO = 'hero_test_area';
+const AREA_SKILL: HeroAbilityDef = {
+  id: 'test_skill_area', trigger: 'activate', target: 'noTarget', name: 'Area', text: 'Deal 1 spirit damage to every enemy.',
+  run: (G, ctx) => { for (const c of liveBoardCards(G.players[otherPlayer(ctx.movingPlayer)])) damageUnit(G, c, 1, 'spirit'); },
+};
+beforeAll(() => {
+  registerAbilities([AREA_SKILL]);
+  CARDS_BY_ID[AREA_HERO] = {
+    id: AREA_HERO, name: 'Area', type: 'hero', rarity: 3, atk: 1, hp: 6, growth: { atk: 0, hp: 1, spirit: 0 }, retreat: 1,
+    profile: { role: 'Support', mix: { tank: 1, damage: 1, control: 1, support: 1 }, reach: 'many', curve: 'mid' },
+    skills: [AREA_SKILL.id], signature: ['extra_spirit', 'mystic_burst'],
+  } as HeroCard;
+});
+afterAll(() => { delete CARDS_BY_ID[AREA_HERO]; });
+
 function geist() {
   const G = freshReadyGame();
   const me = G.players['0'];
@@ -68,16 +89,27 @@ describe('Mystic Expansion and Greater Expansion', () => {
   });
 
   it('only a skill that hit one enemy: an area skill is not widened', () => {
+    // No skill of the roster hits every enemy since 2026-11-17 (Lash's Ground Strike, then
+    // Kelvin's Frost Grenade, came to land on the enemy Active alone): a throwaway one stands in.
     const G = freshReadyGame();
-    // Kelvin's Frost Grenade, 1 to every enemy. (Lash's Ground Strike was the area skill
-    // here until 2026-11-17; it now lands on the enemy Active alone.)
+    const caster = G.players['0'].active = makeHero(AREA_HERO, '0', 'active', 0);
+    giveItem(G, caster, 'greater_expansion');
+    const enemy = G.players['1'];
+    const foes = [enemy.active!, ...enemy.bench.filter((b) => !!b)] as NonNullable<typeof enemy.active>[];
+    for (const f of foes) f.hp = f.hpMax = 30;
+    expect(perform(G, '0', { type: 'useSkill', heroIid: caster.iid, skillId: AREA_SKILL.id })).not.toBe(INVALID);
+    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 1); // its 1 each, no more
+  });
+
+  it('Frost Grenade hits the enemy Active alone, so Greater Expansion carries it to every enemy', () => {
+    const G = freshReadyGame();
     const kelvin = G.players['0'].active = makeHero('hero_kelvin', '0', 'active', 0);
     giveItem(G, kelvin, 'greater_expansion');
     const enemy = G.players['1'];
     const foes = [enemy.active!, ...enemy.bench.filter((b) => !!b)] as NonNullable<typeof enemy.active>[];
     for (const f of foes) f.hp = f.hpMax = 30;
-    expect(perform(G, '0', { type: 'useSkill', heroIid: kelvin.iid, skillId: 'skill_kelvin' })).not.toBe(INVALID);
-    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 1); // Frost Grenade's 1 each, no more
+    expect(perform(G, '0', { type: 'useSkill', heroIid: kelvin.iid, skillId: 'skill_kelvin', targetIid: enemy.active!.iid })).not.toBe(INVALID);
+    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 3); // {sp:3}, 3 at Level 1
   });
 
   it('cards: Spirit T1 and T3, one built from the other', () => {

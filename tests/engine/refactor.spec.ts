@@ -54,15 +54,15 @@ describe('Rusted Barrel applies Weaken (reduces enemy ATK)', () => {
 });
 
 describe('Kelvin Frost Grenade — damage + heal', () => {
-  it('damages enemy Active and heals ally Active', () => {
+  it('damages the enemy Active and heals Kelvin the same (Patrick, 2026-11-17)', () => {
     const G = freshG();
     const kelvin = G.players['0'].active!;
     const enemy = G.players['1'].active!;
-    kelvin.hp = kelvin.hpMax - 3;
+    kelvin.hpMax = 10; kelvin.hp = 1;
     const enemyHpBefore = enemy.hp;
     ABILITIES_BY_ID['skill_kelvin'].run(G, { movingPlayer: '0' }, { source: kelvin, target: enemy });
-    expect(enemyHpBefore - enemy.hp).toBe(1); // a flat 1 spirit
-    expect(kelvin.hp).toBe(kelvin.hpMax - 2); // healed {sp:1}: 1 at Spirit 0
+    expect(enemyHpBefore - enemy.hp).toBe(3); // {sp:3}: 3 at Spirit 0
+    expect(kelvin.hp).toBe(1 + 3); // and Kelvin heals the same 3
   });
 });
 

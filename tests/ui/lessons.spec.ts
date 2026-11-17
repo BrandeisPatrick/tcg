@@ -45,12 +45,12 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(lash.hp).toBe(1);
       // Kelvin moves first: the first mover forgoes first strike.
       expect(actionRefusal(state(c).G, '0', { type: 'attack' })).toEqual(NO_ATTACK_ON_TURN_1);
-      // Frost Grenade hits every enemy (no target) and costs no souls: the turn's two stay banked. It holds two charges.
+      // Frost Grenade hits the enemy Active and heals Kelvin, and costs no souls: the turn's two stay banked. It holds two charges.
       expect(kitCost(kelvin)).toBe(0);
       expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);
       expect(kitCharges(kelvin, 'skill_kelvin')).toEqual({ max: 2, left: 2 });
       expect(skillBlocked(state(c).G, '0', kelvin)).toBeNull();
-      if (taught) moves(c).useSkill(kelvin.iid);
+      if (taught) moves(c).useSkill(kelvin.iid, lash.iid);
       else moves(c).endTurn();
       expect(winner(c), taught ? 'the skill' : 'no skill').toBe(taught ? '0' : undefined);
     }

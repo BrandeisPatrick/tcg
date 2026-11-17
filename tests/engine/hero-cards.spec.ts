@@ -262,7 +262,7 @@ describe('a skill costs no souls: it waits, and a charged one holds two uses (Pa
     const me = G.players['0'];
     const kelvin = instance(G, 'hero_kelvin', '0', 'bench', 1);
     me.bench[0] = kelvin;
-    const use: Action = { type: 'useSkill', heroIid: kelvin.iid };
+    const use: Action = { type: 'useSkill', heroIid: kelvin.iid, targetIid: G.players['1'].active!.iid };
     const turn = () => { let pid: PlayerID = nextTurn(G, '0'); pid = nextTurn(G, pid); expect(pid).toBe('0'); };
     expect(kitCharges(kelvin)).toEqual({ max: 2, left: 2 });
     act(G, '0', use);                                                // the first charge

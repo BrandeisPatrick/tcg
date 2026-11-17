@@ -2527,18 +2527,19 @@ const skill_dynamo: HeroAbilityDef = {
   },
 };
 
-// Kelvin — Frost Grenade: chills every enemy and heals his whole team; the
-// heal grows with his Spirit (support 3).
+// Kelvin — Frost Grenade (Patrick, 2026-11-17: "should damage X to active hero
+// and heal self X"): one grenade at the enemy Active, and Kelvin heals the
+// same X. Both grow with his Spirit (counted twice, as a skill's is).
 const skill_kelvin: HeroAbilityDef = {
-  id: 'skill_kelvin', trigger: 'activate', target: 'noTarget', cooldown: 4, charges: 2,
+  id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive', cooldown: 4, charges: 2,
   name: 'Frost Grenade',
-  text: 'Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each.',
-  base: 1,
+  text: 'Deal {sp:3} spirit damage to the enemy Active and heal Kelvin {sp:3}.',
+  base: 3,
   scalesSpirit: true,
-  run: (G, ctx, { source }) => {
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, 1, 'spirit'); });
-    const heal = 1 + spi(source);
-    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, heal, 'Frost Grenade');
+  run: (G, _ctx, { source, target }) => {
+    const x = 3 + spi(source);
+    if (target) damageUnit(G, target, x, 'spirit', 'Frost Grenade');
+    if (source) healUnit(G, source, x, 'Frost Grenade');
   },
 };
 

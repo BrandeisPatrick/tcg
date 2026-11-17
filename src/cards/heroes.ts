@@ -98,7 +98,7 @@ export const HEROES: HeroCard[] = [
   {
     id: 'hero_kelvin', name: 'Kelvin', type: 'hero', rarity: 3,
     atk: 1, hp: 6, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
-    profile: { role: 'Support', mix: { tank: 2, damage: 1, control: 2, support: 3 }, reach: 'many', curve: 'mid' },
+    profile: { role: 'Support', mix: { tank: 2, damage: 1, control: 2, support: 3 }, reach: 'both', curve: 'mid' },
     skills: ['skill_kelvin'], ult: 'eff_ult_kelvin',
     signature: ['cold_front', 'knockdown'],
   },

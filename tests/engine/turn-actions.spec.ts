@@ -313,13 +313,18 @@ describe('turn actions: abilities, then the attack', () => {
     const c = readyClient();
     passTurn(c); // → P1, turn 2, past its shop
     bankSouls(c, '1', 5); // Frost Grenade's 3 and Abrams's Retreat of 2
+    // P0's Active stands deep: Frost Grenade's 3 (since 2026-11-17, on the Active) and the
+    // swing must not fell it, or a promotion is owed before the next turn.
+    const s0 = c.getState()!, deep = structuredClone(s0.G) as GameState;
+    deep.players['0'].active!.hp = deep.players['0'].active!.hpMax = 30;
+    (c as unknown as { store: { dispatch: (a: unknown) => void } }).store.dispatch({ type: 'SYNC', state: { ...s0, G: deep } });
     let G = snap(c).G;
     // Kelvin's Frost Grenade (3 souls) puts no crowd control on P0's Active, so
     // nothing but the flags stands between P0 and its attack next turn.
     const kelvin = G.players['1'].bench.find((b) => b?.cardId === 'hero_kelvin')!;
     (c.moves as any).moveHero(1, 2);                                    // a free bench shuffle…
     G = snap(c).G;
-    (c.moves as any).useSkill(kelvin.iid);                              // …a bench skill…
+    (c.moves as any).useSkill(kelvin.iid, G.players['0'].active!.iid); // …a bench skill…
     G = snap(c).G;
     (c.moves as any).moveHero(1, 0);                                    // …the Retreat…
     (c.moves as any).attack();                                          // …and the attack
