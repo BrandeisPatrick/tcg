@@ -126,6 +126,16 @@ export const DeadlockGame: Game<GameState> = {
     discard: ({ G, ctx, playerID, events }, cardIids: string[]) =>
       move({ G, ctx, events }, mover(ctx, playerID), { type: 'discard', cardIids: Array.isArray(cardIids) ? cardIids : [cardIids as unknown as string] }),
 
+    /** The deck draft: the offer `index` of the decks made for the drafted
+     *  heroes (`G.deckDraft`). Made from either seat. The draft's turn holds
+     *  on to the first Active; with none owed it ends now. */
+    chooseDeck: ({ G, ctx, playerID, events }, index: number) => {
+      const r = move({ G, ctx, events }, mover(ctx, playerID), { type: 'chooseDeck', index });
+      if (r === INVALID_MOVE) return r;
+      if (G.turnNumber < 1 && !G.deckDraft && !G.pendingActive) events?.endTurn?.();
+      return undefined;
+    },
+
     /** The opening: the drafted hero from the deck that takes the lane as its
      *  side's first Active. Made from either seat (whose it is comes from the
      *  card). The draft's turn held for the choice (`draftPick`): it ends now,

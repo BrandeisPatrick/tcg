@@ -164,7 +164,7 @@ export interface PlanInput {
  *  come in one batch), or a scripted match's first batch. */
 export function isOpening(events: readonly DeckFx[], input: PlanInput): boolean {
   if (!events.some((e) => e.what === 'shuffle')) return false;
-  if (input.before?.draft || input.before?.pendingActive) return true;
+  if (input.before?.draft || input.before?.deckDraft || input.before?.pendingActive) return true;
   return !input.before && input.after.turnNumber <= 1;
 }
 

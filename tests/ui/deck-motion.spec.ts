@@ -38,8 +38,13 @@ function opening() {
   G.fx = [];
   const picks = { '0': TEST_ROSTERS['0'].slice(0, 4), '1': TEST_ROSTERS['1'].slice(0, 4) };
   openDraftedMatch(G, picks);
-  // The last pick's batch: nothing flies yet (the decks are stocked unseen; the picker is up).
+  // The last pick's batch: nothing flies yet (the decks are stocked unseen; the deck draft is up).
   expect(planDeckMotion(G.fx, { me: '0', before: drafting, after: G })).toBe(EMPTY_PLAN);
+  // The deck draft's answer (2026-11-17): the items join the deck unseen too; the picker is up.
+  const decking = snapshot(G);
+  G.fx = [];
+  expect(perform(G, '0', { type: 'chooseDeck', index: 0 })).not.toBe(INVALID);
+  expect(planDeckMotion(G.fx, { me: '0', before: decking, after: G })).toBe(EMPTY_PLAN);
   const before = snapshot(G);
   const chosen = G.players['0'].deck.find((c) => CARDS_BY_ID[c.cardId]?.type === 'hero')!;
   expect(perform(G, '0', { type: 'chooseActive', cardIid: chosen.iid })).not.toBe(INVALID);

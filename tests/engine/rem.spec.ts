@@ -45,6 +45,9 @@ function draftedWithRem(): GameState {
   for (const id of ['hero_rem', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_lash', 'hero_kelvin', 'hero_seven', 'hero_paige']) {
     client.moves.draftPick(id);
   }
+  // The deck draft (2026-11-17): the heroes' builds.
+  const owed = (client.getState()!.G as GameState).deckDraft!;
+  client.moves.chooseDeck(owed.offers.findIndex((o) => o.id === 'builds'));
   const G = structuredClone(client.getState()!.G) as GameState;
   client.stop();
   return G;

@@ -24,6 +24,7 @@ import { DeckPile, DiscardPile } from './board/CardPiles';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { DraftOverlay } from './overlays/DraftOverlay';
+import { DeckDraftOverlay } from './overlays/DeckDraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
@@ -457,6 +458,7 @@ export function Board(props: BoardProps<GameState>) {
   // to answer too, unless auto-play is driving their seat.
   const aiHolds = !!ctx.gameover || !aiControlled || !!combatPlan || G.action?.state === 'begin'
     || (G.pendingPromotion === me && !autoPlay)
+    || (G.deckDraft?.pid === me && !autoPlay)
     || (G.pendingActive === me && !autoPlay)
     || (G.pendingDiscard?.pid === me && !autoPlay)
     || (prompt?.pid === me && !autoPlay);
@@ -547,7 +549,7 @@ export function Board(props: BoardProps<GameState>) {
    *  owed — who steps up for a fallen Active (its prompt may be waiting out the
    *  knockout), the first Active, a draw card's discard. */
   const actionLocked = G.action?.state === 'begin' || !!combatPlan || G.pendingPromotion === me
-    || !!G.pendingActive || !!G.pendingDiscard || !!prompt;
+    || !!G.deckDraft || !!G.pendingActive || !!G.pendingDiscard || !!prompt;
   /** The turn button shows as working: locked, or holding a queued press. */
   const turnBusy = isMyTurn && (actionLocked || queuedEndRef.current);
   const pressTurnButton = () => { setPending(null); endTurn(); };
@@ -845,6 +847,18 @@ export function Board(props: BoardProps<GameState>) {
     );
   }
 
+  // The deck draft, next (2026-11-17): the decks offered for your drafted
+  // heroes, on a screen of its own before the table.
+  if (G.deckDraft?.pid === me && !autoPlay) {
+    return (
+      <DeckDraftOverlay
+        heroes={G.players[me].deck.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero').map((c) => c.cardId)}
+        offers={G.deckDraft.offers}
+        onPick={(index) => (moves as any).chooseDeck(index)}
+      />
+    );
+  }
+
   // An equipped item's chip previews the item (CardPreview, centre screen).
   // Under a pointer it is a peek that leaves with the pointer; on a phone
   // there is no pointer to leave, so the tap opens the held preview, which
@@ -1126,7 +1140,7 @@ export function Board(props: BoardProps<GameState>) {
         </div>
 
         {/* "Your turn" / "Rival's turn", as a turn begins. */}
-        <TurnBanner turn={G.turnNumber} isMyTurn={isMyTurn} enabled={!G.draft && !ctx.gameover && !G.pendingActive} hold={G.action?.state === 'begin'} />
+        <TurnBanner turn={G.turnNumber} isMyTurn={isMyTurn} enabled={!G.draft && !G.deckDraft && !ctx.gameover && !G.pendingActive} hold={G.action?.state === 'begin'} />
 
         <AnimatePresence>
           {pending && (
@@ -1404,7 +1418,7 @@ export function Board(props: BoardProps<GameState>) {
           targeting={!!pending}
           attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
-          choosing={G.pendingDiscard?.pid === me || G.pendingActive === me || prompt?.pid === me || pending?.kind === 'placeHero'}
+          choosing={G.pendingDiscard?.pid === me || G.deckDraft?.pid === me || G.pendingActive === me || prompt?.pid === me || pending?.kind === 'placeHero'}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}

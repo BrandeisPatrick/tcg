@@ -629,6 +629,27 @@ export interface DraftState {
   picks: { '0': CardId[]; '1': CardId[] };        // per-player picks in pick order
 }
 
+/** A deck offered in the deck draft (cards/deckOffers.ts). */
+export interface DeckOffer {
+  /** `builds`, `own`, or the ready deck's id. */
+  id: string;
+  name: string;
+  /** One line: how it plays. */
+  blurb: string;
+  /** Its 16 items. */
+  items: CardId[];
+  /** The drafted heroes it was made for (a ready deck's squad, the ones drafted). */
+  madeFor: CardId[];
+  /** One line: why it is offered for these heroes. */
+  why: string;
+}
+
+/** The deck draft owed by `pid`: the decks offered for its drafted heroes. */
+export interface DeckDraft {
+  pid: PlayerID;
+  offers: DeckOffer[];
+}
+
 /** The counters that name things (see ids.ts). They live in G so a game is
  *  its whole state: a simulation on a clone counts on its own copy. */
 export interface Counters {
@@ -729,6 +750,12 @@ export interface GameState {
    *  so a chain (an answer to an answer, the newest resolving first) can push
    *  onto it later. Absent when nothing is owed. */
   triggers?: PendingTrigger[];
+  /** The deck draft (Patrick, 2026-11-17): the hero draft is over and the
+   *  human seat picks its deck from the offers made for its drafted heroes
+   *  (cards/deckOffers.ts). Only `chooseDeck` is legal, for that seat, until it
+   *  does; then the opening goes on (`pendingActive`). AI seats bring the deck
+   *  of their heroes' builds at once. Absent when nothing is owed. */
+  deckDraft?: DeckDraft;
   /** The human seat has not yet put its first Active in the lane: the match's
    *  opening (after the opening hand is dealt). Only `chooseActive` is legal,
    *  for that seat, from either seat, until it does. AI seats choose at once. */

@@ -1,9 +1,10 @@
 /**
- * Ready decks — the Loadout's first row: five decks made to be picked and
- * played as they are (cards/readyDecks.ts), each a squad of three and its 16
- * items. "Use deck" saves both: the squad the draft hands you first and the
- * deck every match deals. When that would replace picks or a deck of your
- * own, the button asks once more before it does.
+ * Ready decks — the Loadout's first row: the decks made to be played as they
+ * are (cards/readyDecks.ts), each 16 items and the heroes it was made for.
+ * Since 2026-11-17 a deck brings no heroes: the draft does, and the deck
+ * draft after it offers the ready decks that fit them. "Use deck" saves the
+ * items as your deck, which the deck draft offers too. When that would
+ * replace a deck of your own, the button asks once more before it does.
  */
 import { useEffect, useState } from 'react';
 import { SQUAD_SIZE } from '@/engine/constants';
@@ -19,9 +20,9 @@ import { PosterButton } from '../chrome';
 export const READY_DECKS_LABEL = 'Ready decks';
 
 export function ReadyDecks({ inUse, guarded, onUse, compact }: {
-  /** The ready deck the saved squad and deck are, if they are one. */
+  /** The ready deck the saved deck is, if it is one. */
   inUse: ReadyDeck | undefined;
-  /** True when using a deck would replace picks or a deck the player made. */
+  /** True when using a deck would replace a deck the player made. */
   guarded: boolean;
   onUse: (deck: ReadyDeck) => void;
   compact: boolean;
@@ -85,11 +86,11 @@ export function ReadyDecks({ inUse, guarded, onUse, compact }: {
               {deck.heroes.map((h) => <Portrait key={h} heroId={h} />)}
             </div>
             <p style={{ ...text.label, margin: 0, fontSize: 10, letterSpacing: '0.08em', color: poster.inkDim, lineHeight: 1.3 }}>
-              {deck.heroes.map((h) => cardName(h)).join(' · ')}
+              Made for {deck.heroes.map((h) => cardName(h)).join(' · ')}
             </p>
 
             <p style={{ ...text.body, margin: 0, flex: 1, fontSize: 12.5, lineHeight: 1.35, color: poster.inkSoft }}>
-              {asking ? 'This replaces your squad and your deck.' : deck.blurb}
+              {asking ? 'This replaces your deck.' : deck.blurb}
             </p>
 
             <PosterButton
@@ -97,7 +98,7 @@ export function ReadyDecks({ inUse, guarded, onUse, compact }: {
               size="sm"
               disabled={on}
               onClick={() => press(deck)}
-              ariaLabel={on ? `${deck.name} is your deck` : asking ? `Replace your squad and deck with ${deck.name}` : `Use the ready deck ${deck.name}`}
+              ariaLabel={on ? `${deck.name} is your deck` : asking ? `Replace your deck with ${deck.name}` : `Use the ready deck ${deck.name}`}
               style={{ width: '100%', padding: '9px 8px', letterSpacing: '0.16em' }}
             >
               {on ? 'In use' : asking ? 'Replace mine' : 'Use deck'}

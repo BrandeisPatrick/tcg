@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { READY_DECKS, readyDeckInUse } from '@/cards/readyDecks';
+import { DECK_OFFERS, deckOffers, readyDeckFit } from '@/cards/deckOffers';
+import { defaultBuild } from '@/cards/builds';
+import type { CardId } from '@/engine/types';
 import { copyCounts, deckProblem, evolvesFrom } from '@/cards/decks';
 import { CARDS_BY_ID, HEROES, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
@@ -73,11 +76,40 @@ describe('ready decks', () => {
     expect(d.items).toEqual(expect.arrayContaining(['bullet_resist_shredder', 'alchemical_fire', 'spirit_strike', 'spirit_shredder']));
   });
 
-  it('readyDeckInUse names the deck a squad and a deck match exactly, in any item order', () => {
+  it('readyDeckInUse names the deck a saved deck is, in any item order; heroes play no part (2026-11-17)', () => {
     const d = READY_DECKS[1];
-    expect(readyDeckInUse(d.heroes, [...d.items].reverse())).toBe(d);
-    expect(readyDeckInUse(d.heroes, d.items.slice(1))).toBeUndefined();                 // a card short
-    expect(readyDeckInUse([d.heroes[1], d.heroes[0], d.heroes[2]], d.items)).toBeUndefined(); // another order
-    expect(readyDeckInUse([null, null, null], [])).toBeUndefined();
+    expect(readyDeckInUse([...d.items].reverse())).toBe(d);
+    expect(readyDeckInUse(d.items.slice(1))).toBeUndefined();                 // a card short
+    expect(readyDeckInUse([])).toBeUndefined();
+  });
+});
+
+// The deck draft's offers (cards/deckOffers.ts, 2026-11-17): a deck no longer
+// comes with heroes; the draft offers the decks that fit the drafted ones.
+describe('deck offers', () => {
+  const offerIds = (heroes: CardId[], own?: CardId[]) => deckOffers(heroes, heroes.map(defaultBuild), own).map((o) => o.id);
+
+  it('the two best-fitting ready decks, best first, then the heroes\' builds; a legal saved deck beside them', () => {
+    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'])).toEqual(['crossfire', expect.any(String), 'builds']);
+    expect(offerIds(['hero_graves', 'hero_abrams', 'hero_rem'])[0]).toBe('graveyard');
+    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'], [...READY_DECKS[0].items])).toHaveLength(DECK_OFFERS + 1);
+    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'], ['extra_spirit'])).toHaveLength(DECK_OFFERS); // not a legal deck
+  });
+
+  it('says why: the drafted heroes a ready deck was made for, by name', () => {
+    const [first] = deckOffers(['hero_haze', 'hero_mirage', 'hero_kelvin'], [[], [], []]);
+    expect(first.madeFor).toEqual(['hero_haze', 'hero_mirage', 'hero_kelvin']);
+    expect(first.why).toBe('Made for Haze, Mirage and Kelvin');
+  });
+
+  it('a gun team leans to Weapon decks, a spirit team to Spirit ones, when no deck was made for its heroes', () => {
+    const guns = READY_DECKS.find((d) => d.id === 'spray')!;
+    const spirit = READY_DECKS.find((d) => d.id === 'storm')!;
+    // Two teams no ready deck names, read by their growth alone.
+    const gunTeam: CardId[] = ['hero_drifter', 'hero_vindicta'];
+    const spiritTeam: CardId[] = ['hero_lady_geist', 'hero_sinclair'];
+    const fitNoNames = (d: typeof guns, team: CardId[]) => readyDeckFit({ ...d, heroes: ['x', 'y', 'z'] as never }, team, []);
+    expect(fitNoNames(guns, gunTeam)).toBeGreaterThan(fitNoNames(spirit, gunTeam));
+    expect(fitNoNames(spirit, spiritTeam)).toBeGreaterThan(fitNoNames(guns, spiritTeam));
   });
 });

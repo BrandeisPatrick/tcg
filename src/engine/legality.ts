@@ -477,6 +477,15 @@ export function chooseActiveBlocked(G: GameState, cardIid: string): ChooseActive
   return null;
 }
 
+/** Why the deck draft's offer `index` cannot be taken now, or null when it
+ *  can: the deck draft is owed (`G.deckDraft`) and `index` names one of its
+ *  offers. Either seat may make it, like the opening's Active. */
+export function chooseDeckBlocked(G: GameState, index: number): 'notOwed' | 'noOffer' | null {
+  if (!G.deckDraft) return 'notOwed';
+  if (!Number.isInteger(index) || index < 0 || index >= G.deckDraft.offers.length) return 'noOffer';
+  return null;
+}
+
 export type DiscardBlock = 'notOwed' | 'none' | 'tooMany' | 'repeat' | 'notInHand';
 
 /** Why `pid` cannot discard the hand cards `cardIids` now, or null when it
@@ -590,7 +599,8 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
  * also answer the looser "is there some target" when it is left off).
  *
  * Owed choices come first, in this order, and while one is owed it is the only
- * legal action: the opening's first Active (`G.pendingActive`: `chooseActive`
+ * legal action: the deck draft (`G.deckDraft`: `chooseDeck`, from either
+ * seat); the opening's first Active (`G.pendingActive`: `chooseActive`
  * for that seat's hand, made from either seat); a trigger prompt (`G.triggers`:
  * `useTrigger` one of its offers or `passTrigger`, made from either seat, on
  * either player's turn); a promotion (`G.pendingPromotion`:
@@ -602,6 +612,8 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
  */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
+  if (G.deckDraft) return a.type === 'chooseDeck' ? chooseDeckBlocked(G, a.index) : 'deckOwed';
+  if (a.type === 'chooseDeck') return chooseDeckBlocked(G, a.index);
   if (G.pendingActive) return a.type === 'chooseActive' ? chooseActiveBlocked(G, a.cardIid) : 'activeOwed';
   if (a.type === 'chooseActive') return chooseActiveBlocked(G, a.cardIid);
   // A trigger prompt owed (prompts.ts) is answered before anything else, from either seat.
@@ -669,6 +681,10 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const out: Action[] = [];
   const offer = (a: Action) => { if (blocked(G, pid, a) === null) out.push(a); };
 
+  if (G.deckDraft) {
+    G.deckDraft.offers.forEach((_, index) => offer({ type: 'chooseDeck', index }));
+    return out;
+  }
   if (G.pendingActive) {
     for (const c of openingCandidates(G, G.pendingActive)) offer({ type: 'chooseActive', cardIid: c.iid });
     return out;

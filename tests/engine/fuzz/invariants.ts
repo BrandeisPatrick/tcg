@@ -618,7 +618,8 @@ export function collectTransitionViolations(
     if (after.G !== before.G) add('rejected-move-changed-state', move.name, `a rejected ${move.name} replaced G`);
     return out;
   }
-  if (before.G.draft || after.G.draft) return out;
+  // The deck draft (2026-11-17) is the draft's too: its answer brings the side's items in.
+  if (before.G.draft || after.G.draft || before.G.deckDraft || after.G.deckDraft) return out;
 
   const args = move.args;
   const mover = before.ctx.currentPlayer as PlayerID;

@@ -11,7 +11,8 @@ import { makeInstance } from '../instances';
 import { pushLog } from '../log';
 import { otherPlayer, ultimateCard, ultWait } from '../query';
 import { ownTurn } from '../rounds';
-import { dealOpeningHand, drawCards, fillDeck, shuffleDeck, sideDeckIds, stockDeck } from '../deck';
+import { buildOf, dealOpeningHand, drawCards, fillDeck, shuffleDeck, sideDeckIds, stockDeck } from '../deck';
+import { deckOffers } from '@/cards/deckOffers';
 import { newRecord, newTrack } from '../map';
 import { newSeed } from '../rng';
 import { BOSS_SPAWN_ROUND, MID_BOSS_ENABLED, OPENING_DRAW, OPENING_HAND, SOULS_START } from '../constants';
@@ -233,22 +234,43 @@ export function armUltWaits(G: GameState, firstTurn: number) {
 
 /**
  * The drafted match's opening, as the last pick lands: each side's deck is
- * stocked with its items (`sideDeckIds`: the human seat's saved deck, else
- * one made from its heroes' builds) and its three drafted heroes, unshuffled
- * and unseen. The human seat is asked for its first Active from among its
- * drafted heroes (`G.pendingActive`, answered by `chooseActive`); with no
- * human seat the AI's picks are made at once and the opening finishes here
+ * stocked with its three drafted heroes, unshuffled and unseen, and an AI
+ * seat's with its items too (`sideDeckIds`: the deck of its heroes' builds).
+ * The human seat then drafts its deck (Patrick, 2026-11-17: "we draft hero
+ * and then draft deck"): the decks offered for its heroes (`deckOffers`,
+ * `G.deckDraft`, answered by `chooseDeck`), and after it its first Active
+ * from among its drafted heroes (`G.pendingActive`, answered by
+ * `chooseActive`). With no human seat the opening finishes here
  * (`finishOpening`: the AI's pick, the shuffles, the deal of OPENING_DRAW).
  * Nothing else is on the board.
  */
 export function openDraftedMatch(G: GameState, picks: Record<PlayerID, CardId[]>) {
+  const human = G.humanSeat;
   for (const pid of ['0', '1'] as PlayerID[]) {
     G.players[pid] = makeEmptyPlayer(pid);
-    stockDeck(G, pid, [...sideDeckIds(G, pid, picks[pid]), ...picks[pid]]);
+    // The human seat drafts its deck next (`G.deckDraft`): its heroes go in
+    // now, its items when it has picked them (`chooseDeck`).
+    stockDeck(G, pid, [...(pid === human ? [] : sideDeckIds(G, pid, picks[pid])), ...picks[pid]]);
   }
   armUltWaits(G, 1);
-  const human = G.humanSeat;
-  if (human && openingPick(G.players[human])) G.pendingActive = human;
+  if (human) {
+    const builds = picks[human].map((h) => buildOf(G, human, h));
+    G.deckDraft = { pid: human, offers: deckOffers(picks[human], builds, G.playerDeck) };
+    return;
+  }
+  finishOpening(G);
+}
+
+/** The deck draft's answer: the offer `index` is `G.deckDraft`'s seat's deck.
+ *  Its items join the drafted heroes in that seat's deck, and the opening goes
+ *  on: the seat's first Active (`G.pendingActive`), or the rest of it. */
+export function chooseDeck(G: GameState, index: number) {
+  const draft = G.deckDraft!;
+  const offer = draft.offers[index];
+  G.deckDraft = undefined;
+  stockDeck(G, draft.pid, offer.items);
+  pushLog(G, `P${draft.pid} drafted the deck ${offer.name}.`);
+  if (openingPick(G.players[draft.pid])) G.pendingActive = draft.pid;
   else finishOpening(G);
 }
 
@@ -397,7 +419,7 @@ export function draftPick(G: GameState, ctx: { currentPlayer: string; turn: numb
     // (no turn's end to run).
     G.draftTurnsOffset = ctx.turn;
     pushLog(G, 'Match begins.');
-    return { endTurn: !G.pendingActive };
+    return { endTurn: !G.deckDraft && !G.pendingActive };
   }
 
   return { endTurn: draft.order[draft.currentIndex] !== ctx.currentPlayer };
