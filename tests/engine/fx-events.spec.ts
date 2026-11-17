@@ -323,8 +323,10 @@ describe('board FX stream — casts and the turn flush', () => {
     expect(fresh[0].kind).toBe('cast');
     expect(fresh[0] as CastFx).toMatchObject({ castKind: 'skill', by: '0', cardId: 'hero_lash', targetIid: undefined });
     expect((fresh[0] as CastFx).iid).toBe(lash.iid);
+    // Grapple (2026-11-17, third pass) only moves him: no hit, no status.
     const hits = fresh.filter((e): e is HitFx => e.kind === 'hit');
-    expect(hits.map((h) => [h.iid, h.type, h.cast])).toEqual([[enemy.iid, 'spirit', 'skill']]); // Ground Strike, on the enemy Active
+    expect(hits).toEqual([]);
+    expect(enemy.hp).toBe(enemy.hpMax);
     expect(fresh.filter((e) => e.kind === 'status')).toEqual([]);
     // seq strictly increases in push order
     for (let i = 1; i < fresh.length; i++) expect(fresh[i].seq).toBeGreaterThan(fresh[i - 1].seq);

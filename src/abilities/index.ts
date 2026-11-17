@@ -53,11 +53,6 @@ export interface AbilityDef {
     // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
     // a promotion off a fallen Active, nor a drag to the front by the rival.
     | 'onBearerStepIn'
-    // A hero's passive: the hero just moved from its bench into its side's
-    // Active slot, by any road — a Retreat, a card's swap, its own skill, a
-    // promotion off a fallen Active, or a drag to the front by the rival
-    // (Lash's Ground Strike, 2026-11-17). Never a hero put in from the hand.
-    | 'onEnterActive'
     // the bearer's skill, ultimate or spell just healed a unit (itself too):
     // `target` is the one healed, `amount` what it got. Never on regen, lifesteal
     // or a worn item's heal, as Deadlock's Healing Tempo says.
@@ -116,11 +111,7 @@ export interface AbilityDef {
    *  payment comes straight off its HP before the skill runs — through no Shield
    *  or resist, setting off no trigger, and never enough to kill. */
   hpCost?: number;
-  /** A hero passive only: the skill it is part of (Lash, 2026-11-17: Ground
-   *  Strike's landing is always on, and is printed in the skill's own row). The
-   *  engine runs it as a passive; the card and the sheet print it only there. */
-  partOf?: string;
-  /** A hero skill only: it is used from the bench (Lash's Ground Strike). Its `aim`
+  /** A hero skill only: it is used from the bench (Lash's Grapple). Its `aim`
    *  is what keeps it there; this says so, for the button's reason. */
   fromBench?: true;
   /** If true, the hero's Spirit adds to the skill's damage/heal/effect magnitude,
@@ -150,6 +141,11 @@ export interface AbilityDef {
    *  at a known hero, the `target` it is aimed at (Fixation reads the stacks
    *  on it). The card face asks with no target. */
   attackBonus?: (self: CardInstance, target?: CardInstance) => { amount: number; label: string } | null;
+  /** Spirit damage the bearer's attack adds this turn, after its bullets (Lash's
+   *  Ground Strike: the turn he steps in from the bench). Read by
+   *  `attackSpiritBonus` for the Attack row, and by the ability's own `run` on
+   *  the swing. 0 or absent: none. */
+  attackSpirit?: (G: GameState, self: CardInstance) => number;
   /** The bearer's basic attack may be aimed at any living enemy hero, not only
    *  the rival Active. Read by `hasReach`; `attackTargets` (legality.ts) builds
    *  the list of who it may swing at. */
@@ -2372,14 +2368,16 @@ const passive_gravestone: HeroAbilityDef = {
   },
 };
 
-// Lash — Ground Strike (Patrick, 2026-11-17: "his skill should just be Ground
-// Strike, which has damage and movement and passive"). One skill, two halves:
-// the movement is the skill (from the bench he leaps into the Active, a free
-// swap his player chose, so it steps in), and the damage is its landing, which
-// is always on: `passive_lash_ground_strike`, printed in this row (`partOf`),
-// lands however he comes in. Control 3 is the swap itself (docs/hero-design.md
-// §4). The leap is open while Lash is on the bench and could take the front:
-// he can step in, nothing roots him, and there is a standing, unrooted Active.
+// Lash (Patrick, 2026-11-17, third pass: "his skill should be Grapple: leap from
+// bench to Active, refresh attack, low cooldown; his attack becomes 1 BP + 3 SP
+// if he moved from the bench to the Active this turn. So he can attack, retreat,
+// leap, attack, retreat."). Grapple is the leap: from the bench he swings into
+// the Active (a free swap his player chose, so it steps in), and his attack is
+// ready again this turn. Ground Strike, his passive, is the slam: the turn he
+// steps in from the bench, by any road, his attacks add {sp:3} spirit damage.
+// Control 3 is the swap itself (docs/hero-design.md §4). The leap is open while
+// Lash is on the bench and could take the front: he can step in, nothing roots
+// him, and there is a standing, unrooted Active to trade with.
 function leapOpen(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
   const ps = G.players[pid];
   const front = ps.active;
@@ -2387,44 +2385,43 @@ function leapOpen(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
     && !isBlocked(hero, 'move') && stepInCandidates(ps).some((b) => b.iid === hero.iid);
 }
 const skill_lash: HeroAbilityDef = {
-  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 3,
-  name: 'Ground Strike',
-  text: 'Lash leaps in from the bench. Whenever he steps in from the bench, he deals {sp:3} spirit damage to the enemy Active.',
-  base: 3,
-  scalesSpirit: true,
+  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 2,
+  name: 'Grapple',
+  text: 'Leap in from the bench; attack again.',
+  base: 2,
   fromBench: true,
   aim: (G, pid, hero) => (leapOpen(G, pid, hero) ? { target: 'noTarget' } : null),
   run: (G, ctx, { source }) => {
     if (!source) return;
     const ps = G.players[ctx.movingPlayer];
     const was = ps.active;
-    if (!leapOpen(G, ctx.movingPlayer, source) || !was) { pushLog(G, 'Ground Strike fizzled.'); return; }
-    pushLog(G, `Ground Strike: ${cardName(source.cardId)} leaps in for ${cardName(was.cardId)}.`);
+    if (!leapOpen(G, ctx.movingPlayer, source) || !was) { pushLog(G, 'Grapple fizzled.'); return; }
+    pushLog(G, `Grapple: ${cardName(source.cardId)} leaps in for ${cardName(was.cardId)}.`);
     swapIntoActive(G, ps, source, { quiet: true });
+    // The attack refreshed: an attack he made this turn no longer counts.
+    if (G.attackers?.includes(source.iid)) {
+      G.attackers = G.attackers.filter((iid) => iid !== source.iid);
+      pushLog(G, `${cardName(source.cardId)} may attack again this turn.`);
+    }
   },
 };
 
-// The landing: Deadlock's slam hits harder the farther he falls; here the fall
-// is the leap in from the bench. Fired by every road from the bench to the
-// Active (`onEnterActive`), so a Retreat or a promotion lands it too.
+// The slam: Deadlock's Ground Strike hits harder the farther he falls; here the
+// fall is the move in from the bench. Read off `steppedInTurn` (every road from
+// the bench marks it), so a Retreat or a promotion counts too. Each swing of
+// that turn adds it, as Flight's spirit does (`status_flying`); a Ricochet
+// bounce is the bullet alone.
 const passive_lash_ground_strike: HeroAbilityDef = {
-  id: 'passive_lash_ground_strike', trigger: 'onEnterActive', target: 'self',
-  partOf: 'skill_lash',
+  id: 'passive_lash_ground_strike', trigger: 'onAttack', target: 'self',
   name: 'Ground Strike',
-  text: 'Whenever Lash steps in from the bench, he deals {sp:3} spirit damage to the enemy Active.',
+  text: 'The turn Lash steps in from the bench, his attacks deal {sp:3} more spirit damage.',
   base: 3,
   scalesSpirit: true,
-  run: (G, _ctx, { source }) => {
-    if (!source || source.zone !== 'active' || source.hp <= 0 || isRespawning(source)) return;
-    const front = standingActive(G, otherPlayer(seatOf(source)));
-    if (!front) return;
-    // His own leap's landing is that skill's hit (Expansion widens it, Mystic
-    // Burst answers it); any other road lands it as his own proc — never inside
-    // a rival's cast (Vortex Web), which would credit them with it.
-    const hit = () => damageUnit(G, front, 3 + spi(source), 'spirit', 'Ground Strike', { source });
-    if (currentCast()?.source === source) hit();
-    else withCast(source, 'proc', hit);
-    resolve(G);
+  attackSpirit: (G, self) => (self.steppedInTurn === G.turnNumber && self.zone === 'active' ? 3 + spi(self) : 0),
+  run: (G, _ctx, { source, target, params }) => {
+    if (!source || !target || params?.bounce || target.hp <= 0 || isRespawning(target)) return;
+    const n = passive_lash_ground_strike.attackSpirit!(G, source);
+    if (n > 0) damageUnit(G, target, n, 'spirit', 'Ground Strike', { source, cast: 'proc' });
   },
 };
 

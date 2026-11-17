@@ -616,7 +616,7 @@ describe('the transition rules fire', () => {
     expect(retreat.check((A) => { A.players['0'].bench[0]!.statuses.push({ id: 'swift', value: 1, duration: 1 }); })).toContain('swift-spent');
   });
   it('an ability arms its wait: a skill its own, an ultimate its size\'s, one ultimate a turn; a locked ultimate is never used', () => {
-    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 3 }; }); // Grapple names 3 (2026-11-17)
+    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 2 }; }); // Grapple names 2 (2026-11-17)
     const lash = skill.before.G.players['0'].bench[1]!.iid;
     expect(moveIds(skill, 'useSkill', [lash])).not.toContain('ability-cooldown');
     const unarmed = pair(() => undefined);

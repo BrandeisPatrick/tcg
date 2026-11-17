@@ -21,11 +21,17 @@ describe('skill icons', () => {
     }
   });
 
-  it('every hero has the one skill or passive the icon is for', () => {
-    // (Lash's landing is a passive printed in his skill's row since 2026-11-17: one row, one icon.)
+  it('every hero has the one skill or passive the icon is for — Lash two (2026-11-17)', () => {
+    // Lash prints two rows (Patrick, 2026-11-17): Grapple, the skill, and Ground Strike, its
+    // landing, a passive. Each row's icon ships (`skillIconSrc(heroId, abilityId)`), and
+    // the two are not the same picture.
+    const TWO_ROWS = new Set(['hero_lash']);
     for (const h of HEROES) {
       const own = heroAbilities(h as never).filter((k: { kind: string }) => k.kind === 'skill' || k.kind === 'passive');
-      expect(own.length, h.id).toBe(1);
+      expect(own.length, h.id).toBe(TWO_ROWS.has(h.id) ? 2 : 1);
+      const icons = own.map((k: { ability: { id: string } }) => skillIconSrc(h.id, k.ability.id));
+      for (const src of icons) expect(existsSync(pub(src)), `${h.id} ${src}`).toBe(true);
+      expect(new Set(icons).size, h.id).toBe(own.length);
     }
   });
 

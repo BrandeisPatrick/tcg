@@ -12,7 +12,7 @@
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { attackBlocked, attackTargets, heroAttacked } from '@/engine/legality';
-import { otherPlayer } from '@/engine/query';
+import { attackSpiritBonus, otherPlayer } from '@/engine/query';
 import { forecastAttack } from '@/engine/forecast';
 import type { PendingPlay } from '../helpers';
 import type { AttackOffer } from '../overlays/HeroDetailSheet';
@@ -33,6 +33,7 @@ export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMy
       : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,
     made: isMyTurn && heroAttacked(G, hero) && G.players[me].active?.iid === hero.iid,
+    spirit: attackSpiritBonus(G, hero) || undefined,
   };
 }
 
