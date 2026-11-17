@@ -127,9 +127,10 @@ describe('turn actions: the attack is a move', () => {
     expect(attackBlocked(G, '0')).toBe('used'); // Haze has swung
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
-    // Grapple (2026-11-17): he swings in for Haze, and Ground Strike lands as he does.
+    // Grapple (2026-11-17): he leaps in for Haze, and may attack this turn.
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
-    expect(rival.hp).toBeLessThan(hpBefore);
+    expect(me.active).toBe(lash);
+    expect(rival.hp).toBe(hpBefore);
     expect(runMove('playCard', G, '0', grit.iid)).not.toBe('INVALID_MOVE');
     expect(runMove('playCard', G, '0', card.iid, haze.iid)).not.toBe('INVALID_MOVE');
     expect(me.hand).toEqual([]); // both were played
@@ -238,7 +239,7 @@ describe('turn actions: abilities, then the attack', () => {
     expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(0);
-    expect([lash.cooldowns?.skill_lash, paige.cooldowns?.skill_paige]).toEqual([3, 3]); // Grapple waits 3 (2026-11-17)
+    expect([lash.cooldowns?.skill_lash, paige.cooldowns?.skill_paige]).toEqual([2, 3]); // Grapple waits 2 (2026-11-17)
     // A new turn's flags, with the waits still running: neither is ready.
     lash.skillUsedThisTurn = false;
     paige.skillUsedThisTurn = false;

@@ -96,8 +96,8 @@ describe('rule: a skill costs no souls; it waits', () => {
     const r = runMove('useSkill', G, '0', hero.iid);
     expect(r).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(3);
-    expect(me.active).toBe(hero); // Grapple (2026-11-17): he swings in from the bench
-    expect(hero.cooldowns?.skill_lash).toBe(3);
+    expect(me.active).toBe(hero); // Grapple (2026-11-17): he leaps in from the bench
+    expect(hero.cooldowns?.skill_lash).toBe(2);
   });
 
   it('useSkill while the skill waits is refused: nothing happens and the hero has not used its skill', () => {

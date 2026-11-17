@@ -629,8 +629,7 @@ export function ultimateCard(abilityId: AbilityId | undefined): UltimateCard | u
  * order, then its passives — each ability with the `name` and `text` it carries.
  * The one way the card face, the hero sheet, the draft, the AI and the tutorial
  * read a hero's kit. An id that names no registered ability, or one without a
- * name and text, is left out (the data tests fail on it); so is a passive that
- * is part of a skill (`partOf`, Lash's Ground Strike): the skill's text says it.
+ * name and text, is left out (the data tests fail on it).
  */
 export function heroAbilities(data: HeroCard): { kind: 'skill' | 'passive'; ability: HeroAbilityDef }[] {
   const named = (a: AbilityDef | undefined): a is HeroAbilityDef => !!a && typeof a.name === 'string' && typeof a.text === 'string';
@@ -638,13 +637,21 @@ export function heroAbilities(data: HeroCard): { kind: 'skill' | 'passive'; abil
   const add = (kind: 'skill' | 'passive', ids: readonly AbilityId[]) => {
     for (const id of ids) {
       const ability = getAbility(id);
-      // A passive that is part of a skill (Lash's landing) prints in that skill's row.
-      if (named(ability) && !ability.partOf) out.push({ kind, ability });
+      if (named(ability)) out.push({ kind, ability });
     }
   };
   add('skill', data.skills);
   add('passive', data.passives ?? []);
   return out;
+}
+
+/** Spirit damage `card`'s attack adds this turn, after its bullets: the sum of
+ *  the `attackSpirit` hooks of what it carries (Lash's Ground Strike, the turn
+ *  he steps in from the bench). What the Attack row prints beside the bullets. */
+export function attackSpiritBonus(G: GameState, card: CardInstance): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) if (ability.attackSpirit) n += ability.attackSpirit(G, card);
+  return n;
 }
 
 /** Damage `card` is about to take, after the pure `incoming` hooks of what it

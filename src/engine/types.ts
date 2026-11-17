@@ -281,6 +281,10 @@ export interface CardInstance {
    * "Lil Helpers" merge's, whose machinery this is.)
    */
   remMergeTurnsLeft?: number;
+  /** The turn number (`G.turnNumber`) of the hero's latest move from its bench
+   *  into the Active slot, by any road (`enteredFromBench`). Lash's Ground
+   *  Strike reads it: his attacks hit harder the turn he steps in. */
+  steppedInTurn?: number;
   remMergeHpBuff?: number;
   /**
    * Own turns left before a fallen hero goes back to its owner's hand. `> 0`
