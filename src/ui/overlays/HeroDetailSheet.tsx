@@ -283,7 +283,7 @@ export function HeroDetailSheet({
           dial={dial} dialMemo={`${card.iid}:${ability.id}`}
           name={ability.name}
           // The skill's own Deadlock icon; its ring keeps the kind's colour.
-          art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
+          art={<img src={skillIconSrc(data.id, ability.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ability.text, kitScale, lineMax)}
           right={pace(ability.id, dial)}
           reason={reason}
@@ -305,7 +305,7 @@ export function HeroDetailSheet({
         <ActionRow
           passive ink={shopInk(kind).ink} mode="quiet" calm={calm}
           name={ability.name}
-          art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
+          art={<img src={skillIconSrc(data.id, ability.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={fullLine(ability.text, kitScale)}
           right={<span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>Passive</span>}
         />

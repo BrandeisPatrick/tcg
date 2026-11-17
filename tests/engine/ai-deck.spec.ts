@@ -28,11 +28,14 @@ import { freshReadyGame, giveCard, giveItem, spendSkill, stackDeck } from './_he
 const ctxFor = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 2 }) as unknown as Ctx;
 
 /** P0's turn (engine turn 2) with `souls` to spend. Vindicta's two snipes are spent (`spendSkill`):
- *  these tests are about the hand and the souls, and a free Assassinate would come first. */
+ *  these tests are about the hand and the souls, and a free Assassinate would come first.
+ *  So is Lash's Grapple (2026-11-17): it swings him in and his free Retreat takes him out
+ *  again, two moves that spend nothing but would stand among the ones these tests count. */
 function turn(souls: number): GameState {
   const G = freshReadyGame();
   G.players['0'].souls = souls;
   spendSkill(G.players['0'].bench[0]!);
+  spendSkill(G.players['0'].bench.find((h) => h?.cardId === 'hero_lash')!);
   return G;
 }
 
@@ -102,7 +105,8 @@ describe('the AI plays its hand', () => {
     // Lash's build opens on Mystic Slow; Haze's does not list it.
     const card = giveCard(G, '0', 'mystic_slow');
     playOut(G);
-    const lash = me.bench.find((h) => h?.cardId === 'hero_lash')!;
+    // (He may have stepped in by then, for his Ground Strike.)
+    const lash = [me.active, ...me.bench].find((h) => h?.cardId === 'hero_lash')!;
     expect(wornItems(lash).map((it) => it.cardId)).toContain('mystic_slow');
     expect(me.hand).not.toContain(card);
   });
@@ -241,8 +245,11 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
       return { G, vindicta, sharp };
     };
     const saving = stage(1);
-    expect(spends(playOut(saving.G))).toEqual([]);
-    expect(saving.G.players['0'].souls).toBe(1);
+    // No card, and the goal is still paid for next turn. A spend that leaves it as
+    // near is no spend against it: with 1 soul and a lane paying 2, Haze's 1-soul
+    // Retreat to bring Lash in for his Ground Strike (2026-11-17) still leaves 2.
+    expect(spends(playOut(saving.G)).filter((a) => a.type === 'playCard')).toEqual([]);
+    expect(saving.G.players['0'].souls + LANE_INCOME).toBeGreaterThanOrEqual(PRICE[3] - PRICE[2]);
     const paid = stage(PRICE[3] - PRICE[2]);
     const made = playOut(paid.G);
     expect(made.find((a) => a.type === 'playCard')).toMatchObject({ type: 'playCard', cardIid: paid.sharp.iid, heroIid: paid.vindicta.iid });

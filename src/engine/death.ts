@@ -14,7 +14,7 @@ import {
   fallPending, findCardOnBoard, freeBenchSlot, isRespawning, isUnit, killPush, laneOpen, otherPlayer, promptOwed, respawnTimer, reviveReady, stepInCandidates,
   unitData,
 } from './query';
-import { fireTriggers } from './triggers';
+import { enteredFromBench, fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { EXP_ON_KILL } from './constants';
 import { leaveActive } from './lane';
@@ -329,4 +329,5 @@ export function promoteFromBench(G: GameState, ps: PlayerState, benchHero: CardI
   }
   const data = CARDS_BY_ID[benchHero.cardId];
   pushLog(G, `P${ps.id} promoted ${data?.name ?? benchHero.cardId} to Active.`);
+  enteredFromBench(G, benchHero);
 }

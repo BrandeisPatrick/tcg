@@ -5,7 +5,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { raiseUnit, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
-  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
+  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBlocked, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
 import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
@@ -53,6 +53,11 @@ export interface AbilityDef {
     // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
     // a promotion off a fallen Active, nor a drag to the front by the rival.
     | 'onBearerStepIn'
+    // A hero's passive: the hero just moved from its bench into its side's
+    // Active slot, by any road — a Retreat, a card's swap, its own skill, a
+    // promotion off a fallen Active, or a drag to the front by the rival
+    // (Lash's Ground Strike, 2026-11-17). Never a hero put in from the hand.
+    | 'onEnterActive'
     // the bearer's skill, ultimate or spell just healed a unit (itself too):
     // `target` is the one healed, `amount` what it got. Never on regen, lifesteal
     // or a worn item's heal, as Deadlock's Healing Tempo says.
@@ -111,6 +116,9 @@ export interface AbilityDef {
    *  payment comes straight off its HP before the skill runs — through no Shield
    *  or resist, setting off no trigger, and never enough to kill. */
   hpCost?: number;
+  /** A hero skill only: it is used from the bench (Lash's Grapple). Its `aim`
+   *  is what keeps it there; this says so, for the button's reason. */
+  fromBench?: true;
   /** If true, the hero's Spirit adds to the skill's damage/heal/effect magnitude,
    *  counted SKILL_SPIRIT_RATE times (`spi`). */
   scalesSpirit?: boolean;
@@ -2360,19 +2368,56 @@ const passive_gravestone: HeroAbilityDef = {
   },
 };
 
-// Lash — Ground Strike: control 3 needs hard control in the skill, so the slam
-// pins the enemy Active (Rooted: it cannot retreat or be swapped).
+// Lash (Patrick, 2026-11-17: "his skill will be jump to Active … and a passive
+// … whenever he enters Active, he deals damage"). Grapple is the jump: from the
+// bench he swings into the Active, a free swap his player chose (it steps in).
+// Control 3 is the swap itself (docs/hero-design.md §4). The landing is Ground
+// Strike, his passive, so it lands however he comes in. Grapple is open while
+// Lash is on the bench and could take the front: he can step in, nothing roots
+// him, and there is a standing, unrooted Active to trade with.
+function grappleOpen(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
+  const ps = G.players[pid];
+  const front = ps.active;
+  return hero.zone === 'bench' && !!front && !isRespawning(front) && !isBlocked(front, 'move')
+    && !isBlocked(hero, 'move') && stepInCandidates(ps).some((b) => b.iid === hero.iid);
+}
 const skill_lash: HeroAbilityDef = {
-  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 4,
-  name: 'Ground Strike',
-  text: 'Deal {sp:1} spirit damage to every enemy. Root the enemy Active 1 turn.',
-  base: 1,
-  scalesSpirit: true,
+  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 3,
+  name: 'Grapple',
+  text: 'Lash swings in from the bench, swapping with your Active.',
+  base: 2,
+  fromBench: true,
+  aim: (G, pid, hero) => (grappleOpen(G, pid, hero) ? { target: 'noTarget' } : null),
   run: (G, ctx, { source }) => {
-    const front = enemyActiveOf(G, ctx.movingPlayer);
-    const dmg = 1 + spi(source);
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
-    if (front) addStatus(G, front, 'rooted', 1, 1);
+    if (!source) return;
+    const ps = G.players[ctx.movingPlayer];
+    const was = ps.active;
+    if (!grappleOpen(G, ctx.movingPlayer, source) || !was) { pushLog(G, 'Grapple fizzled.'); return; }
+    pushLog(G, `Grapple: ${cardName(source.cardId)} swings in for ${cardName(was.cardId)}.`);
+    swapIntoActive(G, ps, source, { quiet: true });
+  },
+};
+
+// Lash — Ground Strike: Deadlock's slam hits harder the farther he falls; here
+// the fall is the jump in from the bench. Fired by every road from the bench to
+// the Active (`onEnterActive`), so a Retreat or a promotion lands it too.
+const passive_lash_ground_strike: HeroAbilityDef = {
+  id: 'passive_lash_ground_strike', trigger: 'onEnterActive', target: 'self',
+  name: 'Ground Strike',
+  text: 'Whenever Lash steps in from the bench, he deals {sp:3} spirit damage to the enemy Active.',
+  base: 3,
+  scalesSpirit: true,
+  run: (G, _ctx, { source }) => {
+    if (!source || source.zone !== 'active' || source.hp <= 0 || isRespawning(source)) return;
+    const front = standingActive(G, otherPlayer(seatOf(source)));
+    if (!front) return;
+    // His own Grapple's landing is that skill's hit (Expansion widens it, Mystic
+    // Burst answers it); any other road lands it as his own proc — never inside
+    // a rival's cast (Vortex Web), which would credit them with it.
+    const hit = () => damageUnit(G, front, 3 + spi(source), 'spirit', 'Ground Strike', { source });
+    if (currentCast()?.source === source) hit();
+    else withCast(source, 'proc', hit);
+    resolve(G);
   },
 };
 
@@ -2943,7 +2988,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   skill_sinclair, skill_silver,
   // ----- Hero passives -----
   passive_abrams_heal, passive_haze_fixation, passive_drifter_bloodscent,
-  passive_mirage_djinns_mark, passive_victor_aura,
+  passive_mirage_djinns_mark, passive_victor_aura, passive_lash_ground_strike,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven, eff_ult_graves,

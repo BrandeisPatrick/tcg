@@ -23,10 +23,17 @@ export const ULT_IMG_BASE = `${BASE}ult/`;
  *  are (`hero_mo_krill` → `mo_krill.webp`). */
 export const SKILL_IMG_BASE = `${BASE}skill/`;
 
+/** The kit abilities that wear an icon of their own, not their hero's: Lash,
+ *  the one hero with a skill and a passive (2026-11-17), whose Grapple wears
+ *  Deadlock's Grapple icon (`lash_grapple.webp`) beside Ground Strike's. */
+const OWN_SKILL_ICON: Record<string, string> = { skill_lash: 'lash_grapple' };
+
 /** The icon of the hero `heroId`'s own skill or passive (Patrick, 2026-11-16:
- *  the in-game icon, not a generic sword, flame or shield). */
-export function skillIconSrc(heroId: string): string {
-  return `${SKILL_IMG_BASE}${heroId.replace(/^hero_/, '')}.webp`;
+ *  the in-game icon, not a generic sword, flame or shield); `abilityId` names
+ *  the row when the hero has two (`OWN_SKILL_ICON`). */
+export function skillIconSrc(heroId: string, abilityId?: string): string {
+  const own = abilityId ? OWN_SKILL_ICON[abilityId] : undefined;
+  return `${SKILL_IMG_BASE}${own ?? heroId.replace(/^hero_/, '')}.webp`;
 }
 
 /** The Attack row's icon (Patrick, 2026-11-16: "Attack needs a better icon

@@ -75,3 +75,12 @@ export function fireTriggers(G: GameState, bearer: CardInstance, trigger: Trigge
   // The "may"s are asked, not run — never as a reaction inside another effect.
   return !reaction && only === undefined && offerTriggers(G, bearer, trigger, firing.prompt);
 }
+
+/** `hero` has just moved from its bench into its side's Active slot, by any
+ *  road (a Retreat, a card's swap, its own skill, a promotion off a fallen
+ *  Active, a drag to the front): its passives that listen for it run (Lash's
+ *  Ground Strike). Its gear's `onBearerStepIn` is the caller's: that one is
+ *  for the moves its player chose. */
+export function enteredFromBench(G: GameState, hero: CardInstance): void {
+  fireTriggers(G, hero, 'onEnterActive', { only: 'passives' });
+}

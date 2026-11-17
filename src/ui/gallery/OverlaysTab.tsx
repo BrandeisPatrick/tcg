@@ -235,7 +235,7 @@ function AbilityDialDemo({ heroId }: { heroId: string }) {
   const inks = { weapon: shopInk('weapon').ink, spirit: shopInk('spirit').ink, vitality: shopInk('vitality').ink };
   const wait = (l: number, full: number, charges?: { left: number; max: number }): DialModel => ({ kind: 'wait', left: l, full, ...(charges ? { charges } : {}) });
   const glyph = (ult = false) => (
-    <img src={ult ? ultIconSrc(heroId) : skillIconSrc(heroId)} alt="" draggable={false} style={{ display: 'block', width: size - (big ? 20 : 10), height: size - (big ? 20 : 10), objectFit: 'contain' }} />
+    <img src={ult ? ultIconSrc(heroId) : skillIconSrc(heroId, HEROES.find((h) => h.id === heroId)?.skills[0])} alt="" draggable={false} style={{ display: 'block', width: size - (big ? 20 : 10), height: size - (big ? 20 : 10), objectFit: 'contain' }} />
   );
   const strips: { title: string; ink: string; ult?: boolean; steps: DialModel[] }[] = [
     { title: 'A skill that waits 3', ink: inks.spirit, steps: [wait(3, 3), wait(2, 3), wait(1, 3), wait(0, 3)] },

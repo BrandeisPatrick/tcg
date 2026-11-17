@@ -41,7 +41,7 @@ after 2 turns, keeping its level (section 7).
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. Since 2026-11-16 a hero's own skill or passive counts its Spirit twice (`{sp:N}` there is N + 2 × Spirit), so a point put into Spirit pays about what a point put into Attack does ([balance-model.md](balance-model.md) §10). |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
-| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15, and Kinetic Pulse until Dynamo's became Rejuvenating Aurora, 2026-11-16): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
+| Kit | Exactly one **skill** or one **passive**, plus an **ultimate** (one exception, Patrick's call: Lash, whose skill and passive are one move, §5). A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15, and Kinetic Pulse until Dynamo's became Rejuvenating Aurora, 2026-11-16): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
 | Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 3 (Patrick, 2026-11-16; it was Level 2). Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
 | Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
@@ -119,6 +119,10 @@ One soul bought about one point of effect, the rate items were priced at; since 
   - While she is a wolf, her card shows her wolf-form art. That is Deadlock's own wolf-form hero card, from the deadlock-api (`images/heroes/werewolf_wolf_card.webp`), not new art.
   - The Lycan Curse icon (`werewolf_lycancurse.webp`) is her ultimate icon, not her wolf art.
   - In Deadlock, dealing damage builds her bloodlust toward the transformation, so this matches the real game.
+- **Lash** (2026-11-17): "his skill will be jump to Active and deal damage … with also a passive. It's part of his skill, but it's also active all the time: whenever he enters Active, he deals damage."
+  - So he is the one hero with a skill **and** a passive. **Grapple** (skill, waits 3) is the jump: "Lash swings in from the bench, swapping with your Active." **Ground Strike** (passive) is the landing: "Whenever Lash steps in from the bench, he deals {sp:3} spirit damage to the enemy Active."
+  - Ground Strike lands by every road from the bench: Grapple, a Retreat, a swap card, stepping up for a fallen Active, even a rival's Vortex Web dragging him out. Not when he is put into the Active from the hand.
+  - Patrick said "+5"; the budget puts the landing at 3 (§8, Lash). It reads 5 or more from Level 2 (Spirit counts twice).
 - **Haze:** Bullet Dance deals her Attack as bullet damage to every enemy. She starts at Attack 1 and grows +3 Attack a level, so the ultimate grows with her.
 - **Shiv:** a damage tank (HP 6, Attack 1, grows +2 Attack a level) who keeps his execute.
 - **Rem** (2026-11-09): Rem can stand in the lane; Tag Along makes her equipment for 2 turns: "Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench."
@@ -371,10 +375,15 @@ HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Lash** · in the game today — peaks mid, many targets; mix tank 1 · damage 2 · control 3 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, waits 4 — **Ground Strike**: Deal 1✦ spirit damage to every enemy. Root the enemy Active 1 turn.
+- Skill, waits 3 — **Grapple**: Lash swings in from the bench, swapping with your Active.
+- Passive — **Ground Strike**: Whenever Lash steps in from the bench, he deals 3✦ spirit damage to the enemy Active.
 - Ultimate, large, waits 8 — **Death Slam**: Deal 3✦ spirit damage to every enemy. Stun each 1 turn.
-- Why: Lash drops from the sky onto the whole enemy line, pins the Active so it can't escape his chase, then lifts and slams their entire team.
+- Why: Lash swings in off the bench and lands on the enemy Active, slips back out (Retreat 0) and does it again, then lifts and slams their entire team.
 - Changed from today: HP 4 to 5 (tank 1); the Vulnerable skill becomes Ground Strike with a root because control 3 needs hard control in the skill. Death Slam now stuns every enemy instead of only the Active, trading some damage for it.
+- **Changed 2026-11-17 (Patrick: the skill is the jump, the landing a passive that is always on; §5).** Ground Strike was a skill that waited 4: 1✦ to every enemy and a root on the Active. It is now his passive, and his skill is Grapple.
+  - **Grapple, 2 points, waits 3.** A swap of two heroes is 2 points (§4), the low end of a 3-turn skill. The swap is his hard control (control 3), so the root goes.
+  - **Ground Strike, 3.** A passive is worth 1–2 points an own turn. Lash comes in about twice in three turns: Grapple, then out by his free Retreat; next turn back in by a Retreat (the Active's price, 1 soul for most), out again the turn after. That is 2 landings in 3 turns. At 3 a landing that is 2 points a turn, the top of the band; Patrick's 5 would be 3.3, past it. Spirit counts twice, so from Level 2 (Spirit 2) a landing is 7.
+  - He gives up reach for it: Ground Strike hit every enemy, the landing hits the Active. His area is Death Slam's.
 
 **Mirage** · in the game today — peaks late, one target; mix tank 1 · damage 2 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +2 Spirit
