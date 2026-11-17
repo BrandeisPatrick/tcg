@@ -21,14 +21,14 @@ describe('a skill counts Spirit twice, an ultimate and a spell once', () => {
     expect(SKILL_SPIRIT_RATE).toBe(2);
   });
 
-  it("a skill: Seven's Static Charge at Spirit 3 deals 1 + 2 × 3", () => {
+  it("a skill: Seven's Static Charge at Spirit 3 deals 2 + 2 × 3", () => {
     const G = freshReadyGame();
     const seven = G.players['0'].active = makeHero('hero_seven', '0', 'active', 0);
     seven.spiritMod = 3;
     const rival = G.players['1'].active!;
     rival.hp = rival.hpMax = 40;
     expect(perform(G, '0', { type: 'useSkill', heroIid: seven.iid, skillId: 'skill_seven', targetIid: rival.iid })).not.toBe(INVALID);
-    expect(rival.hp).toBe(40 - (1 + 2 * 3));
+    expect(rival.hp).toBe(40 - (2 + 2 * 3));
   });
 
   it("an ultimate: Shiv's Killing Blow at Spirit 3 deals 5 + 3", () => {
@@ -57,10 +57,10 @@ describe('a skill counts Spirit twice, an ultimate and a spell once', () => {
 });
 
 describe("Lady Geist's Essence Bomb hits the enemy Active alone", () => {
-  it('aims at the enemy Active, prints {sp:4}, and costs her 2 HP', () => {
+  it('aims at the enemy Active, prints {sp:4}, and costs her 1 HP', () => {
     const bomb = getAbility('skill_lady_geist') as { target: string; text: string; base: number; hpCost: number };
-    expect([bomb.target, bomb.base, bomb.hpCost]).toEqual(['enemyActive', 4, 2]);
-    expect(bomb.text).toBe('Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active.');
+    expect([bomb.target, bomb.base, bomb.hpCost]).toEqual(['enemyActive', 4, 1]);
+    expect(bomb.text).toBe('Lady Geist pays 1 HP: deal {sp:4} spirit damage to the enemy Active.');
   });
 });
 

@@ -106,8 +106,8 @@ describe('Extra Charge: the bearer\'s charged skill holds 1 more charge', () => 
 });
 
 describe('Rapid Recharge: 2 more charges, and each comes back 1 turn sooner', () => {
-  it('Frost Grenade holds 4 and a charge takes 3 turns, not 4; Serrated Knives holds 4 and a charge takes 2, not 3', () => {
-    for (const [heroId, skillId, wait] of [['hero_kelvin', 'skill_kelvin', 4], ['hero_shiv', 'skill_shiv', 3]] as const) {
+  it('Frost Grenade holds 4 and a charge takes 3 turns, not 4; Serrated Knives holds 4 and a charge takes 3, not 4', () => {
+    for (const [heroId, skillId, wait] of [['hero_kelvin', 'skill_kelvin', 4], ['hero_shiv', 'skill_shiv', 4]] as const) {
       const { G, hero, use } = withHero(heroId);
       const ability = resolveSkill(hero)!.ability;
       expect(skillWait(ability, hero), heroId).toBe(wait);
@@ -125,13 +125,15 @@ describe('Rapid Recharge: 2 more charges, and each comes back 1 turn sooner', ()
   it('a charge that comes back starts the next one\'s wait at the shorter length', () => {
     const { G, hero: shiv, use } = withHero('hero_shiv');
     giveItem(G, shiv, 'rapid_recharge');
-    cast(G, use);                                            // 3 left, a wait of 2
+    cast(G, use);                                            // 3 left, a wait of 3 (4 less 1)
     round(G);
-    cast(G, use);                                            // 2 left, the wait at 1
-    expect(shiv.cooldowns?.skill_shiv).toBe(1);
+    cast(G, use);                                            // 2 left, the wait at 2
+    expect(shiv.cooldowns?.skill_shiv).toBe(2);
+    round(G);
     round(G);                                                // one back: 3 left, and 1 still spent
     expect(kitCharges(shiv)).toEqual({ max: 4, left: 3 });
-    expect(shiv.cooldowns?.skill_shiv).toBe(2);
+    expect(shiv.cooldowns?.skill_shiv).toBe(3);
+    round(G);
     round(G);
     round(G);                                                // and the last
     expect(kitCharges(shiv)).toEqual({ max: 4, left: 4 });

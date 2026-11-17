@@ -56,7 +56,7 @@ describe('Rejuvenating Aurora', () => {
 
   it('is Deadlock\'s own name, and the card says the heal grows with Spirit', () => {
     const skill = getAbility('skill_dynamo') as { name?: string; text?: string; charges?: number };
-    expect([skill.name, skill.text, skill.charges]).toEqual(['Rejuvenating Aurora', 'Your heroes heal {sp:5} each.', undefined]);
+    expect([skill.name, skill.text, skill.charges]).toEqual(['Rejuvenating Aurora', 'Your heroes heal {sp:5} each and get +1 Attack for 2 turns.', undefined]);
   });
 });
 
@@ -67,7 +67,8 @@ describe('Healing Tempo', () => {
     haze.hp = haze.hpMax - 3;
     const atk = effectiveAtk(haze);
     expect(perform(G, '0', aurora(dynamo))).not.toBe(INVALID);
-    expect(haze.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 2, duration: 1 }));
+    // Aurora's own +1 for 2 turns merges with it as any repeated status does: the larger value, the longer wait.
+    expect(haze.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 2, duration: 2 }));
     expect(haze.statuses).toContainEqual(expect.objectContaining({ id: 'swift', duration: 1 }));
     expect(effectiveAtk(haze)).toBe(atk + 2);
     // The bearer healed itself too only if it was hurt: Dynamo was at full HP.
@@ -106,7 +107,8 @@ describe('Healing Tempo', () => {
     const other = withDynamo();
     other.haze.hp = other.haze.hpMax - 3;
     expect(perform(other.G, '0', aurora(other.dynamo))).not.toBe(INVALID);
-    expect(other.haze.statuses.some((s) => s.id === 'swift' || s.id === 'weapon_power')).toBe(false);
+    expect(other.haze.statuses.some((s) => s.id === 'swift')).toBe(false);
+    expect(other.haze.statuses.find((s) => s.id === 'weapon_power')?.value).toBe(1); // Aurora's own +1, not the +2
     // A hero at full HP is not healed, so it gets nothing.
     const full = withDynamo();
     giveItem(full.G, full.dynamo, 'healing_tempo');

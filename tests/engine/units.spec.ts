@@ -252,11 +252,11 @@ describe('Graves', () => {
     expect((ult.text ?? '').split(/\s+/).length).toBeLessThanOrEqual(15);
   });
 
-  it('Grasping Hands: 1 + Spirit to the enemy Active, Rooted 1 turn, and 2 Ghouls shuffled into her own deck', () => {
+  it('Grasping Hands: 2 + Spirit to the enemy Active, Rooted 1 turn, and 2 Ghouls shuffled into her own deck', () => {
     const { G, graves, foe } = withGraves();
     stackDeck(G, '0', ['grit', 'cold_front', 'extra_health']);
     act(G, '0', { type: 'useSkill', heroIid: graves.iid, targetIid: foe.iid });
-    expect(foe.hp).toBe(29);
+    expect(foe.hp).toBe(28);
     expect(foe.statuses.find((s) => s.id === 'rooted')).toMatchObject({ duration: 1 });
     const deck = G.players['0'].deck;
     expect(deck).toHaveLength(5);

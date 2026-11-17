@@ -140,7 +140,7 @@ export const STATUSES: StatusDef[] = [
   // Mirage's mark refreshes its full 3-turn timer on every new stack (stack.duration
   // 'reset'); the mark that makes DJINN_CAP detonates them all (his passive).
   { id: 'charged',       title: 'Charged',       desc: 'When this runs out: Stun for 1 turn. Taking it off first stops the Stun.', hvalue: -1 },
-  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + twice Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' }, burst: true },
+  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 6 spirit damage + twice Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' }, burst: true },
   // Toxic Bullets' build-up (2026-11-16): the item's Djinn's Mark, on Bullet Power.
   { id: 'toxin',         title: 'Toxin',         desc: `At ${TOXIN_CAP} Toxins they burst: ${TOXIN_BURST} bullet damage + the attacker's Bullet Power.`, hvalue: -1, stack: { add: true, cap: TOXIN_CAP, duration: 'reset' }, burst: true },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },

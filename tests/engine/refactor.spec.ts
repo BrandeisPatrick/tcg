@@ -61,8 +61,8 @@ describe('Kelvin Frost Grenade — damage + heal', () => {
     kelvin.hpMax = 10; kelvin.hp = 1;
     const enemyHpBefore = enemy.hp;
     ABILITIES_BY_ID['skill_kelvin'].run(G, { movingPlayer: '0' }, { source: kelvin, target: enemy });
-    expect(enemyHpBefore - enemy.hp).toBe(3); // {sp:3}: 3 at Spirit 0
-    expect(kelvin.hp).toBe(1 + 3); // and Kelvin heals the same 3
+    expect(enemyHpBefore - enemy.hp).toBe(2); // {sp:2}: 2 at Spirit 0 (3 until the balance pass)
+    expect(kelvin.hp).toBe(1 + 2); // and Kelvin heals the same 2
   });
 });
 

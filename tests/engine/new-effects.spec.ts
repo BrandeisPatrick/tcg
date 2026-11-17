@@ -109,7 +109,7 @@ describe('Mystic Expansion and Greater Expansion', () => {
     const foes = [enemy.active!, ...enemy.bench.filter((b) => !!b)] as NonNullable<typeof enemy.active>[];
     for (const f of foes) f.hp = f.hpMax = 30;
     expect(perform(G, '0', { type: 'useSkill', heroIid: kelvin.iid, skillId: 'skill_kelvin', targetIid: enemy.active!.iid })).not.toBe(INVALID);
-    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 3); // {sp:3}, 3 at Level 1
+    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 2); // {sp:2}, 2 at Level 1
   });
 
   it('cards: Spirit T1 and T3, one built from the other', () => {

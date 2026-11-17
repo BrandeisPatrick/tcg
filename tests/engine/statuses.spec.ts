@@ -420,7 +420,7 @@ describe('status texts match the rules', () => {
     expect(G.fx.some((e) => e.kind === 'status')).toBe(false);
   });
 
-  it(`Djinn's Mark detonates at ${DJINN_CAP} marks, for 4 + twice Mirage's Spirit, and fades on expiry without going off`, async () => {
+  it(`Djinn's Mark detonates at ${DJINN_CAP} marks, for 6 + twice Mirage's Spirit, and fades on expiry without going off`, async () => {
     const G = freshG();
     const t = G.players['1'].active!;
     t.hp = t.hpMax = 30;
@@ -428,7 +428,7 @@ describe('status texts match the rules', () => {
     tickStartOfTurn(G, G.players['1']);
     expect(t.hp).toBe(30); // no detonation on expiry
     expect(t.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
-    expect(desc('djinns_mark')).toContain(`At ${DJINN_CAP} marks they detonate: 4 spirit damage + twice Mirage's Spirit Power.`);
+    expect(desc('djinns_mark')).toContain(`At ${DJINN_CAP} marks they detonate: 6 spirit damage + twice Mirage's Spirit Power.`);
     // Mirage's swings put the marks on; the one that makes DJINN_CAP sets them all off.
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const mirage = makeHero('hero_mirage', '0', 'active', 0);
@@ -436,7 +436,7 @@ describe('status texts match the rules', () => {
     for (let i = 1; i < DJINN_CAP; i++) ABILITIES_BY_ID.passive_mirage_djinns_mark.run(G, { movingPlayer: '0' }, { source: mirage, target: t });
     expect(t.hp).toBe(30);
     ABILITIES_BY_ID.passive_mirage_djinns_mark.run(G, { movingPlayer: '0' }, { source: mirage, target: t });
-    expect(t.hp).toBe(30 - (4 + 2 * 1)); // a passive counts Spirit twice
+    expect(t.hp).toBe(30 - (6 + 2 * 1)); // a passive counts Spirit twice
     expect(t.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
   });
 });

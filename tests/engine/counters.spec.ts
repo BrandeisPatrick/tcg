@@ -58,10 +58,10 @@ describe('Static Charge: the hit now, the Stun after the enemy\'s next turn', ()
     expect([a.name, a.target, a.cooldown, a.charges]).toEqual(['Static Charge', 'enemyActive', 4, undefined]);
   });
 
-  it('deals 1 + Spirit and Charges the target; the charged side plays its whole next turn, and is Stunned for the one after', () => {
+  it('deals 2 + Spirit and Charges the target; the charged side plays its whole next turn, and is Stunned for the one after', () => {
     const { G, seven, foe } = withSeven();
     act(G, '0', { type: 'useSkill', heroIid: seven.iid, targetIid: foe.iid });
-    expect(foe.hp).toBe(39);
+    expect(foe.hp).toBe(38);
     expect(has(foe, 'charged')).toBe(true);
     expect(has(foe, 'stun')).toBe(false);
     nextTurn(G, '0');                       // the rival's turn: the window
@@ -156,7 +156,8 @@ describe('Storm Cloud: a channel of 2 turns that a Stun ends', () => {
     expect(G.log.some((l) => l.text.includes('channel is broken'))).toBe(true);
     nextTurn(G, '1');
     nextTurn(G, '0');
-    expect(foes.map((f) => f.hp)).toEqual(afterFirst);
+    // No second pulse: nobody lost HP (the rival's Abrams may heal 1 at his turn's start).
+    foes.forEach((f, i) => expect(f.hp, f.cardId).toBeGreaterThanOrEqual(afterFirst[i]));
     expect(seven.cooldowns?.eff_ult_seven).toBeGreaterThan(0);
   });
 

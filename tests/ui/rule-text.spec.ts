@@ -441,11 +441,11 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     }
   });
 
-  it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — nowhere since the hero rebuild', () => {
+  it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — only Tag Along\'s Attack (2026-11-17: Rem worn as gear counts her Spirit once)', () => {
     const halfMarked = [...READS_SPIRIT].filter((id) => textOf(id).some((t) => /\{sp:\d+\/2\}/.test(t)));
-    const halfCode = /Math\.floor\((?:spi|activeSpi|ultSpi|effectiveSpirit)\([^)]*\) \/ 2\)/.test(abilitiesSource);
-    expect(halfMarked).toEqual([]);
-    expect(halfCode).toBe(false);
+    const halfCode = abilitiesSource.match(/Math\.floor\((?:spi|activeSpi|ultSpi|effectiveSpirit)\([^)]*\) \/ 2\)/g) ?? [];
+    expect(halfMarked).toEqual(['skill_rem']);
+    expect(halfCode).toHaveLength(1);
   });
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {

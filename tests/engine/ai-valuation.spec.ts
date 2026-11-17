@@ -234,7 +234,8 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     const pass = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'endTurn')!;
     expect(ride).toBeDefined();
     expect(pass.score - ride!.score).toBeLessThan(2 * 0.3 + 1); // its souls, give or take the swing
-    expect(enumerateAIMoves(G, ctx('1'))[0].args[0]).not.toBe(rem.iid); // and it is not worth making
+    // Since 2026-11-17 the ride also gives +1 Attack for 2 turns, so even on a full-HP ally it is worth making.
+    expect(enumerateAIMoves(G, ctx('1'))[0].args[0]).toBe(rem.iid);
   });
 
   it('uses Tag Along on a hurt bench ally too', () => {
@@ -264,7 +265,8 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     expect(best.args[0]).toBe(rem.iid);
     expect(best.args.length).toBe(2); // her first skill, Tag Along, on an ally (Naptime would be named)
     expect(ai.bench.map((b) => b!.iid)).toContain(best.args[1]);
-    // In a lane she is not losing, with nobody hurt, she stays and fights.
+    // In a lane she is not losing, with nobody hurt, she rides all the same since 2026-11-17:
+    // the ride's +1 Attack for 2 turns is worth more than her own swing of 1.
     const H = freshReadyGame();
     const h = H.players['1'];
     const calm = makeHero('hero_rem', '1', 'active', 0);
@@ -272,7 +274,7 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     h.souls = kitCost(calm, 'skill_rem');
     for (const b of h.bench) b!.skillUsedThisTurn = true;
     H.players['0'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // the rival's Active cannot swing
-    expect(enumerateAIMoves(H, ctx('1'))[0].args[0]).not.toBe(calm.iid);
+    expect(enumerateAIMoves(H, ctx('1'))[0].args[0]).toBe(calm.iid);
   });
 
   it('puts Rem straight into an empty lane from its hand', () => {

@@ -24,16 +24,16 @@ function freshG(): GameState {
 }
 
 describe("leveling — each hero's own growth", () => {
-  it("each level adds the hero's growth (Lady Geist: +2 Spirit a level, +6 at Lv4, no Attack or HP)", () => {
+  it("each level adds the hero's growth (Lady Geist: +1 HP and +2 Spirit a level, +3 HP and +6 Spirit at Lv4, no Attack)", () => {
     const G = freshG();
     const c = makeHero('hero_lady_geist', '0', 'active', 0);
     const data = CARDS_BY_ID['hero_lady_geist'] as HeroCard;
-    expect(data.growth).toEqual({ atk: 0, hp: 0, spirit: 2 });
+    expect(data.growth).toEqual({ atk: 0, hp: 1, spirit: 2 });
     grantExp(G, c, 21); // cumulative cap → Lv4 (5 + 7 + 9)
     expect(c.level).toBe(4);
     expect(c.atkMod).toBe(0);
     expect(c.spiritMod).toBe(6);
-    expect(c.hpMax).toBe(data.hp);
+    expect(c.hpMax).toBe(data.hp + 3);
   });
 });
 
@@ -96,13 +96,13 @@ describe('early survivability — no Lv1 one-shots', () => {
     }
   });
 
-  it("a Lv1 caster's skill alone cannot kill a fresh squishy (4 HP)", () => {
+  it("a Lv1 caster's skill alone cannot kill a fresh squishy (5 HP, the floor since 2026-11-17)", () => {
     const G = freshG();
     const caster = makeHero('hero_yamato', '0', 'active', 0); // strongest base damage skill ({sp:2}, Flying Slash)
-    const dummy = makeHero('hero_seven', '1', 'active', 0); // 4 HP
+    const dummy = makeHero('hero_seven', '1', 'active', 0); // 5 HP
     G.players['1'].active = dummy;
     G.players['1'].bench = [null, null, null];
-    expect(dummy.hpMax).toBe(4);
+    expect(dummy.hpMax).toBe(5);
     const before = dummy.hp;
     getAbility('skill_yamato')!.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
     expect(before - dummy.hp).toBe(2);
