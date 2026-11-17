@@ -38,8 +38,8 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'cool-full', label: 'Cooling: just used',      hint: 'The turn it was used: the wipe covers the whole glyph, every frame segment is still to come, the number is the full wait.' },
   { id: 'cool-mid',  label: 'Cooling: one turn served', hint: 'The skill has served one turn of its wait (2 of 3 left); the ultimate has one turn left. The wipe opens clockwise from twelve.' },
   { id: 'cool-last', label: 'Cooling: one turn left',  hint: 'The skill is a turn from ready. Open “all ready” next with the same hero to see the ready moment.' },
-  { id: 'charges',   label: 'Charged skill, 1 charge left', hint: 'A skill that holds charges (Kelvin, Shiv, Vindicta): one in hand, so the row is lit; the next pip is a small clock of its wait.' },
-  { id: 'charges-out', label: 'Charged skill, none left', hint: 'Both charges spent: the tile wears the full dial for the next charge, and the pips are empty.' },
+  { id: 'charges',   label: 'Charged skill, 1 charge left', hint: 'A skill that holds charges (Kelvin, Shiv, Vindicta): one in hand, so the row is lit. The bar across the top of the tile is the one Deadlock prints: white a charge in hand, the next one filling purple as its wait runs, grey spent.' },
+  { id: 'charges-out', label: 'Charged skill, none left', hint: 'Both charges spent: the tile wears the full dial for the next charge, and the bar is grey but for the purple of the one coming back.' },
   { id: 'ult-charge', label: 'Charged ultimate, part filled', hint: 'An ultimate that waits on damage (Victor, Silver): the glyph fills from the foot and the frame has a segment a point.' },
   { id: 'cool-rival', label: 'Rival hero, cooling',    hint: 'Read-only, and the dials still say what the rival is waiting on.' },
 ];
