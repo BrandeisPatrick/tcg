@@ -33,12 +33,12 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   // ----- Skill heroes -----
   // Healing Tempo (2026-11-16) is Healing Booster's upgrade: the aurora's heal turns into tempo.
   hero_dynamo:     ['improved_cooldown', 'rescue_beam', 'healing_booster', 'duration_extender', 'superior_cooldown', 'healing_tempo'],
-  hero_kelvin:     ['cold_front', 'knockdown', 'improved_spirit', 'spirit_shielding', 'silence_glyph', 'arctic_blast'],
+  hero_kelvin:     ['cold_front', 'knockdown', 'improved_spirit', 'bullet_resist_shredder', 'silence_glyph', 'arctic_blast'],
   hero_lady_geist: ['mystic_vulnerability', 'spirit_snatch', 'improved_spirit', 'spirit_lifesteal', 'decay', 'escalating_exposure'],
   hero_lash:       ['kinetic_dash', 'arcane_surge', 'improved_spirit', 'enduring_speed', 'veil_walker', 'boundless_spirit'],
   hero_paige:      ['guardian_ward', 'debuff_remover', 'healing_booster', 'restorative_locket', 'healing_nova', 'divine_barrier'],
   hero_seven:      ['spirit_sap', 'surge_of_power', 'improved_cooldown', 'improved_spirit', 'superior_cooldown', 'focus_lens'],
-  hero_sinclair:   ['slowing_hex', 'disarming_hex', 'improved_spirit', 'mystic_vulnerability', 'silence_glyph', 'vortex_web'],
+  hero_sinclair:   ['slowing_hex', 'disarming_hex', 'improved_spirit', 'bullet_resist_shredder', 'silence_glyph', 'vortex_web'],
   hero_viscous:    ['reactive_barrier', 'spirit_resilience', 'debuff_reducer', 'improved_spirit', 'fortitude', 'indomitable'],
   hero_yamato:     ['extended_magazine', 'shadow_weave', 'titanic_magazine', 'kinetic_dash', 'heroic_aura', 'glass_cannon'],
   hero_warden:     ['weapon_shielding', 'metal_skin', 'bullet_lifesteal', 'enduring_speed', 'fortitude', 'juggernaut'],

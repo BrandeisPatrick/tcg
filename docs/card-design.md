@@ -294,6 +294,7 @@ Power, taken as 1.5.
 | Frenzy *fix* | Weapon T4 | 16 | +3 HP, its canon health | 2.5 → + 3 × 0.7 × 3 = 6.3 → **9.0** |
 | Spiritual Overflow *fix* | Weapon T4 | 16 | +3 Spirit Power, its canon spirit | 1.8 → + 6.3 → **8.0** |
 | Bullet Resist Shredder *fix* | Spirit T2 | 4 | Bullet Resist −1 for 1 → 2 turns | 0.7 × 0.15 × 6 = 0.6 → 0.7 × (0.15 + 0.35) × 6 → **2.0** |
+| Bullet Resist Shredder *canon verb* (2026-11-17) | Spirit T2 | 4 | Procs on the bearer's skill / spell / ult damage, not its attacks | Deadlock's item: spirit damage lowers Bullet Resist, so a support opens the target for the team's gun. A support's damaging skill or spell lands about every 2 turns: 3 procs in 6 worn turns, each +1 on about 1.1 ally swings → **3.3**. It was 2.0 on the bearer's own swings, a Spirit item that only paid on a gun. Kelvin and Sinclair carry it in place of Spirit Shielding and Mystic Vulnerability |
 | Suppressor *fix* | Spirit T2 | 4 | +1 Spirit Power, its canon spirit | 0.9 → + 0.7 × 6 = 4.2 → **5.0** |
 | Cold Front *fix* | Spirit T2 · active | 4 | {sp:4} → {sp:2} | (4 + 1.5) × 3 = 16.5 → (2 + 1.5) × 3 → **10.5**. Kept above the band on purpose: it is Kelvin's signature and the tutorial's card, so it keeps a little of its bite ({sp:1} would read 7.5) |
 | Superior Duration *fix* | Spirit T3 | 8 | Buffs last 1 → 2 turns longer | 0.6 × 1 × 4 = 2.4 → **5.0** |
@@ -1039,7 +1040,7 @@ where Deadlock builds them so, or into a slot that opens.
 | Drifter | Restorative Shot (passive, Weapon T1) | Frenzy (passive, Weapon T4) | Restorative Shot → Frenzy → Bullet Lifesteal → Stalker → Berserker → Leech |
 | Dynamo | Compress Cooldown (passive, Spirit T2) | Rescue Beam (active, Vitality T3) | Compress Cooldown → Rescue Beam → Healing Booster → Duration Extender → Superior Cooldown → Healing Tempo (was Transcendent Cooldown until 2026-11-16) |
 | Haze | Swift Striker (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Swift Striker → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Infinite Rounds |
-| Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Spirit Shielding → Silence Wave → Arctic Blast |
+| Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Bullet Resist Shredder → Silence Wave → Arctic Blast |
 | Lady Geist | Mystic Vulnerability (passive, Spirit T2) | Spirit Snatch (passive, Spirit T3) | Mystic Vulnerability → Spirit Snatch → Improved Spirit → Spirit Lifesteal → Decay → Escalating Exposure |
 | Lash | Kinetic Dash (passive, Weapon T2) | Arcane Surge (passive, Spirit T2) | Kinetic Dash → Arcane Surge → Improved Spirit → Enduring Speed → Veil Walker → Boundless Spirit (2026-11-17: his damage is the swing the turn he steps in, so the step-in items; it was Mystic Slow → Tankbuster → Improved Spirit → Suppressor → Decay → Lightning Scroll, for a skill hit he no longer deals) |
 | Mirage | Fleetfoot (active, Weapon T2) | Tesla Bullets (passive, Weapon T3) | Fleetfoot → Tesla Bullets → Mystic Shot → Spirit Shredder → Toxic Bullets → Ricochet |
@@ -1049,7 +1050,7 @@ where Deadlock builds them so, or into a slot that opens.
 | Seven | Spirit Sap (active, Spirit T2) | Surge of Power (passive, Spirit T3) | Spirit Sap → Surge of Power → Compress Cooldown → Improved Spirit → Superior Cooldown → Focus Lens |
 | Shiv | Slowing Bullets (passive, Weapon T2) | Berserker (passive, Weapon T3) | Slowing Bullets → Berserker → Stalker → Titanic Magazine → Weighted Shots → Crippling Headshot |
 | Silver | Monster Rounds (passive, Weapon T1) | Bullet Lifesteal (passive, Vitality T2) | Monster Rounds → Bullet Lifesteal → Swift Striker → Kinetic Dash → Berserker → Frenzy |
-| Sinclair | Slowing Hex (active, Spirit T2) | Disarming Hex (active, Spirit T3) | Slowing Hex → Disarming Hex → Improved Spirit → Mystic Vulnerability → Silence Wave → Vortex Web |
+| Sinclair | Slowing Hex (active, Spirit T2) | Disarming Hex (active, Spirit T3) | Slowing Hex → Disarming Hex → Improved Spirit → Bullet Resist Shredder → Silence Wave → Vortex Web |
 | Victor | Extra Health (passive, Vitality T1) | Torment Pulse (passive, Spirit T3) | Extra Health → Torment Pulse → Spirit Lifesteal → Spirit Shielding → Fortitude → Leech |
 | Vindicta | Long Range (passive, Weapon T2) | Sharpshooter (passive, Weapon T3) | Long Range → Sharpshooter → Titanic Magazine → Opening Rounds → Toxic Bullets → Crippling Headshot |
 | Viscous | Reactive Barrier (passive, Vitality T2) | Spirit Resilience (passive, Vitality T3) | Reactive Barrier → Spirit Resilience → Debuff Reducer → Improved Spirit → Fortitude → Indomitable |
