@@ -554,7 +554,7 @@ export function HeroDetailSheet({
 
           {/* STRIP — worn items and statuses, one row; a tap explains one
               over the sheet. */}
-          {tiles.length > 0 && (
+          {tiles.length > 0 && !infoOpen && (
             <div style={{ position: 'relative' }}>
               <div data-hero-items data-hero-statuses role="group" aria-label="Worn items and effects" style={{
                 display: 'flex', alignItems: 'center', gap: TILE_GAP, height: TILE, overflow: 'visible',
@@ -597,13 +597,15 @@ export function HeroDetailSheet({
           )}
 
           {/* ACTIONS — one row each, all alike. */}
-          {rows.length > 0 && (
+          {rows.length > 0 && !infoOpen && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {rows.map((r) => <div key={r.key}>{r.node}</div>)}
             </div>
           )}
 
-          {/* The whole card, over the sheet while the "i" is on. */}
+          {/* The whole card, in the rows' place while the "i" is on: the sheet
+              grows to hold it (the scrim scrolls a long one), so nothing of the
+              sheet shows through and nothing is cut off. */}
           {infoOpen && (
             <InfoPanel
               card={card}
@@ -772,13 +774,13 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
   const kitScale: Scale = { ...scale, rate: SKILL_SPIRIT_RATE };
   const ult = ultimateCard(data.ult);
   const attackRule = heroAttackRule(data);
+  // One ability: its name, then what kind it is and its pace in small print
+  // under it (never squeezed beside the name), then its rule in full.
   const entry = (key: string, name: string, tag: string, rule: string, note?: string, at: Scale = scale) => (
-    <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ ...NAME, fontSize: T.body }}>{name}</span>
-        <span style={{ ...CAPTION, flexShrink: 0 }}>{tag}</span>
-      </div>
-      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.inkSoft }}>
+    <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ ...NAME, fontSize: T.body + 1 }}>{name}</span>
+      <span style={{ ...CAPTION, color: poster.inkDim }}>{tag}</span>
+      <div style={{ ...text.body, fontSize: T.body + 1, lineHeight: 1.45, color: poster.ink, marginTop: 2 }}>
         <RuleText text={sentence(rule)} keywordColor={poster.ink} scale={at} />
       </div>
       {note && (
@@ -792,7 +794,7 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
     <>
       {heroAbilities(data).map(({ kind, ability }: { kind: 'skill' | 'passive'; ability: HeroAbilityDef }) =>
         entry(ability.id, ability.name, kind === 'passive' ? `Passive · ${TRIGGER_LABELS[ability.trigger] ?? ability.trigger}` : `Skill · ${skillPace(ability)}`, ability.text, undefined, kitScale))}
-      {ult && entry(ult.id, ult.name, `Ultimate · ${ult.charged ? 'charged' : ult.size} · Level ${ULT_UNLOCK_LEVEL} · ${ult.charged ? 'one a turn' : `${ultPace(ult)}, one a turn`}`, ult.text ?? '', ult.charged?.text)}
+      {ult && entry(ult.id, ult.name, `Ultimate · from Level ${ULT_UNLOCK_LEVEL} · ${ultPace(ult)}`, ult.text ?? '', ult.charged?.text)}
       {attackRule && entry(attackRule.id, attackRule.name, 'Attack', attackRule.text, undefined, kitScale)}
     </>
   );
@@ -888,23 +890,14 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
       aria-label={`${data.name} details`}
       onClick={(e) => { e.stopPropagation(); onClose(); }}
       style={{
-        position: 'absolute', top: PAD, left: PAD, right: PAD, zIndex: 8,
-        maxHeight: `calc(100% - ${PAD * 2}px)`, overflowY: 'auto', boxSizing: 'border-box',
-        padding: '10px 14px 14px',
-        background: poster.paper, color: poster.ink,
-        border: `1.5px solid ${poster.ink}`,
-        borderRadius: 7,
-        boxShadow: '0 3px 0 rgba(0, 0, 0, 0.3)',
-        display: 'flex', flexDirection: 'column', gap: 10,
+        color: poster.ink, padding: '2px 4px 4px',
+        display: 'flex', flexDirection: 'column', gap: 12,
         cursor: 'default',
       }}
     >
-      {/* Header, clear of the "i" at the top right. */}
-      <div style={{ minHeight: 28, display: 'flex', alignItems: 'center', margin: '-1px 40px 0 0' }}>
-        <span style={{ ...eyebrow, color: poster.ink }}>
-          {atMax ? `Level ${level} · max` : `Level ${level} · ${card.exp ?? 0}/${need} exp`}
-        </span>
-      </div>
+      <span style={{ ...eyebrow, color: poster.ink }}>
+        {atMax ? `Level ${level} · max` : `Level ${level} · ${card.exp ?? 0}/${need} exp`}
+      </span>
       {rule}
       {section('Stats')}
       <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>

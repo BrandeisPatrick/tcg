@@ -96,7 +96,8 @@ describe('the hero sheet: a charged ultimate\'s live count, its rule, and when a
     // behind the "i" (HeroRules, the details view's Abilities).
     const rules = html(createElement(HeroRules, { card: silver, data: CARDS_BY_ID.hero_silver as HeroCard }));
     expect(rules).toContain('Ready once Silver has dealt 8 damage.');
-    expect(rules).toContain('one a turn');
+    // Its pace says charged; "one a turn" (a rule of every ultimate) left the label on 2026-11-17.
+    expect(rules).toContain('Ultimate · from Level 3 · charged');
   });
 
   it('Victor\'s plate says it is asked when he falls', () => {

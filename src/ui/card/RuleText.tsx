@@ -135,6 +135,11 @@ interface Props {
    *  on instead of opening its popup: a card in the hand fan, where a tap is
    *  the card's (it plays, or arms). Hovering still explains it. */
   passTaps?: boolean;
+  /** Print the numbers as small plates on this ground (an action plate's
+   *  text). Absent, a number is its colour on the paper, as everywhere since
+   *  2026-11-17 (it used to follow `keywordColor`, and drew a filled box in the
+   *  hero's rules panel). */
+  plate?: string;
 }
 
 /**
@@ -144,12 +149,12 @@ interface Props {
  * explains it (Explain). Splits on the markup first, then on the keyword
  * regex (capturing group) so matches and gaps alternate in the output array.
  */
-export function RuleText({ text, keywordColor, scale, passTaps }: Props) {
+export function RuleText({ text, keywordColor, scale, passTaps, plate }: Props) {
   if (!text) return null;
   return (
     <>
       {parseMarkup(text).map((tok, i) => (tok.type === 'num'
-        ? <ScalingNumber key={i} spec={tok} scale={scale} plate={keywordColor} passTaps={passTaps} />
+        ? <ScalingNumber key={i} spec={tok} scale={scale} plate={plate} passTaps={passTaps} />
         : <Keywords key={i} text={tok.text} keywordColor={keywordColor} passTaps={passTaps} />))}
     </>
   );
