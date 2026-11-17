@@ -75,7 +75,11 @@ from their "Deadlock Graphical Library" collection.
   Witchmail (`public/items/`), Cultist Sacrifice and Magic Carpet (`public/spells/`), added
   2026-11-16, are the game's own shop icons from the same asset bucket
   (`images/items/<tab>/<item>.webp`; Mystic Expansion's file there is
-  `mystic_reach.webp`), used as served.
+  `mystic_reach.webp`), used as served. Extra Stamina and Stamina Mastery
+  (2026-11-17) are the shop icons from the same bucket
+  (`images/items/vitality/…`); Seraphim Wings, Electric Slippers and Shadow
+  Strike are Street Brawl items, their icons from `images/items/brawl/`
+  (Seraphim Wings' file there is `icarus_wings.webp`), used as served.
 - The Attack row's icon, `public/hud/weapon_damage.webp`, is the game's own
   weapon-damage icon, the image every hero's weapon item carries in the
   deadlock-api's weapon list (`images/abilities/weapon_damage.webp`), from the

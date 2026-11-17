@@ -111,6 +111,11 @@ export interface AbilityDef {
    *  payment comes straight off its HP before the skill runs — through no Shield
    *  or resist, setting off no trigger, and never enough to kill. */
   hpCost?: number;
+  /** A hero passive only: it is a rule of the hero's attack, printed on the
+   *  Attack row and the card's Attack line, not as a kit row of its own (Lash's
+   *  Ground Strike, Patrick 2026-11-17: "no passive, just attack has that
+   *  passive"). `heroAttackRule` reads it; `heroAbilities` leaves it out. */
+  attackRule?: true;
   /** A hero skill only: it is used from the bench (Lash's Grapple). Its `aim`
    *  is what keeps it there; this says so, for the button's reason. */
   fromBench?: true;
@@ -1808,6 +1813,67 @@ const eff_restorative_locket: AbilityDef = {
 // heal and speed. TCG: the veil is the step into the Active slot (a Retreat or
 // a swap): the bearer heals 2 and gains Dome (stealth: no attack can target it)
 // for 1 turn.
+// The Stamina line (2026-11-17). Deadlock's stamina is dashes; here the dash is
+// the Retreat. When the bearer steps in by a Retreat or a swap and your side's
+// Retreat is spent, it is ready again; then the item waits (`itemWait`, kept on
+// the worn item: Extra Stamina 3 turns, Stamina Mastery to the next turn). Not
+// spent when there is no Retreat to give back.
+function staminaReady(G: GameState, abilityId: string, wait: number, source?: CardInstance, equip?: CardInstance) {
+  if (!source || !equip || isRespawning(source) || !G.retreatUsed) return;
+  if ((equip.cooldowns?.[abilityId] ?? 0) > 0) return;
+  G.retreatUsed = false;
+  equip.cooldowns = { ...(equip.cooldowns ?? {}), [abilityId]: wait };
+  pushLog(G, `${cardName(equip.cardId)}: ${cardName(source.cardId)}'s side may Retreat again this turn.`);
+}
+const eff_extra_stamina: AbilityDef = {
+  id: 'eff_extra_stamina', trigger: 'onBearerStepIn', target: 'self',
+  base: 2,
+  itemWait: 3,
+  run: (G, _ctx, { source, params }) => staminaReady(G, 'eff_extra_stamina', 3, source, params?.equip as CardInstance | undefined),
+};
+const eff_stamina_mastery: AbilityDef = {
+  id: 'eff_stamina_mastery', trigger: 'onBearerStepIn', target: 'self',
+  base: 2,
+  itemWait: 1,
+  run: (G, _ctx, { source, params }) => staminaReady(G, 'eff_stamina_mastery', 1, source, params?.equip as CardInstance | undefined),
+};
+
+// Seraphim Wings (Street Brawl): "when airborne, you deal more damage and take
+// reduced damage". Here airborne is the turn it comes down into the lane.
+const eff_seraphim_wings: AbilityDef = {
+  id: 'eff_seraphim_wings', trigger: 'onBearerStepIn', target: 'self',
+  base: 2,
+  run: (G, _ctx, { source }) => {
+    if (!source || isRespawning(source)) return;
+    addStatus(G, source, 'weapon_power', 2, 1);
+    addStatus(G, source, 'bullet_resist', 2, 1);
+    addStatus(G, source, 'spirit_resist', 2, 1);
+  },
+};
+
+// Electric Slippers (Street Brawl): "when sliding … deal damage to enemies
+// around you". Here the slide is the step in: 3 to every enemy, once a turn.
+const eff_electric_slippers: AbilityDef = {
+  id: 'eff_electric_slippers', trigger: 'onBearerStepIn', target: 'self',
+  base: 3,
+  itemWait: 1,
+  run: (G, _ctx, { source, params }) => {
+    const equip = params?.equip as CardInstance | undefined;
+    if (!source || !equip || isRespawning(source) || (equip.cooldowns?.eff_electric_slippers ?? 0) > 0) return;
+    equip.cooldowns = { ...(equip.cooldowns ?? {}), eff_electric_slippers: 1 };
+    pushLog(G, `Electric Slippers: ${cardName(source.cardId)} slides in.`);
+    eachBoard(G, otherPlayer(seatOf(source)), (c) => { damageUnit(G, c, 3, 'spirit', 'Electric Slippers'); });
+  },
+};
+
+// Shadow Strike (Street Brawl): "go invisible on stamina use". Here the step in
+// leaves it Shadowed for 1 turn, out of reach of anything aimed.
+const eff_shadow_strike: AbilityDef = {
+  id: 'eff_shadow_strike', trigger: 'onBearerStepIn', target: 'self',
+  base: 3,
+  run: (G, _ctx, { source }) => { if (source && !isRespawning(source)) addStatus(G, source, 'shadowed', 1, 1); },
+};
+
 const eff_veil_walker: AbilityDef = {
   id: 'eff_veil_walker', trigger: 'onBearerStepIn', target: 'self',
   base: 2,
@@ -2395,10 +2461,12 @@ const skill_lash: HeroAbilityDef = {
     if (!source) return;
     const ps = G.players[ctx.movingPlayer];
     const was = ps.active;
-    if (!leapOpen(G, ctx.movingPlayer, source) || !was) { pushLog(G, 'Grapple fizzled.'); return; }
-    pushLog(G, `Grapple: ${cardName(source.cardId)} leaps in for ${cardName(was.cardId)}.`);
-    swapIntoActive(G, ps, source, { quiet: true });
-    // The attack refreshed: an attack he made this turn no longer counts.
+    if (leapOpen(G, ctx.movingPlayer, source) && was) {
+      pushLog(G, `Grapple: ${cardName(source.cardId)} leaps in for ${cardName(was.cardId)}.`);
+      swapIntoActive(G, ps, source, { quiet: true });
+    } else if (was !== source) { pushLog(G, 'Grapple fizzled.'); return; }
+    // The attack refreshed: an attack he made this turn no longer counts. Cast
+    // again from the Active (Echo Shard), only this half happens: one more swing.
     if (G.attackers?.includes(source.iid)) {
       G.attackers = G.attackers.filter((iid) => iid !== source.iid);
       pushLog(G, `${cardName(source.cardId)} may attack again this turn.`);
@@ -2413,6 +2481,7 @@ const skill_lash: HeroAbilityDef = {
 // bounce is the bullet alone.
 const passive_lash_ground_strike: HeroAbilityDef = {
   id: 'passive_lash_ground_strike', trigger: 'onAttack', target: 'self',
+  attackRule: true,
   name: 'Ground Strike',
   text: 'The turn Lash steps in from the bench, his attacks deal {sp:3} more spirit damage.',
   base: 3,
@@ -2967,7 +3036,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_knockdown, eff_cast_metal_skin,
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
-  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_witchmail, eff_witchmail_proc, eff_magic_carpet, eff_refresher, eff_colossus_cast,
+  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_witchmail, eff_witchmail_proc, eff_magic_carpet, eff_extra_stamina, eff_stamina_mastery, eff_seraphim_wings, eff_electric_slippers, eff_shadow_strike, eff_refresher, eff_colossus_cast,
   eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,

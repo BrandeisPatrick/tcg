@@ -27,7 +27,7 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
-  effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, ultimateCard,
+  effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, heroAttackRule, ultimateCard,
 } from '@/engine/query';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, SKILL_SPIRIT_RATE, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
@@ -354,6 +354,12 @@ export function HeroDetailSheet({
     // (a target's Shield or resist is the board's to show when it lands).
     const dmg = scale.bullet;
     const weapon = shopInk('weapon').ink;
+    // A rule the attack carries (Lash's Ground Strike) is printed with it, whole;
+    // the turn it is live, the line says what the swing deals.
+    const rule = heroAttackRule(data);
+    const attackText = attack.spirit
+      ? `Deal ${dmg} bullet and ${attack.spirit} spirit damage.`
+      : rule ? `Deal ${dmg} bullet damage. ${fullLine(rule.text, kitScale)}` : `Deal ${dmg} bullet damage.`;
     rows.push({
       key: 'attack',
       node: (
@@ -361,9 +367,8 @@ export function HeroDetailSheet({
           ink={weapon} mode={mode} calm={calm}
           name="Attack"
           art={<img src={ATTACK_ICON_SRC} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={usable || mode === 'quiet'
-            ? (attack.spirit ? `Deal ${dmg} bullet and ${attack.spirit} spirit damage.` : `Deal ${dmg} bullet damage.`)
-            : undefined}
+          wrap={!!rule && !attack.spirit}
+          line={usable || mode === 'quiet' ? attackText : undefined}
           right={<span style={NUMBER(T.display)}>{attack.spirit ? `${dmg}+${attack.spirit}` : dmg}</span>}
           reason={mode === 'used' ? 'Used' : mode === 'blocked' ? attack.blockedReason : undefined}
           reasonBelow
@@ -643,9 +648,12 @@ export function HeroDetailSheet({
  * The name stays the row's first words — the row is found by its text.
  */
 function ActionRow({
-  ult = false, passive = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
+  ult = false, passive = false, wrap = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
   dial, dialMemo,
 }: {
+  /** The line wraps whole, as a passive's does (an Attack that carries a rule
+   *  of its own: Lash's Ground Strike). */
+  wrap?: boolean;
   /** A kit ability's wait, worn on its picture tile (AbilityDial.tsx). */
   dial?: DialModel;
   /** Names the dial among all dials: the hero and the ability. */
@@ -695,7 +703,7 @@ function ActionRow({
       </AbilityTile>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
-        {caption && <span style={{ ...CAPTION, ...(passive ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
+        {caption && <span style={{ ...CAPTION, ...(passive || wrap ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
       </span>
       <span style={{ flexShrink: 0, maxWidth: '42%', display: 'flex', justifyContent: 'flex-end' }}>
         {dim && !reasonBelow && said
@@ -750,6 +758,7 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
   const kitScale: Scale = { ...scale, rate: SKILL_SPIRIT_RATE };
   const ult = ultimateCard(data.ult);
+  const attackRule = heroAttackRule(data);
   const entry = (key: string, name: string, tag: string, rule: string, note?: string, at: Scale = scale) => (
     <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
@@ -771,6 +780,7 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
       {heroAbilities(data).map(({ kind, ability }: { kind: 'skill' | 'passive'; ability: HeroAbilityDef }) =>
         entry(ability.id, ability.name, kind === 'passive' ? `Passive · ${TRIGGER_LABELS[ability.trigger] ?? ability.trigger}` : `Skill · ${skillPace(ability)}`, ability.text, undefined, kitScale))}
       {ult && entry(ult.id, ult.name, `Ultimate · ${ult.charged ? 'charged' : ult.size} · Level ${ULT_UNLOCK_LEVEL} · ${ult.charged ? 'one a turn' : `${ultPace(ult)}, one a turn`}`, ult.text ?? '', ult.charged?.text)}
+      {attackRule && entry(attackRule.id, attackRule.name, 'Attack', attackRule.text, undefined, kitScale)}
     </>
   );
 }

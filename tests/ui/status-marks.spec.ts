@@ -48,7 +48,8 @@ describe('which statuses wear a mark', () => {
   it('each wears the picture named for it; the light channel wears the channel ring, a Toxin the bleed drop and the Cube Invulnerable\'s mark', () => {
     // Borrowed marks: the light channel (the channel ring), and since 2026-11-16 Toxic Bullets'
     // Toxin (the bleed drop) and Viscous's Cube (Invulnerable's mark: no damage, and more).
-    const BORROWED: Record<string, string> = { casting_light: 'casting', toxin: 'bleed', cube: 'invulnerable', infused: 'healing_boost' };
+    // Shadow Strike's Shadowed (2026-11-17) wears the Dome's mark: nothing can pick it.
+    const BORROWED: Record<string, string> = { casting_light: 'casting', toxin: 'bleed', cube: 'invulnerable', infused: 'healing_boost', shadowed: 'dome' };
     for (const id of ALL) expect(markFor(id), id).toBe(BORROWED[id] ?? id);
     for (const id of MARKED) expect(markFor(id), id).toBe(id);
   });

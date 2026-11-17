@@ -12,7 +12,7 @@ import {
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL, itemCard } from '@/cards';
 import type { CardData } from '@/engine/types';
-import { heroAbilities, skillWait, ultimateCard, ultWait } from '@/engine/query';
+import { heroAbilities, heroAttackRule, skillWait, ultimateCard, ultWait } from '@/engine/query';
 import { PRICE, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
@@ -608,6 +608,8 @@ export function CardFrame({
                 tag: kind === 'skill' ? `Skill · ${(ability.charges ?? 1) > 1 ? `${ability.charges} charges` : `wait ${skillWait(ability)}`}` : 'Passive',
                 body: ability.text,
               })),
+              // A rule of the hero's attack (Lash's Ground Strike) prints under the kit, tagged Attack.
+              ...((() => { const r = heroAttackRule(data); return r ? [{ key: r.id, kind: 'passive' as const, tag: 'Attack', body: r.text }] : []; })()),
               // An ultimate prints its wait in turns; a charged one says so, and its rule goes on a line of its own under it.
               ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ult.charged ? 'charged' : `wait ${ultWait(ult)}`}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
               ...(ult?.charged && !isHand ? [{ key: `${ult.id}-charge`, kind: null, tag: null, body: ult.charged.text }] : []),

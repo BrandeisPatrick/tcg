@@ -8,7 +8,7 @@ export type Blockable = 'attack' | 'skill' | 'pulse' | 'move';
 
 /** What a status stops anyone doing TO its bearer. The only one so far is a
  *  basic attack aimed at it (Dome). */
-export type Untargetable = 'attack';
+export type Untargetable = 'attack' | 'card';
 
 export interface StatusDef {
   id: StatusId;
@@ -78,6 +78,10 @@ export const STATUSES: StatusDef[] = [
   // Not crowd control, so it ticks at the start of its owner's turn like any buff: put up
   // for 1 turn on your own turn it covers the rival's turn and is gone when yours begins.
   { id: 'dome',          title: 'Dome',          desc: 'Cannot be the target of an attack.',                       hvalue:  2, untargetable: ['attack'] },
+  // Shadow Strike (2026-11-17): Deadlock's stealth on a dash. Nothing the rival
+  // aims can pick it: no attack, spell, skill or ultimate. What hits every enemy
+  // or "the enemy Active" without aiming still lands.
+  { id: 'shadowed',      title: 'Shadowed',      desc: 'Cannot be the target of an enemy attack, spell, skill or ultimate.', hvalue: 3, untargetable: ['attack', 'card'] },
   // Return Fire: an enemy swing that lands on the bearer comes back at the
   // attacker as bullet damage (damageUnit, engine/damage.ts).
   { id: 'return_fire',   title: 'Return Fire',   desc: 'When an enemy attack hits the bearer, the attacker takes <value> bullet damage.', hvalue: 1 },

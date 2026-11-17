@@ -327,6 +327,8 @@ export function targetLegal(
   if (target.zone === 'pit') return false;
   const ally = target.ownerId === pid;
   const hero = isHeroCard(target);
+  // Shadowed (Shadow Strike, 2026-11-17): no enemy may aim anything at it.
+  if (!ally && target.statuses.some((s) => s.id === 'shadowed')) return false;
   switch (filter) {
     case 'self': return !!source && target.iid === source.iid;
     case 'allyAny': return ally;
@@ -601,7 +603,8 @@ export function attackTargetsOracle(G: GameState, pid: PlayerID): CardInstance[]
   if (!active) return [];
   const alive = boardOf(foe).filter((c) => isHeroCard(c) && !isRespawning(c));
   const reachable = carriesReach(active) ? alive : alive.filter((c) => c.iid === foe.active?.iid);
-  const heroes = reachable.filter((c) => !c.statuses.some((s) => s.id === 'dome'));
+  // Dome, and Shadow Strike's Shadowed (2026-11-17), keep a hero out of a swing's reach.
+  const heroes = reachable.filter((c) => !c.statuses.some((s) => s.id === 'dome' || s.id === 'shadowed'));
   const boss = G.boss && G.boss.zone === 'pit' && G.boss.hp > 0 ? [G.boss] : [];
   return [...heroes, ...boss];
 }

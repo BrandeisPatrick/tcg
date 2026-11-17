@@ -38,8 +38,9 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'One gun at a time, one target: every swing finds a bonus, full HP, above half or below it.',
     heroes: ['hero_drifter', 'hero_vindicta', 'hero_wraith'],
     items: [
-      ...n(4, 'headshot_booster'), ...n(2, 'extended_magazine'), 'restorative_shot', 'golden_goose_egg',
-      ...n(2, 'opening_rounds'), 'titanic_magazine', ...n(2, 'kinetic_dash'),
+      // Kinetic Dash is built from Extra Stamina since 2026-11-17: one of each.
+      ...n(4, 'headshot_booster'), ...n(2, 'extended_magazine'), 'restorative_shot', 'golden_goose_egg', 'extra_stamina',
+      ...n(2, 'opening_rounds'), 'titanic_magazine', 'kinetic_dash',
       'knockdown', 'headhunter', 'express_shot',
     ],
   },
@@ -49,7 +50,8 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'Every swing hits them all: Split Shot and Tesla spread it, Stalker bleeds and shreds each one, Haze ends it.',
     heroes: ['hero_warden', 'hero_haze', 'hero_silver'],
     items: [
-      ...n(4, 'extended_magazine'), 'restorative_shot', 'golden_goose_egg',
+      // Kinetic Dash beside Extra Stamina, its component since 2026-11-17 (a Magazine out for it).
+      ...n(3, 'extended_magazine'), 'extra_stamina', 'restorative_shot', 'golden_goose_egg',
       ...n(4, 'split_shot'), 'titanic_magazine', ...n(2, 'stalker'), 'kinetic_dash',
       'knockdown', 'tesla_bullets',
     ],
