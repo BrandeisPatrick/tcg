@@ -21,15 +21,16 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Your deck
 
-- Six **ready decks** head the Loadout screen: Gunline, Spirit Storm, Aurora
-  (Dynamo's Healing Tempo deck), Ambush, Lockdown and Graveyard (Graves's). Each
-  is a squad of three heroes and its 16 items; "Use deck" saves both, and the
-  match is ready to play. Each costs at most 28 souls at its printed prices, with
-  at most two cards over 2 (its payoffs), at most 2 copies of one, an upgrade
-  beside the item it is built from, a counter (Counterspell, Debuff Reducer,
-  Dispel Magic or Knockdown) and a draw card (Golden Goose Egg; two in Graveyard).
-  They were redesigned on 2026-11-16 for the second swing a free Retreat buys
-  ([`docs/deck-plan.md`](./docs/deck-plan.md), "Ready decks").
+- Seven **ready decks** head the Loadout screen, one per archetype: Headshot
+  (bullet, one target), Spray (bullet, every target), Nuke (spirit burst), Storm
+  (spirit area), Lockdown (crowd control), Graveyard (Graves's mill) and Aurora
+  (tank and support). Each is a squad of three heroes and its 16 items; "Use
+  deck" saves both, and the match is ready to play. Each costs at most 28 souls
+  at its printed prices, with at most two cards over 2 (its payoffs), up to 4
+  copies of one, an upgrade beside the item it is built from, a counter
+  (Counterspell, Debuff Reducer, Dispel Magic or Knockdown) and one Golden
+  Goose Egg. Why each card is in each deck: [`docs/deck-plan.md`](./docs/deck-plan.md),
+  "Ready decks".
 - Or build your own below them, on a deck builder that looks like Deadlock's
   shop: Weapon, Vitality and Spirit tabs, rows by tier, the item icons. Tap an
   item to add a copy; tap one in the deck to take a copy out.

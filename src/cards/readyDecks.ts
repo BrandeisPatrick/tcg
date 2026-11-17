@@ -2,25 +2,21 @@ import type { CardId } from '@/engine/types';
 
 /**
  * Ready decks: a squad of three heroes (SQUAD_SIZE) and the 16 items of their deck, made to
- * be picked and played as they are (the Loadout's "Ready decks" row). Each is a legal deck
- * (`deckProblem`, decks.ts) built to one recipe; every choice is reasoned in docs/deck-plan.md
- * ("Redesigned 2026-11-16: the ready decks by reasoning"). No sim ran.
+ * be picked and played as they are (the Loadout's "Ready decks" row). Since 2026-11-16 there
+ * are seven, one for each archetype Patrick named ("bullet one target, bullet many targets,
+ * spirit burst, spirit area, CC, Graves, tank and support"): every hero is in one of them
+ * (Mirage, the twenty-second, is in none), and each plays a different way. Every choice is
+ * reasoned in docs/deck-plan.md ("Rebuilt 2026-11-16: seven archetypes"). No sim ran.
  *
- *  - 16 items at most 28 souls at the prices they print (a spell priced for one play counts
- *    its own price), and at most two of them over 2 souls: the deck's payoffs. (56 and 4 until
- *    prices halved, 2026-11-16.) The lane pays 2 a turn, so a side has about 30 souls by its
+ *  - 16 items at most 28 souls at the prices they print, and at most two of them over 2
+ *    souls: the deck's payoffs. The lane pays 2 a turn, so a side has about 30 souls by its
  *    turn 9 for the 11 or so items it draws: every one of them can be played.
- *  - At most 2 copies of one card (Pokémon TCG Pocket's rule, inside MAX_COPIES).
- *  - One upgrade line beside the item it is built from (played onto the hero wearing that
- *    item, the upgrade costs only the difference); never an upgrade without its component.
- *  - A counter (docs/card-design.md, "Counters"): Counterspell, Debuff Reducer, Dispel Magic
- *    or Knockdown.
- *  - One draw card, Golden Goose Egg (draw 2); Graveyard carries two, to find its Ghouls too.
+ *  - At most MAX_COPIES (4) of one card (Patrick, 2026-11-16): a deck leans on its engine.
+ *  - At least one upgrade beside the item it is built from (played onto the hero wearing
+ *    that item, the upgrade costs only the difference).
+ *  - A counter: Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
+ *  - One Golden Goose Egg (draw 2), no more: running out of cards loses (2026-11-16).
  *  - Mostly equipment: spells are played once, so at most half the deck.
- *  - Built for the rules of 2026-11-16: a side swings twice a turn when its Retreat is free
- *    (attack, Retreat, attack), so free Retreats and what a hero gets for stepping in are worth
- *    a swing; the Cooldown items shorten every wait, a charged skill's too; Healing Tempo turns
- *    a heal into a swing and a free Retreat.
  */
 export interface ReadyDeck {
   id: string;
@@ -33,76 +29,85 @@ export interface ReadyDeck {
   items: CardId[];
 }
 
-const x2 = (id: CardId): CardId[] => [id, id];
+const n = (k: number, id: CardId): CardId[] => Array.from({ length: k }, () => id);
 
 export const READY_DECKS: readonly ReadyDeck[] = [
   {
-    id: 'gunline',
-    name: 'Gunline',
-    blurb: 'Two shots a turn. Warden holds the lane, retreats for free, and Vindicta or Haze shoots again.',
-    heroes: ['hero_warden', 'hero_vindicta', 'hero_haze'],
+    id: 'headshot',
+    name: 'Headshot',
+    blurb: 'One gun at a time, one target: every swing finds a bonus, full HP, above half or below it.',
+    heroes: ['hero_drifter', 'hero_vindicta', 'hero_wraith'],
     items: [
-      ...x2('extended_magazine'), ...x2('headshot_booster'), ...x2('restorative_shot'), 'grit', 'golden_goose_egg',
-      ...x2('swift_striker'), 'kinetic_dash', 'titanic_magazine', 'improved_cooldown',
-      'knockdown', 'burst_fire', 'toxic_bullets',
+      ...n(4, 'headshot_booster'), ...n(2, 'extended_magazine'), 'restorative_shot', 'golden_goose_egg',
+      ...n(2, 'opening_rounds'), 'titanic_magazine', ...n(2, 'kinetic_dash'),
+      'knockdown', 'headhunter', 'express_shot',
     ],
   },
   {
-    id: 'spirit_storm',
-    name: 'Spirit Storm',
-    blurb: "Three skills that hit every enemy, cast more often: Lash and Kelvin soften, Seven's storm finishes.",
-    heroes: ['hero_lash', 'hero_seven', 'hero_kelvin'],
+    id: 'spray',
+    name: 'Spray',
+    blurb: 'Every swing hits them all: Split Shot and Tesla spread it, Stalker bleeds and shreds each one, Haze ends it.',
+    heroes: ['hero_warden', 'hero_haze', 'hero_silver'],
     items: [
-      ...x2('extra_spirit'), ...x2('mystic_burst'), 'mystic_regeneration', 'extra_charge', 'healing_rite', 'golden_goose_egg',
-      ...x2('improved_spirit'), ...x2('improved_cooldown'), 'mystic_vulnerability',
-      'knockdown', 'torment_pulse', 'superior_cooldown',
+      ...n(4, 'extended_magazine'), 'restorative_shot', 'golden_goose_egg',
+      ...n(4, 'split_shot'), 'titanic_magazine', ...n(2, 'stalker'), 'kinetic_dash',
+      'knockdown', 'tesla_bullets',
     ],
   },
   {
-    id: 'aurora',
-    name: 'Aurora',
-    blurb: "Victor's aura wounds them all, Dynamo's aurora heals your side into a free Retreat, and Drifter finishes the wounded.",
-    heroes: ['hero_victor', 'hero_dynamo', 'hero_drifter'],
+    id: 'nuke',
+    name: 'Nuke',
+    blurb: 'Every skill is a kill shot: Tankbuster and Mystic Burst ride it, Echo Shard casts it twice, Infuser heals off it.',
+    heroes: ['hero_lady_geist', 'hero_shiv', 'hero_yamato'],
     items: [
-      ...x2('extended_magazine'), ...x2('extra_health'), ...x2('healing_rite'), 'restorative_shot', 'grit', 'sprint_boots', 'golden_goose_egg',
-      'healing_booster', 'improved_cooldown', 'kinetic_dash', 'bullet_lifesteal', 'debuff_reducer',
-      'healing_tempo',
+      ...n(2, 'extra_spirit'), ...n(3, 'mystic_burst'), 'golden_goose_egg',
+      ...n(2, 'improved_spirit'), ...n(2, 'mystic_vulnerability'), 'spirit_lifesteal',
+      'knockdown', 'improved_burst',
+      ...n(2, 'echo_shard'), 'infuser',
     ],
   },
   {
-    id: 'ambush',
-    name: 'Ambush',
-    blurb: 'Swap in, strike, swap again: every hero that steps in hits for 3 more.',
-    heroes: ['hero_silver', 'hero_yamato', 'hero_mirage'],
+    id: 'storm',
+    name: 'Storm',
+    blurb: "Area skills on every enemy, and Greater Expansion turns Seven's one-target charge into a storm.",
+    heroes: ['hero_kelvin', 'hero_lash', 'hero_seven'],
     items: [
-      ...x2('extended_magazine'), ...x2('headshot_booster'), 'restorative_shot', 'grit', 'golden_goose_egg',
-      ...x2('kinetic_dash'), 'titanic_magazine', 'swift_striker', 'improved_cooldown',
-      'majestic_leap', 'knockdown', 'tesla_bullets', 'burst_fire',
+      ...n(4, 'extra_spirit'), ...n(2, 'mystic_expansion'), 'extra_charge', 'golden_goose_egg',
+      ...n(2, 'improved_spirit'), ...n(2, 'mystic_vulnerability'), 'mystic_slow',
+      'knockdown', 'greater_expansion', 'torment_pulse',
     ],
   },
   {
     id: 'lockdown',
     name: 'Lockdown',
-    blurb: 'Disarm, silence and hex them every turn, then Wraith shoots twice.',
-    heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_wraith'],
+    blurb: 'Stun, disarm, silence and lock their spells, each a turn longer, until their deck runs dry.',
+    heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_viscous'],
     items: [
-      // Headshot Booster for Titanic Magazine since prices halved (2026-11-16): Disarming Hex's
-      // 1.5 rounds to 2, twice, and the deck came to 29; Wraith's first swing on a fresh Active
-      // gets the +2 instead, for 1 soul.
-      'rusted_barrel', ...x2('extended_magazine'), ...x2('extra_health'), 'grit', 'golden_goose_egg',
-      'headshot_booster', 'slowing_hex', ...x2('improved_cooldown'),
-      ...x2('disarming_hex'), 'knockdown', 'superior_cooldown', 'burst_fire',
+      'rusted_barrel', ...n(4, 'extra_health'), ...n(2, 'extra_regen'), 'golden_goose_egg',
+      ...n(2, 'duration_extender'), 'slowing_hex',
+      ...n(2, 'knockdown'), 'disarming_hex', 'superior_duration', 'silence_glyph',
     ],
   },
   {
     id: 'graveyard',
     name: 'Graveyard',
-    blurb: 'Graves fills your deck with Ghouls and roots what would swap away; every Ghoul that falls costs them a card.',
-    heroes: ['hero_viscous', 'hero_graves', 'hero_lady_geist'],
+    blurb: 'Grind them out: Abrams holds the lane, Rem puts their carry to sleep, and every Ghoul that falls mills a card.',
+    heroes: ['hero_abrams', 'hero_graves', 'hero_rem'],
     items: [
-      ...x2('extra_spirit'), ...x2('golden_goose_egg'), 'healing_rite', 'extra_health', 'mystic_burst', 'mystic_regeneration',
-      'improved_spirit', ...x2('improved_cooldown'), 'mystic_slow', 'spirit_lifesteal', 'debuff_reducer',
-      'torment_pulse', 'decay',
+      ...n(4, 'extra_health'), ...n(2, 'extra_regen'), 'healing_rite', 'golden_goose_egg',
+      'debuff_reducer', 'weapon_shielding', 'spirit_shielding', ...n(2, 'mystic_slow'), 'healbane',
+      'fortitude', 'healing_nova',
+    ],
+  },
+  {
+    id: 'aurora',
+    name: 'Aurora',
+    blurb: "Heal and shield every turn: Victor's aura wounds them all, and a hero Dynamo heals swings harder and retreats free.",
+    heroes: ['hero_victor', 'hero_dynamo', 'hero_paige'],
+    items: [
+      ...n(3, 'extra_health'), 'extra_regen', ...n(2, 'healing_rite'), 'sprint_boots', 'restorative_shot', 'extended_magazine', 'golden_goose_egg',
+      ...n(2, 'healing_booster'), 'enduring_speed', 'restorative_locket', 'debuff_reducer',
+      'healing_tempo',
     ],
   },
 ];
