@@ -176,8 +176,8 @@ describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () =
     return { G, lash, them, cast };
   }
 
-  it('the card: one effect, no number', () => {
-    expect(ULTIMATES.find((u) => u.linkedHero === 'hero_lash')!.text).toBe("Return an enemy hero to its player's hand; its items are shuffled into their deck.");
+  it('the card: the lift, and the slam on the rest (every ultimate scales, 2026-11-17)', () => {
+    expect(ULTIMATES.find((u) => u.linkedHero === 'hero_lash')!.text).toBe('Return an enemy hero to hand, items to deck; others take {sp:1} spirit damage.');
   });
 
   it('the hero goes to the hand at full HP with its level, and what it wore is shuffled into the deck (Patrick: "back to deck")', () => {

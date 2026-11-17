@@ -216,8 +216,12 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     const attack = top.find((o) => o.move === 'attack')!;
     const pass = top.find((o) => o.move === 'endTurn')!;
     expect(attack).toBeDefined();
-    // The line is valued after P1's answer: Victor up again, his charge spent — still better than nothing.
-    expect(attack.score).toBeGreaterThan(pass.score);
+    // The line is valued after P1's answer: Victor up again at half HP, and since 2026-11-17 his
+    // revival shocks every enemy ({sp:1}) — so the lookahead prices the swing below what it would
+    // be worth if he simply fell (the crude list, no lookahead), and below passing.
+    const crude = enumerateAIMoves(G, ctx('0'), false).find((o) => o.move === 'attack')!;
+    expect(attack.score).toBeLessThan(crude.score);
+    expect(pass).toBeDefined();
   });
 
   it('a prompt at the start of his own turn: his Aura fells him, and he is asked as his turn opens', () => {
@@ -331,21 +335,22 @@ describe('Silver — Boot Kick and Lycan Curse', () => {
     expect(silver.tally?.[SILVER_ULT]).toBe(2);                        // the kick charged her: the 2 it dealt
   });
 
-  it('Lycan Curse: Wolf form for 2 of her turns — +3 Attack, Shield 6, the wolf on her card — and then she is Silver again', () => {
+  it('Lycan Curse: Wolf form for 2 of her turns — +{bp:1/2} Attack (1 + half her Attack), Shield 6, the wolf on her card — and then she is Silver again', () => {
     const G = freshReadyGame();
     const silver = standIn(G, '0', 'hero_silver');
     const atk = effectiveAtk(silver);
+    const wolf = 1 + Math.floor(atk / 2);
     silver.tally = { [SILVER_ULT]: SILVER_NEED };
     expect(heroForm(silver)).toBeUndefined();
     expect(perform(G, '0', { type: 'useSkill', heroIid: silver.iid, skillId: SILVER_ULT, targetIid: silver.iid })).not.toBe(INVALID);
-    expect(effectiveAtk(silver)).toBe(atk + 3);
+    expect(effectiveAtk(silver)).toBe(atk + wolf);
     expect(silver.statuses.find((s) => s.id === 'shield')?.value).toBe(6);
     expect(heroForm(silver)).toEqual({ label: 'Wolf form', turns: 2, art: 'hero_silver_wolf_card.webp' });
     // Her next turn: still a wolf, one turn left.
     let pid = nextTurn(G, '0');
     pid = nextTurn(G, pid);
     expect(pid).toBe('0');
-    expect(effectiveAtk(silver)).toBe(atk + 3);
+    expect(effectiveAtk(silver)).toBe(atk + wolf);
     expect(heroForm(silver)?.turns).toBe(1);
     // The turn after: the form has run out.
     pid = nextTurn(G, nextTurn(G, pid));
@@ -376,8 +381,8 @@ describe('the charged lines print on their own, under the effect', () => {
   it('each names its count in the doc\'s words; the effect stays 15 words or fewer', () => {
     expect(ultimateCard(VICTOR_ULT)!.charged).toEqual({ need: 10, by: 'taken', text: 'Ready once Victor has taken 10 damage.' });
     expect(ultimateCard(SILVER_ULT)!.charged).toEqual({ need: 8, by: 'dealt', text: 'Ready once Silver has dealt 8 damage.' });
-    expect(ultimateCard(VICTOR_ULT)!.text).toBe('When Victor falls, you may use this: he revives where he is with half HP.');
-    expect(ultimateCard(SILVER_ULT)!.text).toBe('Silver turns into a wolf for 2 turns: +3 Attack and Shield 6.');
+    expect(ultimateCard(VICTOR_ULT)!.text).toBe('Falling, Victor may revive at half HP and deal {sp:1} spirit damage to every enemy.');
+    expect(ultimateCard(SILVER_ULT)!.text).toBe('Silver turns into a wolf for 2 turns: +{bp:1/2} Attack and Shield 6.');
   });
 });
 

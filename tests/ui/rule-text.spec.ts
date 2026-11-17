@@ -367,6 +367,8 @@ const BP_SCALING: string[] = [
   // Every hero skill and passive scales with Spirit or Bullet Power (Patrick, 2026-11-17);
   // these three with Bullet Power: 1 + half the hero's Attack (`effectiveAtk`), counted once.
   'skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent',
+  // And two ultimates: Bullet Dance ({bp:0}, her Attack) and Lycan Curse ({bp:1/2}).
+  'ult_haze', 'ult_silver',
 ];
 
 /** Where an ability's text is printed: a hero ability prints its own; a spell,
@@ -393,12 +395,13 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
       'eff_ult_warden', 'eff_ult_drifter',
       // Every skill and passive scales (Patrick, 2026-11-17): these four read Spirit since.
       'skill_wraith', 'skill_sinclair', 'skill_warden', 'passive_abrams_heal', 'passive_victor_aura',
+      // And every ultimate (Patrick, 2026-11-17), Bullet Dance and Lycan Curse by Bullet Power:
+      'eff_ult_lash', 'eff_ult_rem', 'eff_ult_yamato', 'eff_ult_mirage', 'eff_ult_victor', 'eff_ult_graves',
     ]) expect(found.has(id), id).toBe(true);
-    // A flat number reads no Spirit: Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler;
-    // and Lash's Grapple, a swap with no number, and Death Slam, a lift to the hand (2026-11-17).
+    // Reads no Spirit: Bullet Dance (Haze's Attack, {bp:0}); Lash's Grapple, whose payoff is an
+    // attack (Bullet Power) and Ground Strike's {sp:3}.
     for (const id of [
-      'skill_lash', 'eff_ult_lash', // Grapple's payoff is an attack (Bullet Power) and Ground Strike's {sp:3}
-      'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
+      'skill_lash', 'eff_ult_haze',
       'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);
   });
@@ -441,7 +444,9 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   it('the first mark carries the ability\'s base number', () => {
     for (const id of READS_SPIRIT) {
       const base = (ABILITIES_BY_ID[id] as { base?: number }).base;
-      if (base === undefined) continue;
+      // Where the main effect is control with no number, `base` is that control's worth to the AI
+      // (the lift, the Sleep, the Rabbit, the Gravestone, the revival) and the printed number is the scaling part.
+      if (base === undefined || ['eff_ult_lash', 'eff_ult_rem', 'eff_ult_graves', 'eff_ult_victor', 'skill_sinclair'].includes(id)) continue;
       const first = parseMarkup(textOf(id)[0]).find((t) => t.type === 'num');
       expect(first && first.type === 'num' ? first.base : undefined, id).toBe(base);
     }
@@ -450,8 +455,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — Tag Along\'s Attack and Victor\'s aura (2026-11-17: Spirit counted once, as gear counts it, and on every enemy)', () => {
     const halfMarked = [...READS_SPIRIT].filter((id) => textOf(id).some((t) => /\{sp:\d+\/2\}/.test(t)));
     const halfCode = abilitiesSource.match(/Math\.floor\((?:spi|activeSpi|ultSpi|effectiveSpirit)\([^)]*\) \/ 2\)/g) ?? [];
-    expect(halfMarked.sort()).toEqual(['passive_victor_aura', 'skill_rem']);
-    expect(halfCode).toHaveLength(2);
+    expect(halfMarked.sort()).toEqual(['eff_ult_graves', 'passive_victor_aura', 'skill_rem']);
+    expect(halfCode).toHaveLength(3);
   });
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
