@@ -44,7 +44,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_haze', name: 'Haze', type: 'hero', rarity: 3,
-    atk: 1, hp: 4, growth: { atk: 3, hp: 1, spirit: 0 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 3, hp: 1, spirit: 0 }, retreat: 1,
     profile: { role: 'Gun carry', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'late', gun: true },
     skills: [], passives: ['passive_haze_fixation'], ult: 'eff_ult_haze',
     signature: ['swift_striker', 'burst_fire'],
@@ -60,7 +60,7 @@ export const HEROES: HeroCard[] = [
     // Rem stands in the lane like any hero (Patrick, 2026-11-09: no longer
     // bench-only); Tag Along makes her equipment on an ally for 2 turns.
     id: 'hero_rem', name: 'Rem', type: 'hero', rarity: 3,
-    atk: 1, hp: 4, growth: { atk: 0, hp: 1, spirit: 3 }, retreat: 0,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 3 }, retreat: 0,
     profile: { role: 'Support', mix: { tank: 0, damage: 0, control: 1, support: 3 }, reach: 'one', curve: 'late' },
     skills: ['skill_rem'], ult: 'eff_ult_rem',
     signature: ['extra_spirit', 'healing_nova'],
@@ -74,21 +74,21 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_vindicta', name: 'Vindicta', type: 'hero', rarity: 3,
-    atk: 2, hp: 5, growth: { atk: 2, hp: 0, spirit: 0 }, retreat: 0,
+    atk: 2, hp: 5, growth: { atk: 1, hp: 1, spirit: 0 }, retreat: 0,
     profile: { role: 'Marksman', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'early', gun: true },
     skills: ['skill_vindicta'], ult: 'eff_ult_vindicta',
     signature: ['long_range', 'sharpshooter'],
   },
   {
     id: 'hero_wraith', name: 'Wraith', type: 'hero', rarity: 3,
-    atk: 1, hp: 4, growth: { atk: 3, hp: 1, spirit: 0 }, retreat: 0,
+    atk: 1, hp: 5, growth: { atk: 3, hp: 1, spirit: 0 }, retreat: 0,
     profile: { role: 'Gun carry', mix: { tank: 0, damage: 3, control: 1, support: 0 }, reach: 'one', curve: 'late', gun: true },
     skills: ['skill_wraith'], ult: 'eff_ult_wraith',
     signature: ['spirit_strike', 'spiritual_overflow'],
   },
   {
     id: 'hero_dynamo', name: 'Dynamo', type: 'hero', rarity: 3,
-    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 2, spirit: 2 }, retreat: 1,
     // Support 3 since 2026-11-16 (Rejuvenating Aurora heals his side); his
     // control is Singularity's (control 2: in the ultimate).
     profile: { role: 'Support', mix: { tank: 1, damage: 1, control: 2, support: 3 }, reach: 'many', curve: 'mid' },
@@ -104,7 +104,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_lady_geist', name: 'Lady Geist', type: 'hero', rarity: 3,
-    atk: 1, hp: 7, growth: { atk: 0, hp: 0, spirit: 2 }, retreat: 2,
+    atk: 1, hp: 7, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 2,
     profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'early' },
     skills: ['skill_lady_geist'], ult: 'eff_ult_lady_geist',
     signature: ['mystic_vulnerability', 'spirit_snatch'],
@@ -127,14 +127,14 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_seven', name: 'Seven', type: 'hero', rarity: 3,
-    atk: 1, hp: 4, growth: { atk: 0, hp: 1, spirit: 3 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 3 }, retreat: 1,
     profile: { role: 'Spirit caster', mix: { tank: 1, damage: 3, control: 1, support: 0 }, reach: 'many', curve: 'late' },
     skills: ['skill_seven'], ult: 'eff_ult_seven',
     signature: ['spirit_sap', 'surge_of_power'],
   },
   {
     id: 'hero_sinclair', name: 'Sinclair', type: 'hero', rarity: 3,
-    atk: 1, hp: 4, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
     profile: { role: 'Controller', mix: { tank: 0, damage: 1, control: 3, support: 1 }, reach: 'one', curve: 'mid' },
     skills: ['skill_sinclair'], ult: 'eff_ult_sinclair',
     signature: ['slowing_hex', 'disarming_hex'],
@@ -148,8 +148,8 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_yamato', name: 'Yamato', type: 'hero', rarity: 3,
-    atk: 2, hp: 5, growth: { atk: 1, hp: 1, spirit: 1 }, retreat: 0,
-    profile: { role: 'Assassin', mix: { tank: 1, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'mid', gun: true },
+    atk: 1, hp: 5, growth: { atk: 1, hp: 1, spirit: 1 }, retreat: 0,
+    profile: { role: 'Assassin', mix: { tank: 1, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'mid' },
     skills: ['skill_yamato'], ult: 'eff_ult_yamato',
     signature: ['extended_magazine', 'shadow_weave'],
   },
@@ -162,7 +162,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_mirage', name: 'Mirage', type: 'hero', rarity: 3,
-    atk: 1, hp: 4, growth: { atk: 1, hp: 1, spirit: 2 }, retreat: 0,
+    atk: 2, hp: 5, growth: { atk: 1, hp: 1, spirit: 2 }, retreat: 0,
     profile: { role: 'Assassin', mix: { tank: 1, damage: 2, control: 1, support: 0 }, reach: 'one', curve: 'late' },
     skills: [], passives: ['passive_mirage_djinns_mark'], ult: 'eff_ult_mirage',
     signature: ['fleetfoot', 'tesla_bullets'],
@@ -178,7 +178,7 @@ export const HEROES: HeroCard[] = [
     // The tank who won't die: his Aura burns him too, and every hit he soaks
     // up makes his charged revive cheaper (asked when he falls).
     id: 'hero_victor', name: 'Victor', type: 'hero', rarity: 3,
-    atk: 1, hp: 6, growth: { atk: 0, hp: 3, spirit: 1 }, retreat: 2,
+    atk: 1, hp: 7, growth: { atk: 1, hp: 3, spirit: 0 }, retreat: 2,
     profile: { role: 'Tank', mix: { tank: 3, damage: 2, control: 0, support: 0 }, reach: 'many', curve: 'late' },
     skills: [], passives: ['passive_victor_aura'], ult: 'eff_ult_victor',
     signature: ['extra_health', 'torment_pulse'],
@@ -187,7 +187,7 @@ export const HEROES: HeroCard[] = [
     // Kick-marks one target and shotguns it; the damage she deals charges her
     // wolf form.
     id: 'hero_silver', name: 'Silver', type: 'hero', rarity: 3,
-    atk: 2, hp: 6, growth: { atk: 2, hp: 1, spirit: 0 }, retreat: 1,
+    atk: 2, hp: 6, growth: { atk: 1, hp: 2, spirit: 0 }, retreat: 1,
     profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 1, support: 0 }, reach: 'one', curve: 'mid', gun: true },
     skills: ['skill_silver'], ult: 'eff_ult_silver',
     signature: ['monster_rounds', 'bullet_lifesteal'],
@@ -196,7 +196,7 @@ export const HEROES: HeroCard[] = [
     // The necromancer (Patrick, 2026-11-16): she traps the lane and fills her
     // own deck with Ghouls; her Gravestone keeps them coming.
     id: 'hero_graves', name: 'Graves', type: 'hero', rarity: 3,
-    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 2, spirit: 2 }, retreat: 1,
     profile: { role: 'Controller', mix: { tank: 1, damage: 2, control: 2, support: 0 }, reach: 'many', curve: 'mid' },
     skills: ['skill_graves'], ult: 'eff_ult_graves',
     signature: ['mystic_slow', 'torment_pulse'],

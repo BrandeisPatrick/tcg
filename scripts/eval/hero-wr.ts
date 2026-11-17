@@ -1,6 +1,14 @@
 // Hero win-rate check: N heuristic-vs-heuristic games through the fuzz driver, one JSON line per game.
 //   npx vite-node scripts/eval/hero-wr.ts <fromSeed> <toSeed> > out.jsonl
+//   OFF=skill_shiv,eff_ult_shiv turns those abilities into no-ops (what is a hero's edge made of?).
 import { playGame } from '../../tests/engine/fuzz/driver';
+import { getAbility } from '@/engine/registry';
+import '@/abilities';
+for (const id of (process.env.OFF ?? '').split(',').filter(Boolean)) {
+  const a = getAbility(id as never) as { run?: unknown } | undefined;
+  if (!a) throw new Error(`OFF: no ability ${id}`);
+  a.run = () => {};
+}
 const from = Number(process.argv[2] ?? 1), to = Number(process.argv[3] ?? 10);
 for (let seed = from; seed <= to; seed++) {
   try {

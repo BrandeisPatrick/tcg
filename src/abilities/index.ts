@@ -2308,9 +2308,9 @@ const skill_viscous: HeroAbilityDef = {
 // spirit damage less the 2 HP (0.5 each) is 3.0, the top of a wait-3 skill's
 // 2–3 (hero-design.md §4); the HP she pays also feeds Soul Exchange.
 const skill_lady_geist: HeroAbilityDef = {
-  id: 'skill_lady_geist', trigger: 'activate', target: 'enemyActive', hpCost: 2,
+  id: 'skill_lady_geist', trigger: 'activate', target: 'enemyActive', hpCost: 1,
   name: 'Essence Bomb',
-  text: 'Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active.',
+  text: 'Lady Geist pays 1 HP: deal {sp:4} spirit damage to the enemy Active.',
   base: 4,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2321,7 +2321,7 @@ const skill_lady_geist: HeroAbilityDef = {
 // Shiv — Serrated Knives: the bleed that was his free on-hit passive, now a
 // thrown knife he pays for.
 const skill_shiv: HeroAbilityDef = {
-  id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', charges: 2,
+  id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', cooldown: 4, charges: 2,
   name: 'Serrated Knives',
   text: 'Deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns.',
   base: 1,
@@ -2373,12 +2373,12 @@ const skill_wraith: HeroAbilityDef = {
 const skill_seven: HeroAbilityDef = {
   id: 'skill_seven', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Static Charge',
-  text: 'Deal {sp:1} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn.',
-  base: 1,
+  text: 'Deal {sp:2} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn.',
+  base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    damageUnit(G, target, 1 + spi(source), 'spirit', 'Static Charge');
+    damageUnit(G, target, 2 + spi(source), 'spirit', 'Static Charge');
     addStatus(G, target, 'charged', 1, 2);
   },
 };
@@ -2398,12 +2398,12 @@ const GHOUL_DEATH_DISCARD = 1;
 const skill_graves: HeroAbilityDef = {
   id: 'skill_graves', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Grasping Hands',
-  text: 'Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck.',
-  base: 1,
+  text: 'Deal {sp:2} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck.',
+  base: 2,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
     if (target) {
-      damageUnit(G, target, 1 + spi(source), 'spirit', 'Grasping Hands');
+      damageUnit(G, target, 2 + spi(source), 'spirit', 'Grasping Hands');
       addStatus(G, target, 'rooted', 1, 1);
     }
     raiseIntoDeck(G, ctx.movingPlayer, GHOUL, GRASPING_HANDS_GHOULS, 'Grasping Hands');
@@ -2516,7 +2516,7 @@ const skill_yamato: HeroAbilityDef = {
 // waits 4. No charges: Deadlock gives it none (cooldown 48 s, its longest).
 // docs/hero-design.md, Dynamo.
 const skill_dynamo: HeroAbilityDef = {
-  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', cooldown: 4,
+  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget',
   name: 'Rejuvenating Aurora',
   text: 'Your heroes heal {sp:5} each.',
   base: 5,
@@ -2533,11 +2533,11 @@ const skill_dynamo: HeroAbilityDef = {
 const skill_kelvin: HeroAbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive', cooldown: 4, charges: 2,
   name: 'Frost Grenade',
-  text: 'Deal {sp:3} spirit damage to the enemy Active and heal Kelvin {sp:3}.',
-  base: 3,
+  text: 'Deal {sp:2} spirit damage to the enemy Active and heal Kelvin {sp:2}.',
+  base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
-    const x = 3 + spi(source);
+    const x = 2 + spi(source);
     if (target) damageUnit(G, target, x, 'spirit', 'Frost Grenade');
     if (source) healUnit(G, source, x, 'Frost Grenade');
   },
@@ -2567,12 +2567,12 @@ const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
-  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4}, then returns to your bench.',
-  base: 4,
+  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:6}, then returns to your bench.',
+  base: 6,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
     if (!source || !target || target === source) return;
-    healUnit(G, target, 4 + spi(source), 'Tag Along');
+    healUnit(G, target, 6 + spi(source), 'Tag Along');
     rideOn(G, G.players[ctx.movingPlayer], source, target, TAG_ALONG_TURNS);
   },
 };
@@ -2581,7 +2581,7 @@ const skill_rem: HeroAbilityDef = {
 // rival's next turn. Its +1 damage rider went on 2026-11-16 (Patrick: one
 // rule); a turn denied is the 3 points of a skill that waits 4 by itself.
 const skill_sinclair: HeroAbilityDef = {
-  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', cooldown: 4,
+  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive',
   name: 'Rabbit Hex',
   text: 'Turn the enemy Active into a Rabbit for 1 turn.',
   base: 3,
@@ -2636,7 +2636,7 @@ const passive_victor_aura: HeroAbilityDef = {
 const passive_mirage_djinns_mark: HeroAbilityDef = {
   id: 'passive_mirage_djinns_mark', trigger: 'onAttack', target: 'self',
   name: "Djinn's Mark",
-  text: "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:4} spirit damage.",
+  text: "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:6} spirit damage.",
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
     // A swing that drops its target, or Mirage himself (Return Fire), marks
@@ -2647,7 +2647,7 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
     if (mark && mark.value >= DJINN_CAP) {
       target.statuses = target.statuses.filter((s) => s !== mark);
       pushLog(G, `${cardName(target.cardId)} — Djinn's Mark detonates.`);
-      damageUnit(G, target, 4 + spi(source), 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
+      damageUnit(G, target, 6 + spi(source), 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
     }
   },
 };
@@ -2655,12 +2655,12 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
 const passive_abrams_heal: HeroAbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
   name: 'Infernal Resilience',
-  text: 'At the start of your turn, if Abrams is Active, he heals 2.',
+  text: 'At the start of your turn, if Abrams is Active, he heals 1.',
   run: (G, _ctx, { source }) => {
     if (!source) return;
     const found = findCardOnBoard(G, source.iid);
     if (found && found.card === source && source.zone === 'active') {
-      healUnit(G, source, 2, 'Infernal Resilience', { tag: 'regen' });
+      healUnit(G, source, 1, 'Infernal Resilience', { tag: 'regen' });
     }
   },
 };
@@ -2688,11 +2688,11 @@ const passive_haze_fixation: HeroAbilityDef = {
 const skill_vindicta: HeroAbilityDef = {
   id: 'skill_vindicta', trigger: 'activate', target: 'enemyHero', cooldown: 5, charges: 2,
   name: 'Assassinate',
-  text: 'Snipe any enemy, bench too: deal {sp:4} spirit damage.',
-  base: 4,
+  text: 'Snipe any enemy, bench too: deal {sp:3} spirit damage.',
+  base: 3,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
-    if (target) damageUnit(G, target, 4 + spi(source), 'spirit', 'Assassinate');
+    if (target) damageUnit(G, target, 3 + spi(source), 'spirit', 'Assassinate');
   },
 };
 
