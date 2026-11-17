@@ -79,9 +79,9 @@ casts a skill again for 1 soul; Infuser makes the nukes heal their caster (Lady 
 for hers). Extra Spirit ×2 → Improved Spirit ×2 (a skill counts Spirit twice), Spirit
 Lifesteal, Knockdown, the Egg.
 
-**Storm** (Kelvin, Lash, Seven). Area skills on every enemy: Frost Grenade and Death Slam; Lash's
-landing (Ground Strike, since 2026-11-17) is one target, so Expansion widens it when he Grapples in,
-and Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion ×2
+**Storm** (Kelvin, Lash, Seven). Area skills on every enemy: Frost Grenade; Lash's landing (Ground
+Strike, since 2026-11-17) is one target, so Expansion widens it when he leaps in, and on him Greater
+Expansion makes Death Slam lift the whole enemy side back to the hand. Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion ×2
 first, a neighbour's 1). Mystic Vulnerability ×2 and Mystic Slow land on everything an area
 skill hits; Torment Pulse chips two a turn. Extra Spirit ×4 → Improved Spirit ×2, Extra Charge
 for Kelvin's grenade, Knockdown, the Egg.

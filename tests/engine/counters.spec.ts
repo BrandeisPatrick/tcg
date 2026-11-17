@@ -339,14 +339,12 @@ describe('Counterspell: a spell that shields one of your heroes from the next en
     const mates = heroesOf(G.players['0']).filter((h) => h !== haze);
     for (const h of mates) { h.hpMax = 30; h.hp = 20; }
     nextTurn(G, '0');
-    const lash = makeInstance(allocatorOf(G), 'hero_lash', '1', 'bench', 1);
-    lash.level = ULT_UNLOCK_LEVEL;
-    G.players['1'].bench[0] = lash;
-    // Death Slam: every enemy, and each Stunned. (Lash's skill was the area card here until
-    // 2026-11-17; it is now Grapple, a swing in from the bench.)
-    act(G, '1', { type: 'useSkill', heroIid: lash.iid, skillId: 'eff_ult_lash' });
+    // Kelvin's Frost Grenade: 1 to every enemy. (Lash's skill was the area card here until
+    // 2026-11-17, when it stopped hitting every enemy.)
+    const kelvin = makeInstance(allocatorOf(G), 'hero_kelvin', '1', 'bench', 1);
+    G.players['1'].bench[0] = kelvin;
+    act(G, '1', { type: 'useSkill', heroIid: kelvin.iid });
     expect(haze.hp).toBe(20 + COUNTERSPELL_HEAL);
-    expect(has(haze, 'stun')).toBe(false);
     expect(mates.every((h) => h.hp < 20)).toBe(true);
     expect(has(haze, 'counterspell')).toBe(false);
   });

@@ -910,8 +910,8 @@ the effects they lack; Patrick picked these. None was simulated.
 
 | Card | Tab · tier | Price | Text | Value (points) |
 |---|---|---|---|---|
-| Mystic Expansion | Spirit T1 (new) | 1 | When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage. | about 2.7 one-enemy damaging casts in its 8 turns worn × 0.8 that a neighbour stands × 1 = **2.2**, its tier's 2 |
-| Greater Expansion | Spirit T3 (new, built from it) | 4 | When the bearer's skill deals damage to one enemy, every other enemy takes the same damage. | 1.3 casts in 4 turns × 2.2 other enemies standing × about 4 (a Level 2 skill, Spirit counted twice) = **11.4**, the top of its band (6–12) |
+| Mystic Expansion | Spirit T1 (new) | 1 | When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage. Lash's Death Slam lifts them too (2026-11-17). | about 2.7 one-enemy damaging casts in its 8 turns worn × 0.8 that a neighbour stands × 1 = **2.2**, its tier's 2 |
+| Greater Expansion | Spirit T3 (new, built from it) | 4 | When the bearer's skill deals damage to one enemy, every other enemy takes the same damage. Lash's Death Slam lifts every enemy hero (2026-11-17). | 1.3 casts in 4 turns × 2.2 other enemies standing × about 4 (a Level 2 skill, Spirit counted twice) = **11.4**, the top of its band (6–12) |
 | Trophy Collector | Vitality T2 (new) | 2 | Your lane pays 1 more soul a turn while it is worn. Two do not add up. | 6 souls in its 6 turns worn less its 2 = 4 net; souls stop being the limit by mid-match (balance-model.md §12), so about half buys something: 4 × 2 × 0.5 = **4.0** |
 | Cultist Sacrifice | Weapon T3 spell (new) | 4 | At the start of your next turn, gain 8 souls. | 8 less its 4 = 4 net; one turn later most of a burst is spent (0.8): 4 × 2 × 0.8 = **6.4**, in its band |
 | Silence Wave | Spirit T3 spell | 4 | Deal {sp:2} spirit damage to the enemy Active. The rival plays no spells on its next 2 turns. | 2; a side plays about 0.6 spells a turn at about 3 points: 2 × 0.6 × 3 = 3.6 → **5.6**, half its 8 or more, so its tier's price |

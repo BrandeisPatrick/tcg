@@ -67,10 +67,7 @@ from their "Deadlock Graphical Library" collection.
   icons are) are the game's own icon of the Deadlock ability each hero's one
   skill or passive is named for (Willpower, Fixation, Grasping Hands…): the
   deadlock-api's ability image (`image_webp` in its ability list), from the
-  community asset bucket at https://deadlock-api.com/, used as served. Lash has
-  two rows since 2026-11-17: `lash.webp` is Ground Strike's icon and
-  `lash_grapple.webp` is Grapple's (`images/abilities/lash/lash_lash.webp` in
-  the same bucket).
+  community asset bucket at https://deadlock-api.com/, used as served.
 - The icons of Mystic Expansion, Greater Expansion, Trophy Collector,
   Witchmail (`public/items/`), Cultist Sacrifice and Magic Carpet (`public/spells/`), added
   2026-11-16, are the game's own shop icons from the same asset bucket
