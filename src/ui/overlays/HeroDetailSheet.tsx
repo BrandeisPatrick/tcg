@@ -41,6 +41,7 @@ import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
 import { poster, scrimStyle, printEdge, shopInk } from '../poster';
 import { AbilityTile } from './AbilityDial';
+import { ItemWaitDial } from './ItemWaitDial';
 import { abilityDial, dialReason, dialSaid, type DialModel } from './abilityDialModel';
 import {
   scale as T, Souls, HpSegments, hpNumberStyle, ultimateGlyph, panelStyle, plateStyle, bandStyle, chargedGlow,
@@ -397,6 +398,8 @@ export function HeroDetailSheet({
           ) : (
             <ItemIcon itemId={eq.cardId} size={TILE} chip />
           )}
+          {/* An item with a wait of its own (Cheat Death): the wait as a dial, no number. */}
+          {!rider && <ItemWaitDial item={eq} size={TILE} calm={calm} memo={`${eq.iid}:item`} />}
         </button>
       ),
     };

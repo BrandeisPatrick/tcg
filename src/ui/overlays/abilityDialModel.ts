@@ -13,6 +13,8 @@
 import type { AbilityId, CardInstance } from '@/engine/types';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { kitCharges, resolveSkill, skillWait, ultCharge, ultimateCard, ultWait } from '@/engine/query';
+import { itemCard } from '@/cards';
+import { getAbility } from '@/abilities';
 
 export type DialModel =
   | {
@@ -27,6 +29,21 @@ export type DialModel =
   | { kind: 'charge'; have: number; need: number };
 
 const turns = (n: number) => `${n} turn${n === 1 ? '' : 's'}`;
+
+/** The dial of a worn item with a wait of its own (Cheat Death,
+ *  `AbilityDef.itemWait`): the turns left of it, kept on the item's
+ *  `cooldowns` under its ability's id; undefined while it is ready, and for
+ *  every item with no wait. */
+export function itemDial(item: CardInstance): DialModel | undefined {
+  const data = itemCard(item.cardId);
+  for (const id of data?.abilities ?? []) {
+    const full = getAbility(id)?.itemWait;
+    if (!full) continue;
+    const left = Math.max(0, item.cooldowns?.[id] ?? 0);
+    return left > 0 ? { kind: 'wait', left, full: Math.max(full, left) } : undefined;
+  }
+  return undefined;
+}
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 /** The dial of one of `hero`'s kit abilities, or undefined for an ability it
