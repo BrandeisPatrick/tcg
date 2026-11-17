@@ -9,12 +9,18 @@
  * the pick and Enter confirms.
  *
  * Printed in the hero draft's lobby idiom: the dark ground, cream type, gold
- * for the pick.
+ * for the pick. Each panel carries a bar of its items by shop slot (Weapon,
+ * Spirit, Vitality), so the decks compare at a glance.
+ *
+ * On a phone (2026-11-17) the decks stack, and only the picked one opens to
+ * its line and its items: the others are their name, why and slot bar, so
+ * all of them fit near one screen. The Play button stays pinned at the foot.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { CardId, DeckOffer } from '@/engine/types';
 import { cardName, itemCard } from '@/cards';
+import { deckLean } from '@/cards/deckOffers';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { useCalmMotion } from '../effects/fx/FxMotionContext';
 import { useViewport } from '../hooks/useViewport';
@@ -59,24 +65,29 @@ export function DeckDraftOverlay({ heroes, offers, onPick }: Props) {
         position: 'fixed', inset: 0, zIndex: 95,
         background: poster.ground, color: poster.cream, fontFamily: fonts.ui,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        gap: isMobile ? 14 : 20,
-        padding: isMobile ? '16px 16px 18px' : 'clamp(18px, 3vh, 32px) clamp(20px, 4vw, 48px)',
+        gap: isMobile ? 12 : 20,
+        padding: isMobile ? '14px 16px 0' : 'clamp(18px, 3vh, 32px) clamp(20px, 4vw, 48px)',
         overflowY: 'auto', overflowX: 'hidden',
       }}
     >
-      <header style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+      <header style={{
+        display: 'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: 'center',
+        justifyContent: 'center', gap: isMobile ? 12 : 10, flexShrink: 0,
+      }}>
         <h1 style={{
-          margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? 20 : 26,
-          letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.cream,
+          margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? 18 : 26,
+          letterSpacing: isMobile ? '0.12em' : '0.16em', textTransform: 'uppercase', color: poster.cream,
         }}>
           Draft your deck
         </h1>
-        <div style={{ display: 'flex', gap: 6 }} aria-label={`Your heroes: ${heroes.map(cardName).join(', ')}`}>
-          {heroes.map((h) => <Face key={h} heroId={h} size={isMobile ? 40 : 48} />)}
+        <div style={{ display: 'flex', gap: isMobile ? 4 : 6 }} aria-label={`Your heroes: ${heroes.map(cardName).join(', ')}`}>
+          {heroes.map((h) => <Face key={h} heroId={h} size={isMobile ? 32 : 48} />)}
         </div>
-        <p style={{ ...text.label, margin: 0, fontSize: 11, letterSpacing: '0.12em', color: poster.creamDim, textAlign: 'center' }}>
-          Decks that fit your heroes
-        </p>
+        {!isMobile && (
+          <p style={{ ...text.label, margin: 0, fontSize: 11, letterSpacing: '0.12em', color: poster.creamDim, textAlign: 'center' }}>
+            Decks that fit your heroes
+          </p>
+        )}
       </header>
 
       <div style={{
@@ -96,7 +107,12 @@ export function DeckDraftOverlay({ heroes, offers, onPick }: Props) {
         ))}
       </div>
 
-      <div style={{ flexShrink: 0, paddingBottom: 4 }}>
+      {/* On a phone the button is pinned at the foot, over a fade of the ground. */}
+      <div style={isMobile ? {
+        position: 'sticky', bottom: 0, alignSelf: 'stretch', flexShrink: 0, zIndex: 1,
+        display: 'flex', justifyContent: 'center', padding: '22px 0 16px', marginTop: 'auto',
+        background: `linear-gradient(to bottom, transparent, ${poster.ground} 40%)`,
+      } : { flexShrink: 0, paddingBottom: 4 }}>
         <PosterButton variant="paper" onClick={confirm} ariaLabel={`Play ${chosen?.name ?? ''}`}>
           Play {chosen?.name}
         </PosterButton>
@@ -106,7 +122,8 @@ export function DeckDraftOverlay({ heroes, offers, onPick }: Props) {
 }
 
 /** One offer: its name, why it is offered, the heroes it was made for, its
- *  line and its items, counted. */
+ *  slot bar, its line and its items, counted (on a phone the last two only
+ *  while it is picked). */
 function OfferPanel({ offer, first, chosen, compact, transition, onTap }: {
   offer: DeckOffer;
   first: boolean;
@@ -116,8 +133,15 @@ function OfferPanel({ offer, first, chosen, compact, transition, onTap }: {
   onTap: () => void;
 }) {
   const counted = countItems(offer.items);
+  // On a phone only the picked deck opens to its line and its items.
+  const open = !compact || chosen;
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (compact && chosen) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [compact, chosen]);
   return (
     <motion.article
+      ref={ref}
       role="button"
       tabIndex={0}
       aria-pressed={chosen}
@@ -153,17 +177,22 @@ function OfferPanel({ offer, first, chosen, compact, transition, onTap }: {
         {offer.why}
       </p>
 
-      {offer.madeFor.length > 0 && (
+      {/* The heroes it was made for (on a phone the line above names them). */}
+      {!compact && offer.madeFor.length > 0 && (
         <div aria-hidden style={{ display: 'flex', gap: 4 }}>
           {offer.madeFor.map((h) => <Face key={h} heroId={h} size={28} />)}
         </div>
       )}
 
-      <p style={{ ...text.body, margin: 0, fontSize: 12.5, lineHeight: 1.35, color: poster.creamDim }}>
-        {offer.blurb}
-      </p>
+      <SlotBar items={offer.items} />
 
-      <ul style={{
+      {open && (
+        <p style={{ ...text.body, margin: 0, fontSize: 12.5, lineHeight: 1.35, color: poster.creamDim }}>
+          {offer.blurb}
+        </p>
+      )}
+
+      {open && <ul style={{
         listStyle: 'none', margin: 0, padding: '8px 0 0', borderTop: `1px solid ${poster.edge}`,
         display: 'grid', gridTemplateColumns: compact ? '1fr 1fr' : '1fr', gap: '3px 10px',
       }}>
@@ -181,8 +210,31 @@ function OfferPanel({ offer, first, chosen, compact, transition, onTap }: {
             </li>
           );
         })}
-      </ul>
+      </ul>}
     </motion.article>
+  );
+}
+
+const SLOTS = ['weapon', 'spirit', 'vitality'] as const;
+const SLOT_WORD = { weapon: 'Weapon', spirit: 'Spirit', vitality: 'Vitality' } as const;
+
+/** A deck's items by shop slot: one bar in the slots' own inks, each part as
+ *  wide as its share, the counts beside it. */
+function SlotBar({ items }: { items: readonly CardId[] }) {
+  const lean = deckLean(items);
+  const counts = SLOTS.map((k) => Math.round(lean[k] * items.length));
+  const label = SLOTS.map((k, i) => `${counts[i]} ${SLOT_WORD[k]}`).join(' · ');
+  return (
+    <div role="img" aria-label={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', flex: 1, height: 5, borderRadius: 3, overflow: 'hidden', background: poster.edge }}>
+        {SLOTS.map((k) => lean[k] > 0 && <span key={k} style={{ width: `${lean[k] * 100}%`, background: shopInk(k).ink }} />)}
+      </div>
+      <span aria-hidden style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.08em', color: poster.creamDim, whiteSpace: 'nowrap' }}>
+        {SLOTS.map((k, i) => counts[i] > 0 && (
+          <span key={k} style={{ marginLeft: i ? 6 : 0 }}><span style={{ color: shopInk(k).ink }}>■</span> {counts[i]}</span>
+        ))}
+      </span>
+    </div>
   );
 }
 
