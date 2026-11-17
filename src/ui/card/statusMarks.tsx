@@ -74,6 +74,8 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
   ['cube', 'invulnerable'],
   // Infuser's lifesteal wears the healing mark.
   ['infused', 'healing_boost'],
+  // Shadow Strike's stealth wears the Dome's mark: nothing can pick it.
+  ['shadowed', 'dome'],
 ]);
 
 /** Which mark a status wears: its own picture, or the diamond tag for an id

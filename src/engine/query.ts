@@ -316,7 +316,8 @@ export type TargetFilter =
  */
 export function targetsFor(G: GameState, pid: PlayerID, filter: TargetFilter, source?: CardInstance): CardInstance[] {
   if (filter === 'noTarget') return [];
-  const enemy = liveBoardCards(G.players[otherPlayer(pid)]);
+  // A Shadowed enemy (Shadow Strike) is no one's to aim at.
+  const enemy = liveBoardCards(G.players[otherPlayer(pid)]).filter((c) => !isUntargetable(c, 'card'));
   const ally = liveBoardCards(G.players[pid]);
   const heroes = (cards: CardInstance[]) => cards.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero');
   switch (filter) {
@@ -336,7 +337,7 @@ export function targetsFor(G: GameState, pid: PlayerID, filter: TargetFilter, so
     case 'enemyBench': {
       const ps = G.players[otherPlayer(pid)];
       if (!ps.active) return [];
-      return stepInCandidates(ps).filter((b) => !isBlocked(b, 'move'));
+      return stepInCandidates(ps).filter((b) => !isBlocked(b, 'move') && !isUntargetable(b, 'card'));
     }
     case 'anyBoard': return [...enemy, ...ally];
   }
@@ -637,12 +638,23 @@ export function heroAbilities(data: HeroCard): { kind: 'skill' | 'passive'; abil
   const add = (kind: 'skill' | 'passive', ids: readonly AbilityId[]) => {
     for (const id of ids) {
       const ability = getAbility(id);
-      if (named(ability)) out.push({ kind, ability });
+      // A rule of the hero's attack (`attackRule`) prints on the Attack row, not as a kit row.
+      if (named(ability) && !ability.attackRule) out.push({ kind, ability });
     }
   };
   add('skill', data.skills);
   add('passive', data.passives ?? []);
   return out;
+}
+
+/** The rule a hero's attack carries, printed with its Attack (Lash's Ground
+ *  Strike): the passive marked `attackRule`, or undefined. */
+export function heroAttackRule(data: HeroCard): HeroAbilityDef | undefined {
+  for (const id of data.passives ?? []) {
+    const a = getAbility(id);
+    if (a?.attackRule && typeof a.name === 'string' && typeof a.text === 'string') return a as HeroAbilityDef;
+  }
+  return undefined;
 }
 
 /** Spirit damage `card`'s attack adds this turn, after its bullets: the sum of

@@ -22,7 +22,7 @@ import { SQUAD_SIZE } from '@/engine/constants';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
 import type { CardId, DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName, HEROES } from '@/cards';
-import { heroAbilities, otherPlayer } from '@/engine/query';
+import { heroAbilities, heroAttackRule, otherPlayer } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroPortraitArt } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
@@ -724,7 +724,7 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
           <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: scale.number, lineHeight: 1, color: lobby.cream }}>{data.atk}</span>
         </span>
       </span>
-      {heroAbilities(data).map(({ ability }) => (
+      {[...heroAbilities(data).map(({ ability }) => ability), ...(heroAttackRule(data) ? [heroAttackRule(data)!] : [])].map((ability) => (
         <span key={ability.id} style={{ ...text.body, fontSize: 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
           <span style={{ color: lobby.cream, fontWeight: 700 }}>{ability.name}</span>
           {ability.text ? ` — ${plainText(ability.text)}` : ''}

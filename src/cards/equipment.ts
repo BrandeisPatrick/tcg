@@ -153,7 +153,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   // A Retreat is 1 soul (RETREAT_COST), one a turn, before the attack; these make it cheap.
   { id: 'sprint_boots',   name: 'Sprint Boots',   type: 'equipment', rarity: 1, slot: 'vitality', tier: 1, abilities: ['eff_sprint_boots'],   text: "Bearer's Retreat costs 1 less." },
   { id: 'enduring_speed', name: 'Enduring Speed', type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, upgradesFrom: 'sprint_boots', abilities: ['eff_enduring_speed'], text: "Bearer's Retreat costs 1 less, and it cannot be Rooted." },
-  { id: 'kinetic_dash',   name: 'Kinetic Dash',   type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: ['eff_kinetic_dash'],   text: 'When the bearer steps into the Active slot by a Retreat or a swap: +3 Bullet Power this turn.' },
+  { id: 'kinetic_dash',   name: 'Kinetic Dash',   type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, upgradesFrom: 'extra_stamina', abilities: ['eff_kinetic_dash'],   text: 'When the bearer steps into the Active slot by a Retreat or a swap: +3 Bullet Power this turn.' },
 
   // ----- Added 2026-11-05: the full shop (docs/card-design.md) -----
   // Every passive item of Deadlock's current shop that reads as its own card
@@ -185,6 +185,16 @@ export const EQUIPMENT: EquipmentCard[] = [
   // Vitality
   { id: 'battle_vest',           name: 'Battle Vest',           type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_battle_vest'], text: 'Bullet Resist 1. While the bearer is above half HP: +1 Bullet Power.' },
   { id: 'enchanters_emblem',     name: "Enchanter's Emblem",    type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_enchanters_emblem'], text: 'Spirit Resist 1. At the start of your turn, if the bearer is above half HP: +1 Spirit Power for 1 turn.' },
+  // The Stamina line (Patrick, 2026-11-17: "I like those"): Deadlock's dash
+  // stamina is the Retreat here. Extra Stamina is the component Kinetic Dash and
+  // Arcane Surge are built from, as in Deadlock; Stamina Mastery its upgrade.
+  { id: 'extra_stamina',  name: 'Extra Stamina',  type: 'equipment', rarity: 1, slot: 'vitality', tier: 1, abilities: ['eff_extra_stamina'], text: 'Once every 3 turns, when the bearer steps into the Active slot by a Retreat or a swap: your Retreat is ready again.' },
+  { id: 'stamina_mastery', name: 'Stamina Mastery', type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, upgradesFrom: 'extra_stamina', bonus: { hp: 1 }, abilities: ['eff_stamina_mastery'], text: '+1 HP. Once a turn, when the bearer steps into the Active slot by a Retreat or a swap: your Retreat is ready again.' },
+  // Three Street Brawl items (tier 5 in Deadlock's data, not in its main shop),
+  // each a dash item: what the bearer gets the turn it steps in.
+  { id: 'seraphim_wings', name: 'Seraphim Wings', type: 'equipment', rarity: 4, slot: 'vitality', tier: 5, bonus: { hp: 3 }, abilities: ['eff_seraphim_wings'], text: '+3 HP. When the bearer steps into the Active slot by a Retreat or a swap: +2 Bullet Power, Bullet Resist 2 and Spirit Resist 2 for 1 turn.' },
+  { id: 'electric_slippers', name: 'Electric Slippers', type: 'equipment', rarity: 4, slot: 'vitality', tier: 5, abilities: ['eff_electric_slippers'], text: 'Once a turn, when the bearer steps into the Active slot by a Retreat or a swap: deal 3 spirit damage to every enemy.' },
+  { id: 'shadow_strike',  name: 'Shadow Strike',  type: 'equipment', rarity: 4, slot: 'vitality', tier: 5, bonus: { hp: 3 }, abilities: ['eff_shadow_strike'], text: '+3 HP. When the bearer steps into the Active slot by a Retreat or a swap: it is Shadowed for 1 turn (no attack, spell, skill or ultimate can be aimed at it).' },
   { id: 'veil_walker',           name: 'Veil Walker',           type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, bonus: { hp: 2 }, abilities: ['eff_veil_walker'], text: '+2 HP. When the bearer steps into the Active slot by a Retreat or a swap: heal 2 and Dome for 1 turn.' },
   // Witchmail (canon Vitality T4 passive: Spirit Power, Spirit Resist, a
   // cooldown cut, and heavy spirit hits taken cut a cooldown). Skipped while no
@@ -199,7 +209,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'spellbreaker',          name: 'Spellbreaker',          type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', bonus: { hp: 5 }, abilities: ['eff_debuff_reducer', 'eff_spellbreaker'], text: '+5 HP. Spirit Resist 2. At the start of your turn: remove 1 random debuff from the bearer. A spirit hit of 3 or more on it is halved, rounded up.' },
   // Spirit
   // Arcane Surge's stamina is Sprint Boots' line: a soul off the Retreat.
-  { id: 'arcane_surge',          name: 'Arcane Surge',          type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_sprint_boots', 'eff_arcane_surge'], text: "Bearer's Retreat costs 1 less. When it steps into the Active slot by a Retreat or a swap: +3 Spirit Power for 1 turn." },
+  { id: 'arcane_surge',          name: 'Arcane Surge',          type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, upgradesFrom: 'extra_stamina', abilities: ['eff_sprint_boots', 'eff_arcane_surge'], text: "Bearer's Retreat costs 1 less. When it steps into the Active slot by a Retreat or a swap: +3 Spirit Power for 1 turn." },
   { id: 'duration_extender',     name: 'Duration Extender',     type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_duration_extender'], text: "Buffs on the bearer, and crowd control it casts on an enemy, last 1 turn longer if they last 2 turns or more." },
   { id: 'quicksilver_reload',    name: 'Quicksilver Reload',    type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_quicksilver_reload'], text: 'After the bearer uses a skill: the enemy Active takes 1 spirit damage, and the bearer gains +1 Bullet Power for 1 turn.' },
   { id: 'radiant_regeneration',  name: 'Radiant Regeneration',  type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'mystic_regeneration', bonus: { hp: 2 }, abilities: ['eff_radiant_regeneration', 'eff_radiant_regeneration_ult'], text: '+2 HP. After the bearer uses its skill or ultimate: heal 2.' },

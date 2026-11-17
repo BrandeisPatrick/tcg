@@ -143,19 +143,13 @@ describe('the 22 heroes are the hero doc\'s cards', () => {
   });
 
   it('a hero has exactly one skill or one passive, plus an ultimate; no hero has a Weakness', () => {
-    // The one exception is Lash (Patrick, 2026-11-17): his skill Grapple is the leap in
-    // from the bench, and Ground Strike, a passive, is what his attacks add the turn he lands.
-    const TWO_ROWS: Record<string, string[]> = { hero_lash: ['skill_lash', 'passive_lash_ground_strike'] };
+    // A rule of the hero's attack (Lash's Ground Strike, Patrick 2026-11-17: "no passive, just
+    // attack has that passive") is no kit row: it prints with the Attack (`heroAttackRule`).
     for (const h of HEROES) {
       const kit = heroAbilities(h);
-      const rows = TWO_ROWS[h.id];
-      if (rows) {
-        expect(kit.map((k) => k.ability.id), h.id).toEqual(rows);
-        expect(kit.map((k) => k.kind), h.id).toEqual(['skill', 'passive']);
-      } else {
-        expect(kit.length, h.id).toBe(1);
-        expect(h.skills.length + (h.passives ?? []).length, h.id).toBe(1);
-      }
+      expect(kit.length, h.id).toBe(1);
+      const rows = (h.passives ?? []).filter((id) => !getAbility(id)?.attackRule);
+      expect(h.skills.length + rows.length, h.id).toBe(1);
       expect(ultimateCard(h.ult)?.linkedHero, h.id).toBe(h.id);
       expect(Object.keys(h).some((k) => /weak/i.test(k)), h.id).toBe(false);
     }

@@ -156,6 +156,7 @@ const STATUS_WEIGHT: Record<string, Weight> = {
   // Immunity.
   unstoppable:   { scale: 3,   turns: 2 },                // a turn of immunity to damage and crowd control is worth a lot: about 6 a turn
   dome:          { scale: 2,   turns: 1 },                // a turn no attack can reach the bearer: about a swing's damage
+  shadowed:      { scale: 3,   turns: 1 },                // a turn nothing aimed can reach it: a swing and a skill
   return_fire:   { scale: 1,   turns: 2, byValue: true }, // `value` bullet damage back at each swing that lands
   ricochet:      { scale: 2,   turns: 1, byValue: true }, // `value` bullet damage to each other enemy hero on a swing this turn, its debuffs aside
   // Rooted is flagged `cc` (Unstoppable clears it) but only stops a move, so it is

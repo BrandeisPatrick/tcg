@@ -985,6 +985,39 @@ the effects they lack; Patrick picked these. None was simulated.
   a high-Spirit caster; two Trophy Collectors' worth of tempo in a deck that
   also runs Cultist Sacrifice; Silence Wave chained 4 times.
 
+### Added 2026-11-17: the step-in items (from the Lash discussion)
+
+Patrick, of five drafts made for Lash's in-and-out play: "I like those". Deadlock's
+stamina is its dashes; here the dash is the step into the Active (a Retreat or a
+swap, as Kinetic Dash, Arcane Surge and Veil Walker already read it). Two are the
+shop's Stamina line; three are Street Brawl items (tier 5 in Deadlock's data, not in
+its main shop), each a dash item.
+
+| Card | Tab · tier | Price | Text | Value (points) |
+|---|---|---|---|---|
+| Extra Stamina | Vitality T1 (new) | 1 | Once every 3 turns, when the bearer steps into the Active slot by a Retreat or a swap: your Retreat is ready again. | a Retreat is a swap, 2; worn about 8 turns with a 3-turn wait, about 2 uses, half of them worth taking: **2**, its tier's |
+| Stamina Mastery | Vitality T3 (new, built from it) | 4 | +1 HP. Once a turn, when the bearer steps into the Active slot by a Retreat or a swap: your Retreat is ready again. | +1 HP × 0.7 × 6 turns = 4.2; the Retreat back about one turn in three of 6 worn × 2 = 4: **8.2**, its tier's 8 |
+| Seraphim Wings | Vitality T5 (Street Brawl) | 12 | +3 HP. When the bearer steps into the Active slot by a Retreat or a swap: +2 Bullet Power, Bullet Resist 2 and Spirit Resist 2 for 1 turn. | +3 HP × 0.7 × 4 turns = 8.4; about 1 step-in a turn on a hero built for it × (2 on its swing + about 2 kept off two hits) × 4 turns = 16: **24**, a T5's |
+| Electric Slippers | Vitality T5 (Street Brawl) | 12 | Once a turn, when the bearer steps into the Active slot by a Retreat or a swap: deal 3 spirit damage to every enemy. | 3 to every enemy (2.5 a point) = 7.5 × about 0.8 step-ins a turn × 4 turns: **24** |
+| Shadow Strike | Vitality T5 (Street Brawl) | 12 | +3 HP. When the bearer steps into the Active slot by a Retreat or a swap: it is Shadowed for 1 turn (no attack, spell, skill or ultimate can be aimed at it). | +3 HP 8.4; a rival turn with nothing aimed at it (its swing and a skill, about 4) × 0.8 × 4 turns = 12.8: **21**, under a T5's 24 |
+
+- **The Retreat comes back only if it was spent**, and the item waits only when it
+  gives it back. "Once a turn" and "once every 3 turns" are item waits, drawn on the
+  item's tile as Cheat Death's is.
+- **Electric Slippers waits a turn** so a hero that steps in twice (a Retreat, then
+  Lash's Grapple) does not hit everyone twice.
+- **Shadowed** is a new status: no enemy attack, spell, skill or ultimate can pick
+  the hero. What hits every enemy, or the enemy Active without aiming, still lands.
+- **Kinetic Dash and Arcane Surge are built from Extra Stamina**, as in Deadlock. The
+  upgrade is what it was (its text unchanged); built onto a hero wearing Extra
+  Stamina it costs the difference, 1 soul. The Headshot and Spray decks carry one
+  Extra Stamina beside their Kinetic Dash.
+- **With Lash** (Grapple: "Leap in from the bench; attack again"): attack, retreat,
+  leap, attack, and with Extra Stamina, retreat once more. Echo Shard recasts Grapple
+  from the Active: no leap, but his attack is ready again, a third swing with
+  Ground Strike's 3✦ (Patrick: "combo with Echo Shard can be even more crazy").
+  Left for testing.
+
 ## 4. Signature items and default builds
 
 Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its

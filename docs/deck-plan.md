@@ -63,13 +63,15 @@ is the artifact "Deck Archetype Map".
 **Headshot** (Drifter, Vindicta, Wraith). One gun at a time on one target, a bonus for every
 state of its HP: Headshot Booster ×4 (+2 at full HP), Opening Rounds ×2 (+2 above half),
 Drifter's Bloodscent (+2 below half). Headhunter evolves the Booster; Express Shot fires again
-while the target is above half. Two Kinetic Dash and Vindicta's free Retreat make the second
-swing land hard. Extended Magazine ×2 → Titanic Magazine, Restorative Shot, Knockdown, the Egg.
+while the target is above half. Kinetic Dash and Vindicta's free Retreat make the second
+swing land hard; Extra Stamina, its component since 2026-11-17, gives that Retreat back (it was
+Kinetic Dash ×2). Extended Magazine ×2 → Titanic Magazine, Restorative Shot, Knockdown, the Egg.
 
 **Spray** (Warden, Haze, Silver). Every swing hits every enemy. Split Shot ×4 (Ricochet 2 this
 turn, 2 souls) carries the swing's on-hit debuffs to all; Stalker ×2 makes each of them Bleed
 and lose Bullet Resist; Tesla Bullets chains to the bench. Warden holds the lane; Haze's Bullet
-Dance is the finish. Extended Magazine ×4 → Titanic Magazine, Kinetic Dash, Restorative Shot,
+Dance is the finish. Extended Magazine ×3 → Titanic Magazine, Extra Stamina → Kinetic Dash
+(2026-11-17: Kinetic Dash is built from it; a fourth Magazine made room), Restorative Shot,
 Knockdown, the Egg.
 
 **Nuke** (Lady Geist, Shiv, Yamato). Every skill is a kill shot: Essence Bomb, Serrated Knives

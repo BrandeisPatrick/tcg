@@ -15,12 +15,12 @@ import { INVALID, perform } from '@/engine/engine';
 import { damageUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
 import { addStatus } from '@/engine/statusOps';
-import { attackPower, attackSpiritBonus, heroAbilities, skillWait } from '@/engine/query';
+import { attackPower, attackSpiritBonus, heroAbilities, heroAttackRule, skillWait } from '@/engine/query';
 import { attackBlocked, skillBlocked } from '@/engine/legality';
 import { skillBlockReason } from '@/ui/board/heroActions';
 import { attackOffer } from '@/ui/board/attackAim';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
-import { freshReadyGame, giveItem, makeHero } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeHero } from './_helpers';
 
 function board() {
   const G = freshReadyGame();
@@ -39,13 +39,34 @@ function retreatIn(G: ReturnType<typeof board>['G'], lash: ReturnType<typeof boa
 const swing = (G: ReturnType<typeof board>['G']) => expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
 
 describe('Lash: Grapple and Ground Strike', () => {
-  it('the card: Grapple, a skill that waits 2, and Ground Strike, a passive', () => {
-    const kit = heroAbilities(CARDS_BY_ID.hero_lash as HeroCard);
-    expect(kit.map((k) => [k.kind, k.ability.name, k.ability.text])).toEqual([
+  it('the card: one kit row, Grapple (waits 2); Ground Strike is his Attack\'s rule (Patrick: "no passive, just attack has that passive")', () => {
+    const data = CARDS_BY_ID.hero_lash as HeroCard;
+    expect(heroAbilities(data).map((k) => [k.kind, k.ability.name, k.ability.text])).toEqual([
       ['skill', 'Grapple', 'Leap in from the bench; attack again.'],
-      ['passive', 'Ground Strike', 'The turn Lash steps in from the bench, his attacks deal {sp:3} more spirit damage.'],
     ]);
+    expect(heroAttackRule(data)).toMatchObject({ name: 'Ground Strike', text: 'The turn Lash steps in from the bench, his attacks deal {sp:3} more spirit damage.' });
     expect(skillWait(getAbility('skill_lash')!)).toBe(2);
+  });
+
+  it('Echo Shard recasts Grapple from the Active: no leap, but his attack is ready again (a third swing)', () => {
+    const { G, lash, rival } = board();
+    // Swing, Retreat out, Grapple in, swing: two swings so far.
+    retreatIn(G, lash);
+    G.retreatUsed = false; G.turnNumber += 2; G.attackers = [];
+    swing(G);
+    const out = G.players['0'].bench.findIndex((h) => !!h && h.cardId !== 'hero_lash') + 1;
+    perform(G, '0', { type: 'moveHero', fromSlot: 0, toSlot: out as 1 | 2 | 3 });
+    perform(G, '0', { type: 'useSkill', heroIid: lash.iid });
+    swing(G);
+    expect(attackBlocked(G, '0')).toBe('used');
+    const hp = rival.hp;
+    G.players['0'].souls = 5;
+    const shard = giveCard(G, '0', 'echo_shard');
+    expect(perform(G, '0', { type: 'playCard', cardIid: shard.iid })).not.toBe(INVALID);
+    expect(G.players['0'].active).toBe(lash);
+    expect(attackBlocked(G, '0')).toBeNull();
+    swing(G);
+    expect(hp - rival.hp).toBe(attackPower(lash, rival).total + 3);
   });
 
   it('Grapple from the bench: Lash takes the Active, the Active takes his slot, and nobody is hit', () => {

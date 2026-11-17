@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'boardgame.io/client';
-import { ABILITIES_BY_ID, type HeroAbilityDef } from '@/abilities';
+import { ABILITIES_BY_ID, getAbility, type HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID, HEROES } from '@/cards';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { damageUnit } from '@/engine/damage';
@@ -399,27 +399,23 @@ describe('what a hero card prints', () => {
     hero_silver: ['skill', "Boot Kick", "Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns."],
     hero_graves: ['skill', "Grasping Hands", "Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck."],
   };
-  // The one hero who prints two rows (Patrick, 2026-11-17): Lash's Grapple is the leap in from
-  // the bench, and Ground Strike, a passive, is what his attacks add the turn he lands.
-  const SECOND_ROW: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
-    hero_lash: ['passive', "Ground Strike", "The turn Lash steps in from the bench, his attacks deal {sp:3} more spirit damage."],
-  };
-
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {
     expect(Object.keys(PRINTED).sort()).toEqual(HEROES.map((h) => h.id).sort());
     for (const hero of HEROES) {
       const kit = heroAbilities(hero);
       expect(kit.length, hero.id).toBeGreaterThan(0);
-      expect(kit.map((x) => x.ability.id), hero.id).toEqual([...hero.skills, ...(hero.passives ?? [])]);
+      // A rule of the attack (Lash's Ground Strike, 2026-11-17) prints with the Attack, not here.
+      const printed = (hero.passives ?? []).filter((id) => !getAbility(id)?.attackRule);
+      expect(kit.map((x) => x.ability.id), hero.id).toEqual([...hero.skills, ...printed]);
       expect(kit.map((x) => x.kind), hero.id).toEqual([
-        ...hero.skills.map(() => 'skill'), ...(hero.passives ?? []).map(() => 'passive'),
+        ...hero.skills.map(() => 'skill'), ...printed.map(() => 'passive'),
       ]);
       for (const { ability } of kit) {
         expect(ability.name.length, `${hero.id} ${ability.id} name`).toBeGreaterThan(0);
         expect(ability.text.length, `${hero.id} ${ability.id} text`).toBeGreaterThan(0);
       }
       expect(kit.map((x) => [x.kind, x.ability.name, x.ability.text]), hero.id)
-        .toEqual([PRINTED[hero.id], ...(SECOND_ROW[hero.id] ? [SECOND_ROW[hero.id]] : [])]);
+        .toEqual([PRINTED[hero.id]]);
       expect(hero.skills.length, hero.id).toBeLessThanOrEqual(2);
     }
   });
@@ -433,7 +429,7 @@ describe('what a hero card prints', () => {
     }
   });
 
-  it('each ability carries no prompt of its own: its name is the one place the sheet and the coach read it from, one per hero (Lash two, 2026-11-17)', () => {
+  it('each ability carries no prompt of its own: its name is the one place the sheet and the coach read it from, one per hero', () => {
     const names = new Set<string>();
     for (const hero of HEROES) {
       for (const { ability } of heroAbilities(hero)) {
@@ -443,6 +439,6 @@ describe('what a hero card prints', () => {
         names.add(ability.name);
       }
     }
-    expect(names.size).toBe(HEROES.length + 1); // Lash's Grapple and Ground Strike
+    expect(names.size).toBe(HEROES.length);
   });
 });

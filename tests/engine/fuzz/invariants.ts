@@ -461,10 +461,18 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
   }
 }
 
-/** Items with a wait of their own, written from their card text: the ability that keeps it and
- *  its turns. Cheat Death: "…leaves it at 1 HP; then Cheat Death waits 3 turns." */
-const ITEM_WAITS: Readonly<Record<string, { ability: string; turns: number }>> = {
-  cheat_death: { ability: 'eff_cheat_death', turns: 3 },
+/** Items with a wait of their own, written from their card text: the ability that keeps it,
+ *  its turns, and when it fires (its wait then starts, at full).
+ *  Cheat Death: "…leaves it at 1 HP; then Cheat Death waits 3 turns." The Stamina line and
+ *  Electric Slippers (2026-11-17): "Once every 3 turns" / "Once a turn, when the bearer steps
+ *  into the Active slot…": it fires as its bearer steps in. */
+type ItemWait = { ability: string; turns: number; fired: (G: GameState, bearer: CardInstance) => boolean };
+const steppedIn = (G: GameState, bearer: CardInstance) => bearer.zone === 'active' && bearer.steppedInTurn === G.turnNumber;
+const ITEM_WAITS: Readonly<Record<string, ItemWait>> = {
+  cheat_death: { ability: 'eff_cheat_death', turns: 3, fired: (_G, bearer) => bearer.hp === 1 },
+  extra_stamina: { ability: 'eff_extra_stamina', turns: 3, fired: steppedIn },
+  stamina_mastery: { ability: 'eff_stamina_mastery', turns: 1, fired: steppedIn },
+  electric_slippers: { ability: 'eff_electric_slippers', turns: 1, fired: steppedIn },
 };
 
 /** The hero on either side's board that wears the item `itemIid`. */
@@ -1169,9 +1177,11 @@ export function collectTransitionViolations(
         }
         else if (key === usedSkill || key === usedTrigger) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
-        // Cheat Death (2026-11-16): its wait starts when it saves its bearer, who is left at 1 HP.
+        // An item's own wait starts, at full, when it fires (ITEM_WAITS): Cheat Death saving its
+        // bearer at 1 HP, a step-in item as its bearer steps in.
         const itemWait = Object.values(ITEM_WAITS).find((w) => w.ability === key.split('|')[1]);
-        if (itemWait && v0 === undefined && v1 === itemWait.turns && bearerOfItem(after.G, owner)?.hp === 1) want = v1;
+        const wearer = bearerOfItem(after.G, owner);
+        if (itemWait && v0 === undefined && v1 === itemWait.turns && wearer && itemWait.fired(after.G, wearer)) want = v1;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }
     }
