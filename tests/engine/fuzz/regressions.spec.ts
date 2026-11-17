@@ -841,13 +841,20 @@ describe('M2 the attack forecast matches what the attack does', () => {
     expect(hit.statuses.some((s) => s.id === 'fixation')).toBe(false); // Fixation is a bonus, no status (2026-11-16)
   });
 
-  it('M2f Bullet Resist Shredder (+1 damage on the next swing) is in the plan of a two-swing attack', () => {
-    const { G, atk } = duel('hero_haze', 40);
-    giveItem(G, atk, 'bullet_resist_shredder');
-    grantExtraAttacks(atk, 1); // the second swing (Fixation gives none now)
+  it('M2f Bullet Resist −1 (a support\'s Bullet Resist Shredder opened the target) is in the plan of a two-swing attack', () => {
+    // The Shredder procs on its bearer's spirit damage since 2026-11-17, so the gun's own
+    // swings shred nothing...
+    const plain = duel('hero_haze', 40);
+    giveItem(plain.G, plain.atk, 'bullet_resist_shredder');
+    grantExtraAttacks(plain.atk, 1);
+    expect(forecastMismatches(plain.G, ctxFor('0'), '0')).toEqual([]);
+    expect(swing(plain.G).hp).toBe(40 - 1 - 2); // swing 2: 1 + Fixation 1
+    // ...and a target a support opened takes +1 on both, as forecast.
+    const { G, atk, foe } = duel('hero_haze', 40);
+    addStatus(G, foe, 'bullet_resist_down', 1, 2);
+    grantExtraAttacks(atk, 1);
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
-    // swing 1: 1; swing 2: 1 + Fixation 1 + the Shredder's 1
-    expect(swing(G).hp).toBe(40 - 1 - 3);
+    expect(swing(G).hp).toBe(40 - 2 - 3); // swing 1: 1 + 1; swing 2: 1 + Fixation 1 + 1
   });
 });
 

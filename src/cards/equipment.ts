@@ -49,7 +49,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'spirit_shielding', name: 'Spirit Shielding', type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, upgradesFrom: 'grit', abilities: ['eff_spirit_shield_proc'], text: 'When bearer takes spirit damage: gain Shield 2.' },
 
   // ----- T2 — resist shred (canon T2 Spirit) -----
-  { id: 'bullet_resist_shredder', name: 'Bullet Resist Shredder', type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_bullet_resist_shredder_proc'], text: "Bearer's attacks apply Bullet Resist −1 for 2 turns." },
+  { id: 'bullet_resist_shredder', name: 'Bullet Resist Shredder', type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_bullet_resist_shredder_proc'], text: "When the bearer's skill / spell / ult damages an enemy: Bullet Resist −1 for 2 turns." },
 
 
   // The Cooldown family (Compress → Superior → Transcendent Cooldown) is the

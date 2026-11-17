@@ -340,6 +340,16 @@ describe('New equipment', () => {
     expect(status(G.players['1'].active!, 'spirit_resist_down')).toMatchObject({ value: 1, duration: 2 });
   });
 
+  it('Bullet Resist Shredder (canon, 2026-11-17): the bearer\'s spirit damage applies Bullet Resist −1 for 2 turns; its swings do not', () => {
+    const G = freshReadyGame();
+    hpPool(G, '1');
+    giveItem(G, G.players['0'].active!, 'bullet_resist_shredder');
+    makeAttack(G, '0');
+    expect(status(G.players['1'].active!, 'bullet_resist_down')).toBeUndefined();
+    useItem(G, '0', 'cold_front', G.players['1'].active!.iid);
+    expect(status(G.players['1'].active!, 'bullet_resist_down')).toMatchObject({ value: 1, duration: 2 });
+  });
+
   it('Mystic Slow: the bearer\'s item damage Roots the enemy for 1 turn', () => {
     const G = freshReadyGame();
     hpPool(G, '1');

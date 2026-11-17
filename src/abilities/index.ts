@@ -953,11 +953,14 @@ const eff_healing_tempo_proc: AbilityDef = {
 
 // ----- Equipment reactive triggers -----
 
-// Bullet Resist Shredder: bearer's attacks apply Bullet Vulnerable 1 for 2 turns
-// (stored 2, it covers the target's turn and your next one).
+// Bullet Resist Shredder (canon Spirit T2, 2026-11-17): spirit damage lowers
+// Bullet Resist, so a caster opens the target for the team's guns. When the
+// bearer's skill / spell / ult damages an enemy: Bullet Resist −1 for 2 turns
+// (stored 2, it covers the target's turn and your next one). Mystic
+// Vulnerability's mirror.
 const eff_bullet_resist_shredder_proc: AbilityDef = {
-  id: 'eff_bullet_resist_shredder_proc', trigger: 'onAttack', target: 'self',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bullet_resist_down', 1, 2); },
+  id: 'eff_bullet_resist_shredder_proc', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'bullet_resist_down', 1, 2); },
 };
 
 // Restorative Shot: after bearer's basic attack, heal 1.
