@@ -134,8 +134,9 @@ Patrick: "deck doesn't have to come with heroes because hero always come to draf
 hero, then we transition to drafting deck … the system will recommend three decks [based on] what
 we drafted … So we draft hero and then draft deck."
 
-- **Hero draft → deck draft → first Active → play.** When the last hero is drafted, a screen of its
-  own (DeckDraftOverlay) offers your decks: your three heroes across the top, the decks under them.
+- **Hero draft → deck draft → first Active → play.** When the last hero is drafted, the lobby goes
+  on to its second step (DeckDraftOverlay): the same ground, both crews' heroes still along the
+  top, the plate between them now reading PLAY, and your decks where the roster was.
 - **The three offers** (cards/deckOffers.ts), the same every time for the same heroes:
   - the **two ready decks that fit best**, best first ("Best fit"). Fit = 3 for each drafted hero
     the deck was made for, + 1 for each of its items a drafted hero's build lists, + up to 6 for
@@ -143,9 +144,14 @@ we drafted … So we draft hero and then draft deck."
     Vitality), so a gun team is offered gun decks when no deck names its heroes;
   - **Hero builds**, the deck read across the heroes' own builds, which always fits.
   - **Your deck**, the one saved in the Loadout, comes beside them when it is a legal deck.
-- Each offer says why ("Made for Haze, Mirage and Kelvin", "Built on guns, like your heroes"), its
-  line, the heroes it was made for and its 16 items, counted. Tap one (it lights in gold), or the
-  arrows; one button confirms ("Play Crossfire").
+- **Each offer is a card** of the lobby's kind (Patrick, 2026-11-17: "fix these ugly UI", of the
+  first screen's three panels of plain lists): numbered, the drafted heroes it was made for across
+  its face (a deck made for none prints the lobby's dial in its slot's ink), a band of its items
+  by slot, its name on the cream plate. Tap one (gold frame, full colour), or the arrows.
+- **One sheet under the cards is the picked deck's**: why it is offered ("Made for Haze, Mirage and
+  Kelvin", "Built on guns, like your heroes"), its items by slot, its line, and its 16 items as
+  their shop tiles, counted. The PLAY plate confirms (Enter too). A phone prints the same thing:
+  the cards three across (a fourth scrolls), the items in two columns, the plate in the header.
 - **The rival AI** brings the deck of its heroes' builds, as before (its items go on the heroes
   whose builds list them).
 - **A ready deck brings no heroes now.** Its squad is the heroes it was made for: the fit reads it.
