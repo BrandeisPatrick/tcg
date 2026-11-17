@@ -102,12 +102,12 @@ describe('the AI plays its hand', () => {
   it('puts an item on the hero whose build lists it, paying its price', () => {
     const G = turn(10);
     const me = G.players['0'];
-    // Lash's build opens on Mystic Slow; Haze's does not list it.
-    const card = giveCard(G, '0', 'mystic_slow');
+    // Lash's build opens on Kinetic Dash (2026-11-17); Haze's does not list it.
+    const card = giveCard(G, '0', 'kinetic_dash');
     playOut(G);
     // (He may have stepped in by then, for his Ground Strike.)
     const lash = [me.active, ...me.bench].find((h) => h?.cardId === 'hero_lash')!;
-    expect(wornItems(lash).map((it) => it.cardId)).toContain('mystic_slow');
+    expect(wornItems(lash).map((it) => it.cardId)).toContain('kinetic_dash');
     expect(me.hand).not.toContain(card);
   });
 
@@ -347,14 +347,14 @@ describe('the AI and its draw cards', () => {
   });
 
   it('discardChoice keeps heroes, then items its heroes could take, cheaper first; drops items no hero can take', () => {
-    const G = turn(1); // Boundless Spirit (8 since prices halved) is then past three turns of income
+    const G = turn(1); // Spiritual Overflow (8 since prices halved) is then past three turns of income
     const me = G.players['0'];
     const haze = me.active!;
     for (const h of [haze, ...me.bench]) if (h) giveItem(G, h, 'extended_magazine');
     const hero = giveCard(G, '0', 'hero_kelvin');
     const useless = giveCard(G, '0', 'extended_magazine');          // every hero wears one
-    const wanted = giveCard(G, '0', 'mystic_slow');                 // Lash's build
-    const dear = giveCard(G, '0', 'boundless_spirit');              // tier 4, far off
+    const wanted = giveCard(G, '0', 'kinetic_dash');                // Lash's build (2026-11-17)
+    const dear = giveCard(G, '0', 'spiritual_overflow');            // tier 4, far off, in no build here
     const order = discardChoice(G, '0', 4);
     expect(order[0]).toBe(useless.iid);
     expect(order.slice(0, 3)).not.toContain(hero.iid);

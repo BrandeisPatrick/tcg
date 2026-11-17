@@ -1006,7 +1006,7 @@ where Deadlock builds them so, or into a slot that opens.
 | Haze | Swift Striker (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Swift Striker → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Infinite Rounds |
 | Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Spirit Shielding → Silence Wave → Arctic Blast |
 | Lady Geist | Mystic Vulnerability (passive, Spirit T2) | Spirit Snatch (passive, Spirit T3) | Mystic Vulnerability → Spirit Snatch → Improved Spirit → Spirit Lifesteal → Decay → Escalating Exposure |
-| Lash | Mystic Slow (passive, Spirit T2) | Tankbuster (passive, Spirit T3) | Mystic Slow → Tankbuster → Improved Spirit → Suppressor → Decay → Lightning Scroll |
+| Lash | Kinetic Dash (passive, Weapon T2) | Arcane Surge (passive, Spirit T2) | Kinetic Dash → Arcane Surge → Improved Spirit → Enduring Speed → Veil Walker → Boundless Spirit (2026-11-17: his damage is the swing the turn he steps in, so the step-in items; it was Mystic Slow → Tankbuster → Improved Spirit → Suppressor → Decay → Lightning Scroll, for a skill hit he no longer deals) |
 | Mirage | Fleetfoot (active, Weapon T2) | Tesla Bullets (passive, Weapon T3) | Fleetfoot → Tesla Bullets → Mystic Shot → Spirit Shredder → Toxic Bullets → Ricochet |
 | Mo & Krill | Spirit Lifesteal (passive, Vitality T2) | Bullet Resilience (passive, Vitality T3) | Spirit Lifesteal → Bullet Resilience → Guardian Ward → Weapon Shielding → Metal Skin → Plated Armor |
 | Paige | Guardian Ward (active, Vitality T2) | Dispel Magic (active, Vitality T3) | Guardian Ward → Dispel Magic → Healing Booster → Restorative Locket → Healing Nova → Divine Barrier |
