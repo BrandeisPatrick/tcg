@@ -21,7 +21,7 @@ import { leaveActive } from './lane';
 import { awardSouls } from './souls';
 import { killBounty } from './rounds';
 import { pushStructures, reapBoss } from './map';
-import { heroToHand, toDiscard } from './deck';
+import { heroToHand, nextRandom, toDiscard } from './deck';
 import { getAbility } from './registry';
 import { allocatorOf } from './ids';
 import { detachItem, makeInstance, syncVitalitySpike } from './instances';
@@ -244,9 +244,9 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
 
 /**
  * Lash's Death Slam (Patrick, 2026-11-17: "pick one hero, return to player
- * hand"): `hero`, standing on `ps`'s board, goes back to its owner's hand and
- * takes what it wears with it — each item a card in the hand again, to be paid
- * for again. The hero comes back as a fallen one does (`heroToHand`: full HP,
+ * hand"; its items "back to deck"): `hero`, standing on `ps`'s board, goes back
+ * to its owner's hand, and what it wears is shuffled into its owner's deck —
+ * to be drawn and paid for again. The hero comes back as a fallen one does (`heroToHand`: full HP,
  * its level and exp, no statuses); its slot is left empty, so an Active's lane
  * opens and its side steps a hero up (`resolve`). A riding Rem jumps off first,
  * as she does when her bearer falls. No bounty, no push: nobody fell.
@@ -261,13 +261,14 @@ export function bounceToHand(G: GameState, ps: PlayerState, hero: CardInstance) 
   const worn = (hero.attached ?? []).filter((a) => !!itemCard(a.cardId));
   for (const it of worn) {
     detachItem(hero, it);
-    it.zone = 'hand';
+    it.zone = 'deck';
     it.slot = undefined;
     it.cooldowns = undefined;
-    ps.hand.push(it);
+    ps.deck.splice(Math.floor(nextRandom(G) * (ps.deck.length + 1)), 0, it);
+    pushFx(G, { kind: 'deck', what: 'raise', pid: ps.id, iid: it.iid, cardId: it.cardId });
   }
   syncVitalitySpike(hero);
-  if (worn.length > 0) pushLog(G, `${cardName(hero.cardId)}'s ${worn.length === 1 ? 'item goes' : `${worn.length} items go`} back to P${ps.id}'s hand.`);
+  if (worn.length > 0) pushLog(G, `${cardName(hero.cardId)}'s ${worn.length === 1 ? 'item is' : `${worn.length} items are`} shuffled into P${ps.id}'s deck.`);
   heroToHand(G, ps, hero, { lifted: true });
 }
 
