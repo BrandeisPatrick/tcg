@@ -444,14 +444,14 @@ describe('souls economy', () => {
     expect(ally.hp - 1).toBe(4 + 2 * 2); // {sp:4}: a skill counts Spirit twice
   });
 
-  it("a flat shield is flat — Spirit does NOT scale it (Warden's Willpower: Shield 2); Paige's Plot Armor prints {sp:2} and does", async () => {
+  it("Willpower scales since 2026-11-17 (every skill does): Shield {sp:2}; Paige's Plot Armor prints {sp:2} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const G = freshG();
     const warden = makeHero('hero_warden', '0', 'active', 0);
     G.players['0'].active = warden;
-    warden.spiritMod = 4; // spirit is ignored for Willpower's shield
+    warden.spiritMod = 4;
     ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target: warden });
-    expect(warden.statuses.find((s) => s.id === 'shield')?.value).toBe(2); // flat 2, no spirit
+    expect(warden.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 2 * 4); // {sp:2}: a skill counts Spirit twice
     const paige = G.players['0'].bench[2]!;
     expect(paige.cardId).toBe('hero_paige');
     paige.spiritMod = 4;

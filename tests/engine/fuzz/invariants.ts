@@ -668,7 +668,11 @@ export function collectTransitionViolations(
     }
     const pusher = ending !== undefined && pid === other(ending) ? before.G.players[ending].active : null;
     const lane = pusher && !isRespawning(pusher) ? attackPower(pusher).total * pushMultiplierOracle(roundOracle(before.G)) : 0;
-    const options = [...new Set([...sums].flatMap((s) => (lane > 0 ? [s, s + lane] : [s])).map((s) => Math.min(s, was)))];
+    // The turn's end grants its exp before the push: a pusher that levels there pushes with
+    // the Attack its level gave it (Mirage's +2 a level, 2026-11-17).
+    const leveled = pusher && ending !== undefined ? heroesByIid(after.G.players[ending]).get(pusher.iid) : undefined;
+    const lanes = [lane, leveled && (leveled.level ?? 1) > (pusher!.level ?? 1) ? attackPower(leveled).total * pushMultiplierOracle(roundOracle(before.G)) : 0].filter((l) => l > 0);
+    const options = [...new Set([...sums].flatMap((s) => [s, ...lanes.map((l) => s + l)]).map((s) => Math.min(s, was)))];
     if (!options.includes(drop)) {
       add('structure-delta', pid, `P${pid}'s structures ${was} -> ${now} (drop ${drop}) after ${move.name}; its falls [${paid.map((f) => `${f.hero.cardId} Lv${f.levels.join('/')}`).join(', ')}]${lane > 0 ? ` and an empty-lane push of ${lane}` : ''} give ${options.sort((x, y) => x - y).join(' or ')}`);
     }

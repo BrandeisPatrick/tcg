@@ -35,7 +35,7 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_mo_krill:   { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_viscous:    { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 1, skill: [4, 1], ult: 'medium' },
   hero_lady_geist: { atk: 1, hp: 7, growth: [0, 1, 2], retreat: 2, skill: [3, 1], ult: 'medium' },
-  hero_shiv:       { atk: 1, hp: 6, growth: [1, 2, 1], retreat: 1, skill: [4, 2], ult: 'medium' },
+  hero_shiv:       { atk: 1, hp: 6, growth: [2, 1, 1], retreat: 1, skill: [4, 2], ult: 'medium' },
   hero_warden:     { atk: 2, hp: 7, growth: [1, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_haze:       { atk: 1, hp: 5, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
   hero_wraith:     { atk: 1, hp: 5, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
@@ -44,16 +44,16 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
   // Grapple waits 2 (Patrick, 2026-11-17: "low cooldown"; the leap from the bench, attack ready again).
   hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [2, 1], ult: 'large' },
-  hero_mirage:     { atk: 2, hp: 5, growth: [2, 1, 2], retreat: 0, skill: null, ult: 'small' },
+  hero_mirage:     { atk: 1, hp: 5, growth: [2, 1, 2], retreat: 0, skill: null, ult: 'small' },
   hero_yamato:     { atk: 1, hp: 5, growth: [1, 1, 1], retreat: 0, skill: [3, 1], ult: 'medium' },
   hero_dynamo:     { atk: 1, hp: 5, growth: [0, 2, 2], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_kelvin:     { atk: 1, hp: 6, growth: [0, 1, 2], retreat: 1, skill: [4, 2], ult: 'medium' },
   hero_paige:      { atk: 1, hp: 5, growth: [0, 0, 2], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_rem:        { atk: 1, hp: 5, growth: [0, 1, 3], retreat: 0, skill: [3, 1], ult: 'small' },
-  hero_sinclair:   { atk: 1, hp: 5, growth: [1, 1, 2], retreat: 1, skill: [3, 1], ult: 'medium' },
+  hero_sinclair:   { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'medium' },
   // The charged ultimates wait on damage (`charged`: what they need); their size is what the effect is worth.
-  hero_victor:     { atk: 1, hp: 7, growth: [1, 3, 0], retreat: 2, skill: null, ult: 'medium', charged: 10 },
-  hero_silver:     { atk: 2, hp: 6, growth: [1, 2, 0], retreat: 1, skill: [3, 1], ult: 'medium', charged: 8 },
+  hero_victor:     { atk: 1, hp: 7, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 10 },
+  hero_silver:     { atk: 2, hp: 6, growth: [1, 2, 0], retreat: 1, skill: [4, 1], ult: 'medium', charged: 8 },
   hero_graves:     { atk: 1, hp: 5, growth: [0, 2, 2], retreat: 1, skill: [4, 1], ult: 'small' },
 };
 
@@ -61,13 +61,12 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
  *  carries over the formula, set from AI-vs-AI win rates and written beside each hero there.
  *  The formula still holds for everything else. */
 const TUNED: Record<string, { atk?: number; hp?: number; growth?: number }> = {
-  hero_mirage:     { atk: 1, growth: 1 }, // her marks come from hits: Attack 2, +2 Attack a level
+  hero_mirage:     { growth: 1 }, // late: weak at Level 1 as her curve says, +2 Attack a level for the marks
   hero_victor:     { hp: 1 },     // a tank that hurts himself every turn
   hero_dynamo:     { growth: 1 }, // +1 HP a level
   hero_graves:     { growth: 1 }, // +1 HP a level
   hero_lady_geist: { growth: 1 }, // +1 HP a level
   hero_viscous:    { growth: 1 }, // +1 HP a level (The Cube keeps its wait of 4: at 3, Transcendent Cooldown would make it every turn)
-  hero_sinclair:   { growth: 1 }, // +1 Attack a level: Rabbit Hex has no number for Spirit to grow
 };
 const tune = (id: string) => ({ atk: TUNED[id]?.atk ?? 0, hp: TUNED[id]?.hp ?? 0, growth: TUNED[id]?.growth ?? 0 });
 /** No hero starts below HP 5 (2026-11-17; it was 4): a turn-1 snipe of 3 or 4 no longer
