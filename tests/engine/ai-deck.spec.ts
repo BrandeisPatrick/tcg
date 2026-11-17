@@ -190,7 +190,8 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
     const toxic = giveCard(G, '0', 'toxic_bullets');
     const mag = giveCard(G, '0', 'extended_magazine');
     const made = playOut(G);
-    expect(made[0]).toMatchObject({ type: 'playCard', cardIid: toxic.iid });
+    // Its first spend (a skill, which costs no souls, may come before it).
+    expect(spends(made)[0]).toMatchObject({ type: 'playCard', cardIid: toxic.iid });
     expect(me.souls).toBe(0);
     expect(me.hand).toEqual([mag]);
   });

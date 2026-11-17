@@ -325,11 +325,12 @@ const CHANNELS = ['eff_ult_seven'];
 /** Spirit scales these abilities through a skill's `scalesSpirit` flag too. */
 const READS_SPIRIT = abilitiesReadingSpirit();
 
-/** Cards (or hero abilities) whose text may carry a Bullet Power mark. None
- *  does today: Split Shot carried one while its damage was the Active's swing
- *  (`attackPower`), and lost it when it became Ricochet 2. Add the id here when
- *  another does, with the code that adds it. */
-const BP_SCALING: string[] = [];
+/** Cards (or hero abilities) whose text may carry a Bullet Power mark, each
+ *  with the code that adds it. Toxic Bullets (2026-11-16): its Toxins burst for
+ *  TOXIN_BURST + the bearer's Bullet Power (`effectiveAtk(source)` in
+ *  eff_toxic_bullets). (Split Shot carried one while its damage was the
+ *  Active's swing, and lost it when it became Ricochet 2.) */
+const BP_SCALING: string[] = ['toxic_bullets'];
 
 /** Where an ability's text is printed: a hero ability prints its own; a spell,
  *  an ultimate or a piece of gear prints the card's. */
@@ -347,15 +348,16 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     for (const id of [
       'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
       'skill_seven', 'skill_shiv', 'skill_yamato', 'skill_dynamo', 'skill_vindicta', 'status_flying', 'passive_mirage_djinns_mark',
+      'skill_viscous', // The Cube's heal, {sp:3} since 2026-11-16
       'eff_cold_front', 'eff_silence_glyph',
       'eff_ult_abrams', 'eff_ult_dynamo', 'eff_ult_kelvin', 'eff_ult_lady_geist', 'eff_ult_lash', 'eff_ult_mo_krill',
       'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_viscous', 'eff_ult_wraith',
       'eff_ult_warden', 'eff_ult_drifter',
     ]) expect(found.has(id), id).toBe(true);
-    // A flat number reads no Spirit: The Cube, Full Auto, Rabbit Hex,
+    // A flat number reads no Spirit: Full Auto, Rabbit Hex,
     // Willpower, Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler.
     for (const id of [
-      'skill_viscous', 'skill_wraith', 'skill_sinclair', 'skill_warden',
+      'skill_wraith', 'skill_sinclair', 'skill_warden',
       'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
       'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);
@@ -413,7 +415,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   });
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
-    for (const e of EQUIPMENT) expect(e.text, e.id).not.toMatch(/\{(sp|bp):/);
+    // Gear marks only an effect of its own that scales (BP_SCALING), never a stat it adds.
+    for (const e of EQUIPMENT) if (!BP_SCALING.includes(e.id)) expect(e.text, e.id).not.toMatch(/\{(sp|bp):/);
     for (const id of ['healing_rite', 'rusted_barrel', 'metal_skin', 'decay', 'knockdown']) {
       expect((CARDS_BY_ID[id] as { text: string }).text, id).not.toMatch(/\{/);
     }
@@ -425,6 +428,9 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
       ...ABILITY_TEXT.filter((a) => /\{bp:/.test(a.text)).map((a) => a.id),
     ];
     expect(marked.sort()).toEqual([...BP_SCALING].sort());
+    // And the code adds it: Toxic Bullets' burst reads its bearer's Bullet Power.
+    const toxic = /const eff_toxic_bullets: AbilityDef = \{\n([\s\S]*?)^\};/m.exec(abilitiesSource)?.[1] ?? '';
+    expect(toxic).toMatch(/TOXIN_BURST \+ effectiveAtk\(source\)/);
   });
 
   it('the spells and ultimates the marks were written for print them', () => {

@@ -128,11 +128,11 @@ describe('Ricochet: a swing that lands bounces to every other enemy hero', () =>
 });
 
 describe('What spreads with the bounce, and what stays with the swing', () => {
-  it("Toxic Bullets' Bleed and Slowing Bullets' Root land on every bounce target", () => {
+  it("Toxic Bullets' Toxin and Slowing Bullets' Root land on every bounce target", () => {
     const { G, enemies } = lane('hero_dynamo', 'ricochet', 'toxic_bullets', 'slowing_bullets');
     makeAttack(G, '0');
     for (const c of enemies) {
-      expect(status(c, 'bleed'), c.cardId).toMatchObject({ value: 2 });
+      expect(status(c, 'toxin'), c.cardId).toMatchObject({ value: 1 }); // a Toxin each (2026-11-16)
       expect(status(c, 'rooted'), c.cardId).toBeDefined();
     }
   });

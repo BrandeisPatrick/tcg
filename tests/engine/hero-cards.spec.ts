@@ -17,7 +17,7 @@ import type { CardInstance, GameState, HeroCard, PlayerID, UltSize } from '@/eng
 import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { INVALID, perform, type Action } from '@/engine/engine';
-import { retreatCost, skillBlocked } from '@/engine/legality';
+import { attackBlocked, moveBlocked, retreatCost, skillBlocked } from '@/engine/legality';
 import { heroAbilities, heroRetreat, kitCharges, kitCost, skillWait, ultimateCard } from '@/engine/query';
 import { grantExp } from '@/engine/expSystem';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
@@ -25,6 +25,7 @@ import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
 import { LANE_INCOME, LEVEL_THRESHOLDS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame } from './_helpers';
+import { addStatus } from '@/engine/statusOps';
 
 /** Each hero as docs/hero-design.md §8 prints it: Attack / HP at Level 1,
  *  growth a level (Attack, HP, Spirit), Retreat, the skill's wait in turns and
@@ -355,7 +356,20 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
     act(G, '0', { type: 'useSkill', heroIid: viscous.iid, targetIid: haze.iid });
     expect(me.souls).toBe(0);
     expect(viscous.cooldowns?.skill_viscous).toBe(4);
-    expect(haze.statuses.find((s) => s.id === 'invulnerable')).toMatchObject({ duration: 1 });
+    // Since 2026-11-16 the hero is encased: the Cube status (Invulnerable's no-damage and more).
+    expect(haze.statuses.find((s) => s.id === 'cube')).toMatchObject({ duration: 1 });
+  });
+
+  it('encased (2026-11-16): it heals 3 + twice his Spirit, gains no status, and cannot attack, Retreat or use abilities until his next turn', () => {
+    const { G, me, viscous, haze } = withViscous();
+    haze.hpMax = 20; haze.hp = 10;
+    act(G, '0', { type: 'useSkill', heroIid: viscous.iid, targetIid: haze.iid });
+    expect(haze.hp).toBe(10 + 3 + 2 * (viscous.spiritMod ?? 0));
+    addStatus(G, haze, 'stun', 1, 1);
+    expect(haze.statuses.some((s) => s.id === 'stun')).toBe(false);
+    expect(attackBlocked(G, '0')).not.toBeNull();
+    me.souls = 5;
+    expect(moveBlocked(G, '0', 0, 2)).toBe('rooted'); // the move gate's word for a hero that cannot leave
   });
 
   it('the cubed hero takes no damage on the rival\'s turn — not its attack, not its spirit — and from its own next turn it does', () => {
@@ -375,6 +389,6 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
     expect(G.fx.some((e) => e.kind === 'immune' && e.iid === haze.iid && e.what === 'damage')).toBe(true);
     // Viscous's next turn: the Cube is gone.
     nextTurn(G, '1');
-    expect(haze.statuses.some((s) => s.id === 'invulnerable')).toBe(false);
+    expect(haze.statuses.some((s) => s.id === 'cube')).toBe(false);
   });
 });

@@ -194,8 +194,13 @@ export const GROUPS: Group[] = [
       { label: '−Spirit Res 2', events: [status('r0', 'spirit_resist_down', 2, 2, true)] },
       { label: "Djinn's Mark ×3", events: [status('r0', 'djinns_mark', 3, 3, true)] },
       { label: 'Bleed 3', events: [status('r0', 'bleed', 3, 2, true)] },
+      // Toxic Bullets' build-up (2026-11-16): two Toxins, then the third bursts.
+      { label: 'Toxin ×2', events: [status('r0', 'toxin', 2, 3, true)] },
+      { label: 'Toxins burst (Toxic Bullets → Abrams)', events: [status('r0', 'toxin', 3, 3, true), hit('r0', 7, 'attack', { source: 'y0', cast: 'proc' })] },
       { label: 'Unstoppable', events: [status('y0', 'unstoppable', 1, 1, false)] },
-      { label: 'Invulnerable (The Cube)', events: [status('y0', 'invulnerable', 1, 1, false)] },
+      { label: 'Invulnerable (Unstoppable)', events: [status('y0', 'invulnerable', 1, 1, false)] },
+      // The Cube since 2026-11-16: encased (no damage, no status, no action) until its side's next turn.
+      { label: 'The Cube (encased)', events: [status('y0', 'cube', 1, 1, false)] },
       { label: 'Channeling (Seven)', events: [status('r2', 'casting', 2, 3, false)] },
       { label: '+Heal 2', events: [status('y0', 'healing_boost', 2, 999, false)] },
       { label: 'Healing blocked', events: [status('r0', 'healing_boost_down', 1, 2, true)] },

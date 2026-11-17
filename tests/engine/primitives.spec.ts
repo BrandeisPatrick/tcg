@@ -402,7 +402,7 @@ describe('Rooted', () => {
     expect(snapshot(G)).toBe(before);
     // The board says why, in the engine's own code and words.
     expect(actionRefusal(G, '0', { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual({ code: 'rooted', text: moveBlockReason('rooted') });
-    expect(moveBlockReason('rooted')).toBe('Rooted: cannot retreat or be swapped');
+    expect(moveBlockReason('rooted')).toBe('Rooted or in The Cube: cannot retreat or be swapped');
 
     const H = game();
     addStatus(H, H.players['0'].bench[1]!, 'rooted', 1, 1);
@@ -885,9 +885,9 @@ describe('attackAll', () => {
 
   it('fires worn on-attack gear once per swing', () => {
     const { G, atk, foes } = duel(TALLY);
-    giveItem(G, atk, 'toxic_bullets'); // Bleed 2 on whoever the bearer hits
+    giveItem(G, atk, 'toxic_bullets'); // a Toxin on whoever the bearer hits (2026-11-16)
     attackAll(G, atk);
-    for (const f of foes) expect(status(f, 'bleed'), f.cardId).toMatchObject({ value: 2 });
+    for (const f of foes) expect(status(f, 'toxin'), f.cardId).toMatchObject({ value: 1 });
   });
 
   it('reads each swing\'s power for its own target, and uses no Extra Attack', () => {

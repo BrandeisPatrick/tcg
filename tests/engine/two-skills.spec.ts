@@ -388,7 +388,7 @@ describe('what a hero card prints', () => {
     hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],
     hero_seven: ['skill', "Static Charge", "Deal {sp:1} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn."],
     hero_sinclair: ['skill', "Rabbit Hex", "Turn the enemy Active into a Rabbit for 1 turn."],
-    hero_viscous: ['skill', "The Cube", "Cube one of your heroes: it takes no damage until your next turn."],
+    hero_viscous: ['skill', "The Cube", "Cube one of your heroes until your next turn, and heal it {sp:3}."],
     hero_yamato: ['skill', "Flying Slash", "Deal {sp:2} spirit damage to any enemy, bench too."],
     hero_warden: ['skill', "Willpower", "Shield 2 on Warden, and Swift."],
     hero_mirage: ['passive', "Djinn's Mark", "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:4} spirit damage."],

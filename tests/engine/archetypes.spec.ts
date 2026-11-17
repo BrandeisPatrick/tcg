@@ -68,16 +68,16 @@ describe('Multi-attack: Extra Attack (N)', () => {
     expect(extraOf(atk)).toBe(0); // consumed
   });
 
-  it('Extra Attacks re-fire onAttack procs (Toxic Bullets bleed stacks per swing)', () => {
+  it('Extra Attacks re-fire onAttack procs (Toxic Bullets: a Toxin per swing)', () => {
     const G = freshReadyGame();
     soloAttacker(G, '0');
     const atk = G.players['0'].active!;
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 30;
     atk.attached = [{ ...makeHero('toxic_bullets', '0'), cardId: 'toxic_bullets' }];
-    grantExtraAttacks(atk, 2); // 3 swings → Bleed maxes at 3
+    grantExtraAttacks(atk, 1); // 2 swings → 2 Toxins (the third would burst)
     makeAttack(G, '0');
-    expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBe(3);
+    expect(def.statuses.find((s) => s.id === 'toxin')?.value).toBe(2);
   });
 
   it('Burst Fire (equipment) grants Extra Attack; Fixation is a bonus on the swing, not an Extra Attack', () => {

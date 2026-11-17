@@ -5,6 +5,8 @@ import { fireTriggers } from '@/engine/triggers';
 import { addStatus } from '@/engine/statusOps';
 import { HEROES } from '@/cards';
 import '@/abilities'; // registers the card behaviour with the engine
+import { TOXIN_BURST } from '@/engine/constants';
+import { effectiveAtk } from '@/engine/query';
 
 function freshGame(): GameState {
   const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
@@ -41,19 +43,27 @@ function benchHero(G: GameState, pid: PlayerID, slot: 1 | 2 | 3): CardInstance {
   return c;
 }
 
+// Since 2026-11-16 Toxic Bullets builds up (a Toxin a swing) and the third
+// bursts for TOXIN_BURST + the bearer's Bullet Power (it was Bleed 2 a swing).
 describe('Toxic Bullets', () => {
-  it('attacks apply Bleed, which stacks up to 3', () => {
+  it('each attack adds a Toxin; the third bursts for 4 + the bearer\'s Bullet Power and clears them', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
+    enemy.hp = enemy.hpMax = 40;
     attach(G, hero, 'toxic_bullets');
+    const toxin = () => enemy.statuses.find((s) => s.id === 'toxin')?.value;
 
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
-    expect(enemy.statuses.find((s) => s.id === 'bleed')?.value).toBe(2);
+    expect(toxin()).toBe(1);
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
+    expect(toxin()).toBe(2);
+    expect(enemy.hp).toBe(40); // nothing yet: a build-up
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
+    expect(toxin()).toBeUndefined(); // burst
+    expect(enemy.hp).toBe(40 - (TOXIN_BURST + effectiveAtk(hero)));
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
-    expect(enemy.statuses.find((s) => s.id === 'bleed')?.value).toBe(3); // capped
+    expect(toxin()).toBe(1); // and it builds again
   });
 });
 
