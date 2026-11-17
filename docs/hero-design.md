@@ -127,7 +127,7 @@ One soul bought about one point of effect, the rate items were priced at; since 
     - "Steps in from the bench" is any road: Grapple, a Retreat, a swap card, stepping up for a fallen Active (`steppedInTurn`). Pulled in on the rival's turn (Vortex Web), it is spent before his turn comes. Not when he is put into the Active from the hand.
     - His kit is one row again, Grapple. The numbers are Patrick's (low wait, 3); §8 has the budget, which puts the kit over its band.
     - Echo Shard recasts Grapple from the Active: no leap, but his attack is ready again (Patrick: "combo with Echo Shard can be even more crazy"). Extra Stamina (2026-11-17, card-design.md) gives the Retreat back as he steps in.
-  - **Death Slam** (2026-11-17): "pick one hero, return it to the player's hand; it can be AOE if he has the Expansion equipment." It reads "Return an enemy hero, with its items, to its player's hand." Mystic Expansion lifts the heroes next to it too, Greater Expansion every enemy hero (the items' texts say so).
+  - **Death Slam** (2026-11-17): "pick one hero, return it to the player's hand; it can be AOE if he has the Expansion equipment." It reads "Return an enemy hero to its player's hand; its items are shuffled into their deck." (Patrick's pick, the same day: the items "back to deck"; they went to the hand at first.) Mystic Expansion lifts the heroes next to it too, Greater Expansion every enemy hero (the items' texts say so).
 - **Haze:** Bullet Dance deals her Attack as bullet damage to every enemy. She starts at Attack 1 and grows +3 Attack a level, so the ultimate grows with her.
 - **Shiv:** a damage tank (HP 6, Attack 1, grows +2 Attack a level) who keeps his execute.
 - **Rem** (2026-11-09): Rem can stand in the lane; Tag Along makes her equipment for 2 turns: "Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench."
@@ -382,7 +382,7 @@ HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
 - Skill, waits 2 — **Grapple**: Leap in from the bench; attack again.
 - Attack — **Ground Strike**: The turn Lash steps in from the bench, his attacks deal 3✦ more spirit damage.
-- Ultimate, large, waits 8 — **Death Slam**: Return an enemy hero, with its items, to its player's hand.
+- Ultimate, large, waits 8 — **Death Slam**: Return an enemy hero to its player's hand; its items are shuffled into their deck.
 - Why: Lash swings, slips out (Retreat 0), whips back in off the bench and slams down for a second, harder swing; then he lifts their best-geared hero clean off the board.
 - Changed from today: HP 4 to 5 (tank 1); the Vulnerable skill becomes Ground Strike with a root because control 3 needs hard control in the skill. Death Slam now stuns every enemy instead of only the Active, trading some damage for it.
 - **Changed 2026-11-17 (Patrick: the skill is the jump, the landing a passive that is always on; §5).** Ground Strike was a skill that waited 4: 1✦ to every enemy and a root on the Active. It is now his passive, and his skill is Grapple.
@@ -397,8 +397,8 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
     - Arcane Surge's +3 Spirit on stepping in counts twice in it: a 9✦ swing at Level 1.
     - The root and the area are gone from his skill. His control is the swap; his area is Death Slam's with Expansion.
 - **Changed 2026-11-17 (Patrick: Death Slam lifts one hero back to the hand; Expansion makes it an area).** It was 3✦ to every enemy and a Stun on each.
-  - **What the lift costs the rival.** The hero comes back as a fallen hero does (full HP, its level), so the damage on it is undone. What it loses is its place and its items: they go to the hand too, to be paid for again, and if it was the Active a bench hero steps up. Placing a hero is free, so the lift is worth what it wore.
-  - **The number.** By Level 3 (when the ultimate opens, about turn 8) a carry wears about 3 items: 1 + 2 + 4 = 7 souls, 14 points to buy back. Add the forced step-up (2) and take off the heal (about 4 HP, 2): **about 14**, inside a large ultimate's 12–18. On a hero with no items it is about 2. So the value is in the choice of target: Lash's player reads the board.
+  - **What the lift costs the rival.** The hero comes back as a fallen hero does (full HP, its level), so the damage on it is undone. What it loses is its place and its items: they are shuffled into its deck, to be drawn again and paid for again, and if it was the Active a bench hero steps up. Placing a hero is free, so the lift is worth what it wore.
+  - **The number.** By Level 3 (when the ultimate opens, about turn 8) a carry wears about 3 items: 1 + 2 + 4 = 7 souls, 14 points to buy back. In the deck they are also out of reach until drawn: a deck of about 15 cards, a draw a turn, gives each one back after several turns, about 4 points more for the three. Add the forced step-up (2) and take off the heal (about 4 HP, 2): **about 18**, the top of a large ultimate's 12–18 (14 when they went to the hand). The cards in the deck also put off the rival's deck-out a little. On a hero with no items it is about 2: the value is in the choice of target.
   - **With Expansion it is past any band.** Mystic Expansion adds about 1.5 neighbours (×2.5, about 35 points); Greater Expansion lifts the whole side (×4, about 56), all of its items back to the hand at once. Patrick asked for it ("can be AOE if he has the Expansion"). It is kept as asked and marked for testing: Greater Expansion on Lash is likely the strongest line in the game.
 
 **Mirage** · in the game today — peaks late, one target; mix tank 1 · damage 2 · control 1 · support 0  

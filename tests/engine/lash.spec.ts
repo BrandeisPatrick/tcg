@@ -177,10 +177,10 @@ describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () =
   }
 
   it('the card: one effect, no number', () => {
-    expect(ULTIMATES.find((u) => u.linkedHero === 'hero_lash')!.text).toBe("Return an enemy hero, with its items, to its player's hand.");
+    expect(ULTIMATES.find((u) => u.linkedHero === 'hero_lash')!.text).toBe("Return an enemy hero to its player's hand; its items are shuffled into their deck.");
   });
 
-  it('the hero goes to the hand at full HP with its level, and what it wore goes back to the hand as cards', () => {
+  it('the hero goes to the hand at full HP with its level, and what it wore is shuffled into the deck (Patrick: "back to deck")', () => {
     const { G, them, cast } = slam();
     const foe = them.bench[0]!;
     const worn = giveItem(G, foe, 'extra_health');
@@ -190,7 +190,9 @@ describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () =
     expect(cast(foe.iid)).not.toBe(INVALID);
     expect(foe.zone).toBe('hand');
     expect(them.hand).toContain(foe);
-    expect(them.hand).toContain(worn);
+    expect(them.hand).not.toContain(worn);
+    expect(them.deck).toContain(worn);
+    expect(worn.zone).toBe('deck');
     expect(foe.attached ?? []).toEqual([]);
     expect(foe.hp).toBe(foe.hpMax);
     expect(foe.level).toBe(2);

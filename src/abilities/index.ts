@@ -2795,9 +2795,9 @@ const eff_ult_lady_geist: AbilityDef = {
   },
 };
 // Death Slam (Patrick, 2026-11-17: "pick one hero, return to player hand; it
-// can be AOE if he has the Expansion"): Lash lifts an enemy hero off the board,
-// and it goes back to its player's hand with its items (`bounceToHand`), to be
-// placed and paid for again. Expansion widens it as it widens a skill's hit:
+// can be AOE if he has the Expansion"): Lash lifts an enemy hero off the board:
+// it goes back to its player's hand, and its items are shuffled into their deck
+// (Patrick: "back to deck"), to be drawn and paid for again (`bounceToHand`). Expansion widens it as it widens a skill's hit:
 // Mystic Expansion lifts the heroes next to it on the board too, Greater
 // Expansion every enemy hero. The Cube holds its hero down; a Counterspell
 // stops it for its hero (the one aimed at, in useSkill; the rest, here).
