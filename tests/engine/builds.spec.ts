@@ -33,7 +33,7 @@ describe('items', () => {
     // worth under half its tier's price costs less instead of doing more, 2026-11-16), always a
     // spell's, and always under the tier's. Prices halved on 2026-11-16 (Rusted Barrel's 1 is its
     // tier's now, so it prints none).
-    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['disarming_hex', 2], ['knockdown', 2], ['majestic_leap', 1], ['echo_shard', 1], ['unstoppable', 2], ['curse', 3], ['divine_barrier', 3], ['ethereal_shift', 2], ['vortex_web', 3], ['infuser', 3], ['mystical_piano', 5]]); // Transcendent Cooldown printed 11 until it went back to equipment, 2026-11-16
+    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['disarming_hex', 2], ['knockdown', 2], ['majestic_leap', 1], ['echo_shard', 1], ['unstoppable', 2], ['curse', 3], ['divine_barrier', 3], ['ethereal_shift', 2], ['vortex_web', 3], ['infuser', 4], ['magic_carpet', 3], ['mystical_piano', 5]]); // Transcendent Cooldown printed 11 until it went back to equipment, 2026-11-16
     for (const item of ITEMS) if (item.price !== undefined) expect(item.type, item.id).toBe('spell');
     for (const item of ITEMS) if (item.price !== undefined) expect(item.price, item.id).toBeLessThan(PRICE[item.tier]);
     expect(PRICE).toEqual({ 1: 1, 2: 2, 3: 4, 4: 8, 5: 12 }); // half of 2 / 4 / 8 / 16 / 24 since 2026-11-16

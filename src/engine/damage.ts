@@ -203,6 +203,11 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // Worn-equipment reactions to the damage, through the one trigger dispatcher.
   if (cast && cast.source) {
     if (cast.kind === 'skill' || cast.kind === 'spell' || cast.kind === 'ult') {
+      // Infuser (2026-11-16): an Infused hero's spirit hit heals it that much.
+      const caster = cast.source;
+      if (type === 'spirit' && caster !== target && caster.hp > 0 && caster.statuses.some((s) => s.id === 'infused')) {
+        withCast(caster, 'proc', () => healUnit(G, caster, dmg, 'Infuser', { tag: 'lifesteal', from: target }));
+      }
       fireTriggers(G, cast.source, 'onBearerSkillDamage', { reaction: true, target, amount: dmg });
     }
     // A Ricochet bounce is an attack frame marked `bounce`: the gear hears it,

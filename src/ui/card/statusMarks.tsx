@@ -72,6 +72,8 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
   // Toxic Bullets' build-up wears the bleed drop; the Cube, Invulnerable's mark.
   ['toxin', 'bleed'],
   ['cube', 'invulnerable'],
+  // Infuser's lifesteal wears the healing mark.
+  ['infused', 'healing_boost'],
 ]);
 
 /** Which mark a status wears: its own picture, or the diamond tag for an id
