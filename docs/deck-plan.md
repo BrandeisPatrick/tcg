@@ -24,152 +24,89 @@ with less to rebuild.
 - A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), read across as they are, upgrades included.
 - You draft 3 heroes (Patrick, 2026-11-16; it was 4). They are shuffled into your deck, with an animation, so the deck has 19 cards. The board keeps its 4 spots, so a full squad leaves one for a unit ([hero-design.md](hero-design.md), "Units").
 
-## Ready decks (2026-11-15; redesigned by reasoning 2026-11-16)
+## Ready decks (2026-11-15; rebuilt 2026-11-16: seven archetypes)
 
-Patrick, 2026-11-15: "we need to have decks ready." Six decks head the Loadout, each a squad of
-three heroes and its 16 items (`src/cards/readyDecks.ts`). "Use deck" saves the squad and the
-deck together. When that would replace picks or a deck of the player's own, the button asks once
-more.
-
-Patrick, 2026-11-16: "redesign the deck based on reasoning." The six were rebuilt for the rules
-of that day. Every number below is reasoned, none played or simulated.
-
-### What the rules of 2026-11-16 reward
-
-- **A second swing costs a Retreat.** An attack no longer ends the turn and each hero attacks once,
-  so attack, Retreat, attack is two swings. The Retreat is the leaving hero's printed 0, 1 or 2
-  souls, so it is the price of the second swing. A swing at Attack 1–3 with a bonus or two is 2 to
-  4 damage, 2 to 4 points: more than any tier-1 card is worth in a turn.
-  - So a Retreat made free is worth about one swing a turn. Six heroes print 0 (Vindicta, Wraith,
-    Lash, Rem, Yamato, Mirage); Swift Striker and Sprint Boots take 1 off; Willpower, Fleetfoot,
-    Majestic Leap and Healing Tempo make one Retreat free.
-  - What a hero gets for stepping in is paid every turn the deck swaps: Kinetic Dash's +3 Bullet
-    Power on the incoming swing is about 3 points a swap, against 4 souls once.
-  - Root is the counter: a Rooted Active cannot Retreat, so it denies the rival's second swing
-    (Mystic Slow, Slowing Bullets, Ground Strike, Grasping Hands).
-- **The Cooldown items shorten every wait**, a charged skill's too. In a squad of three skills
-  Compress Cooldown is a cast every few turns on whoever wears it; two copies find two of them.
-- **Healing Tempo turns a heal into a swing.** A hero its wearer heals gets +2 Bullet Power and a
-  free Retreat that turn. On Dynamo, Rejuvenating Aurora heals every hero, so the Active swings
-  harder, retreats free, and the hero stepping in swings harder too.
-- **Cheap spells count at their price.** Majestic Leap 2, Disarming Hex 3 and Knockdown 4 cost
-  what they print, not their tier's 8.
+Patrick, 2026-11-16: "For all the decks, we want them to have very different play styles …
+they have their own archetypes: bullet single target, bullet multi target, single burst
+spirit, multi-target spirit, CC … Graves is a special one … tank, shield is more like support.
+… The max duplicate per deck should be 4." Then: "you decide." A hero may be in only one
+ready deck, and there are 22: seven decks of three use 21 (Mirage is in none). The picks
+below are reasoned; nothing was played or simulated. The archetype map, with the styles from
+other card games not built as ready decks (Rush, Snipe, Pivot, Voltron, Berserker, Combo turn),
+is the artifact "Deck Archetype Map".
 
 ### The recipe
 
-- **16 items, at most 28 souls at the prices they print, and at most two of them over 2 souls:**
-  the deck's payoffs, up to 8 each (56, 4 and 16 until prices halved on 2026-11-16,
-  [balance-model.md](balance-model.md) §12). The lane pays 2 a turn (§7): by its turn 9 a side has
-  about 30 souls (18 from the lane, about 12 in bounties) and has drawn about 11 of its 16 items,
-  13 with its Golden Goose Egg. A whole deck lists at about what a side has by turn 7, so
-  everything drawn is played, and a payoff of 4 lands on turn 2.
-  Until this redesign the recipe counted tiers (8 tier-1, 6 tier-2, 2 tier-3). That priced
-  Majestic Leap at 8 for a card that costs 2, and left no room for a deck to be built around one
-  tier-4 card (Aurora's Healing Tempo: 16, the same as two tier-3s).
-- **At most 2 copies of one** (Pocket's rule, inside this game's cap of 4).
-- **One upgrade line beside the item it is built from**, never an upgrade without its component
-  (played onto the hero wearing it, the upgrade costs the difference).
-- **A counter:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown. Knockdown is the
-  aggressive decks' (4 souls, a Stun that also breaks a channel), Debuff Reducer the slow decks'
-  (it stays).
-- **One draw card, Golden Goose Egg** (draw 2 for 2 souls, worth 2.8): a deck holds two heroes
-  behind its first Active, and a draw finds one sooner. Graveyard carries two, to find its Ghouls.
-- **Mostly equipment:** spells are played once, so at most half the deck. Lockdown carries the
-  most (7), because a denial is a spell.
-- **A squad has a front, a carry and a helper**, and no hero is in two decks. Four heroes are in
-  none: Abrams, Rem, Shiv and Paige.
+- **16 items at most 28 souls** at the prices they print, **at most two over 2 souls** (the
+  payoffs). The lane pays 2 a turn ([balance-model.md](balance-model.md) §12): a whole deck
+  lists at about what a side has by turn 7, so everything drawn is played. In practice a deck
+  is eight 1-soul cards, six 2-soul cards and two payoffs of 4, or one payoff of 8.
+- **Up to 4 copies** (MAX_COPIES): the engine card of an archetype comes 4 times (Headshot
+  Booster, Split Shot, Extra Spirit, Extra Health).
+- **One Golden Goose Egg** in every deck: running out of cards loses since 2026-11-16, so a
+  second Egg is a turn off its own clock (§13).
+- **An upgrade beside its component**, **a counter** (Knockdown, Debuff Reducer, Counterspell
+  or Dispel Magic), **at most 8 spells**, listed by tier.
 
-| Deck | Squad | How it wins | Payoffs | Souls (halved 2026-11-16) |
-|---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Two shots a turn | Burst Fire, Toxic Bullets | 28 |
-| Spirit Storm | Lash, Seven, Kelvin | Area skills cast more often | Torment Pulse, Superior Cooldown | 28 |
-| Aurora | Victor, Dynamo, Drifter | Heal into a free Retreat, finish the wounded | Healing Tempo | 28 |
-| Ambush | Silver, Yamato, Mirage | Every hero that steps in hits for 3 more | Tesla Bullets, Burst Fire | 28 |
-| Lockdown | Mo & Krill, Sinclair, Wraith | Deny every turn, then two shots | Superior Cooldown, Burst Fire | 28 |
-| Graveyard | Viscous, Graves, Lady Geist | Ghouls mill them; Roots deny their swaps | Torment Pulse, Decay | 28 |
+| Deck | Archetype | Squad (first Active first) | Payoffs |
+|---|---|---|---|
+| Headshot | Bullet, one target | Drifter, Vindicta, Wraith | Headhunter, Express Shot |
+| Spray | Bullet, every target | Warden, Haze, Silver | Tesla Bullets |
+| Nuke | Spirit burst, one target | Lady Geist, Shiv, Yamato | Tankbuster, Infuser |
+| Storm | Spirit, area | Kelvin, Lash, Seven | Greater Expansion, Torment Pulse |
+| Lockdown | Crowd control | Mo & Krill, Sinclair, Viscous | Superior Duration, Silence Wave |
+| Graveyard | Mill and grind | Abrams, Graves, Rem | Fortitude, Healing Nova |
+| Aurora | Tank and support | Victor, Dynamo, Paige | Healing Tempo |
 
 ### Each deck
 
-**Gunline** (Warden, Vindicta, Haze). Warden holds the lane and shoots; a free Retreat brings in
-Vindicta or Haze for a second shot every turn.
-- 2 Swift Striker (4): +1 Bullet Power and Retreat −1. On Warden and Haze (Retreat 1) the second
-  swing is free every turn; Vindicta's is 0 already.
-- Kinetic Dash (4): +3 on the hero stepping in. Titanic Magazine over 2 Extended Magazine (+1, then
-  +2 for 2 more souls); 2 Headshot Booster (+2 on the first swing at a fresh Active, the swing a
-  kill leaves); 2 Restorative Shot (a heal a swing, two swings a turn).
-- Compress Cooldown (4): Willpower 3 → 2 (its Swift is a free Retreat too), Assassinate's charges
-  5 → 4.
-- Knockdown (4) is the counter; Grit and Golden Goose Egg.
-- Payoffs: Burst Fire (an Extra Attack every turn on its wearer) and Toxic Bullets (Bleed that
-  stacks twice as fast with two swings).
-- Out: Long Range, Fleetfoot and Debuff Reducer (Swift Striker makes the Retreat free every turn,
-  which Fleetfoot did once).
+**Headshot** (Drifter, Vindicta, Wraith). One gun at a time on one target, a bonus for every
+state of its HP: Headshot Booster ×4 (+2 at full HP), Opening Rounds ×2 (+2 above half),
+Drifter's Bloodscent (+2 below half). Headhunter evolves the Booster; Express Shot fires again
+while the target is above half. Two Kinetic Dash and Vindicta's free Retreat make the second
+swing land hard. Extended Magazine ×2 → Titanic Magazine, Restorative Shot, Knockdown, the Egg.
 
-**Spirit Storm** (Lash, Seven, Kelvin). Three skills that hit the Active or every enemy; the deck
-casts them more often and makes each cast hit harder.
-- 2 Compress Cooldown, then Superior Cooldown (a payoff): Ground Strike and Static Charge 4 → 3,
-  Frost Grenade's charges 4 → 3, and with Superior the ultimates 2 sooner (Death Slam stuns every
-  enemy). Extra Charge (2): a third Frost Grenade charge.
-- Improved Spirit over 2 Extra Spirit: every skill's spirit number grows.
-- 2 Mystic Burst (1 spirit damage on every skill cast), Mystic Vulnerability (Spirit Resist −1 on
-  what a skill hits), Mystic Regeneration and Healing Rite for the casters' small HP.
-- Knockdown (4) counter; Torment Pulse, the other payoff (1 to the Active and the first bench hero
-  every turn); Golden Goose Egg.
-- Out: Cold Front, Spirit Strike and Spirit Lifesteal: the skills do the damage and a third cast is
-  worth more than a spell.
+**Spray** (Warden, Haze, Silver). Every swing hits every enemy. Split Shot ×4 (Ricochet 2 this
+turn, 2 souls) carries the swing's on-hit debuffs to all; Stalker ×2 makes each of them Bleed
+and lose Bullet Resist; Tesla Bullets chains to the bench. Warden holds the lane; Haze's Bullet
+Dance is the finish. Extended Magazine ×4 → Titanic Magazine, Kinetic Dash, Restorative Shot,
+Knockdown, the Egg.
 
-**Aurora** (Victor, Dynamo, Drifter), new. It replaces Bulwark (Abrams, Victor, Rem), whose heals
-and shields took no part in the second swing. It is the deck Patrick named: "Dynamo with Healing
-Tempo can do a rearrange and attack combo."
-- Victor leads: his Aura of Suffering deals 1 spirit damage to every enemy each turn (and to
-  himself, which charges his revive), so enemies drop below half, and Drifter's Bloodscent hits a
-  hero below half for 2 more.
-- Dynamo wears Healing Booster (4), then Healing Tempo over it (12 more; the payoff). Rejuvenating
-  Aurora heals every hero 5 + Spirit, so each one healed gets +2 Bullet Power and a free Retreat:
-  Victor (Retreat 2) swings, retreats for nothing, and Drifter steps in with Kinetic Dash (+3),
-  Healing Tempo's +2 and Bloodscent's +2.
-- Compress Cooldown on Dynamo: the Aurora every 3 turns instead of 4.
-- Sprint Boots (Victor's Retreat 2 → 1 on the turns without a heal); 2 Extra Health (the front);
-  2 Extended Magazine, Bullet Lifesteal and Restorative Shot on Drifter.
-- 2 Healing Rite and Grit: a Healing Rite cast by Dynamo in the lane counts for Healing Tempo too.
-- Debuff Reducer is the counter (it stays on the front); Golden Goose Egg.
+**Nuke** (Lady Geist, Shiv, Yamato). Every skill is a kill shot: Essence Bomb, Serrated Knives
+(Shiv's Killing Blow knocks out what is below half), Flying Slash at any enemy. Mystic Burst ×3
+→ Tankbuster add to each cast; Mystic Vulnerability ×2 lowers Spirit Resist; Echo Shard ×2
+casts a skill again for 1 soul; Infuser makes the nukes heal their caster (Lady Geist pays HP
+for hers). Extra Spirit ×2 → Improved Spirit ×2 (a skill counts Spirit twice), Spirit
+Lifesteal, Knockdown, the Egg.
 
-**Ambush** (Silver, Yamato, Mirage). Swap in, strike, swap again: Yamato and Mirage retreat for
-nothing, Silver for 0 with Swift Striker.
-- 2 Kinetic Dash: +3 on every hero that steps in. Majestic Leap (2): a free swap for Silver's turn.
-- Titanic Magazine over 2 Extended Magazine; 2 Headshot Booster; Restorative Shot.
-- Compress Cooldown: Boot Kick and Flying Slash 3 → 2.
-- Knockdown counter; Grit; Golden Goose Egg.
-- Payoffs: Tesla Bullets (2 to a bench hero after every swing: two a turn) and Burst Fire.
-- Out: Sprint Boots and Fleetfoot (the squad's Retreats are free already), Dispel Magic (Knockdown
-  is the cheaper counter).
+**Storm** (Kelvin, Lash, Seven). Area skills on every enemy: Frost Grenade and Ground Strike,
+and Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion ×2
+first, a neighbour's 1). Mystic Vulnerability ×2 and Mystic Slow land on everything an area
+skill hits; Torment Pulse chips two a turn. Extra Spirit ×4 → Improved Spirit ×2, Extra Charge
+for Kelvin's grenade, Knockdown, the Egg.
 
-**Lockdown** (Mo & Krill, Sinclair, Wraith). Disarm, silence and hex every turn; Wraith (Retreat
-0) gets two shots behind it.
-- 2 Disarming Hex (3 each now): Disarm any enemy 2 turns. Slowing Hex (4): Silence 2 turns.
-  Rusted Barrel (1). Knockdown (4) is the counter and a third denial.
-- 2 Compress Cooldown, then Superior Cooldown: Sand Blast 3 → 2, Rabbit Hex 4 → 3, Full Auto 3 → 2,
-  and with Superior the ultimates 2 sooner (Combo and Telekinesis both stun).
-- Headshot Booster over 2 Extended Magazine and Burst Fire for Wraith (it was Titanic Magazine
-  until prices halved: two Disarming Hex at 2 each put the deck at 29); 2 Extra Health for Mo &
-  Krill in front; Grit; Golden Goose Egg.
-- Out: Silence Wave (8) for two Disarming Hex (6), and Spirit Strike, Extra Spirit, Mystic Shot and
-  Spirit Lifesteal: the squad's damage is Wraith's gun.
+**Lockdown** (Mo & Krill, Sinclair, Viscous). The rival does not get to play: Knockdown ×2,
+Disarming Hex (from Rusted Barrel), Slowing Hex, Silence Wave (no spells for 2 turns), the
+squad's Disarm, Rabbit and Cube, and Duration Extender ×2 → Superior Duration, which make each
+a turn longer. It wins on the clock: Extra Health ×4 and Extra Regen ×2 keep it standing until
+the rival's deck runs out (or round 20). The Egg.
 
-**Graveyard** (Viscous, Graves, Lady Geist). Grasping Hands shuffles two Ghouls into Graves's deck;
-every Ghoul that falls discards the top of the rival's.
-- 2 Compress Cooldown: Grasping Hands and The Cube 4 → 3, Essence Bomb 3 → 2.
-- Mystic Slow: what a skill hits is Rooted 1 turn. Essence Bomb hits the enemy Active (one
-  target since 2026-11-16), so it cannot Retreat for the rival's second swing.
-- 2 Golden Goose Egg (find the Ghouls and the heroes); Improved Spirit over 2 Extra Spirit; Mystic
-  Burst; Spirit Lifesteal, Mystic Regeneration, Healing Rite and Extra Health for Lady Geist, who
-  pays HP for her bomb.
-- Debuff Reducer counter; payoffs Torment Pulse and Decay.
-- Out: Reactive Barrier (the Cube already guards).
+**Graveyard** (Abrams, Graves, Rem). Grind them out: Graves shuffles Ghouls into his own deck
+(his deck lasts longer) and every Ghoul that falls mills the rival's; Rem's Naptime sleeps their
+carry; Abrams holds the lane and heals. Extra Health ×4 → Fortitude, Extra Regen ×2, Weapon and
+Spirit Shielding, Healing Rite → Healing Nova, Mystic Slow ×2 (Graves's Root spreads), Healbane
+against their heals, Debuff Reducer, the Egg.
 
-**Left for testing** (only when Patrick asks by name): whether two Kinetic Dash in Ambush and two
-Swift Striker in Gunline make the second swing too cheap; whether Aurora's Healing Tempo lands by
-turn 6–7 as the curve says; whether Lockdown's seven spells leave it short of items late.
+**Aurora** (Victor, Dynamo, Paige). Heal and shield every turn. Victor's Aura wounds every enemy
+from the lane; Dynamo's Rejuvenating Aurora and Paige's Plot Armor keep the side up; Healing
+Tempo (from Healing Booster ×2) turns each heal into +2 Bullet Power and a free Retreat.
+Healing Rite ×2, Restorative Locket, Sprint Boots → Enduring Speed, Extra Health ×3, Extra
+Regen, Restorative Shot, Extended Magazine, Debuff Reducer, the Egg.
+
+**Left for testing** (only when Patrick asks by name): whether Spray's four Split Shots make
+every match a race; whether Lockdown can reach the rival's deck-out before its own; whether
+Graveyard's own Ghouls outlast the rival's clock; whether Storm's Greater Expansion on Seven is
+the strongest single card in the set.
 
 ## Start of the match
 

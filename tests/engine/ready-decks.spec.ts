@@ -3,15 +3,17 @@ import { READY_DECKS, readyDeckInUse } from '@/cards/readyDecks';
 import { copyCounts, deckProblem, evolvesFrom } from '@/cards/decks';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
-import { DECK_SIZE, PRICE, SQUAD_SIZE } from '@/engine/constants';
+import { DECK_SIZE, PRICE, SQUAD_SIZE, MAX_COPIES } from '@/engine/constants';
 
 // The ready decks (docs/deck-plan.md, "Ready decks"): each is a squad of three
 // and a legal 16-item deck built to one recipe.
 describe('ready decks', () => {
-  it('there are six, each with its own name and id; Graveyard is Graves\'s, Aurora Dynamo\'s (2026-11-16)', () => {
-    expect(READY_DECKS).toHaveLength(6);
-    expect(new Set(READY_DECKS.map((d) => d.id)).size).toBe(6);
-    expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(6);
+  // Seven since 2026-11-16, one an archetype Patrick named: bullet one target, bullet many,
+  // spirit burst, spirit area, crowd control, Graves, tank and support.
+  it('there are seven, each with its own name and id; Graveyard is Graves\'s, Aurora Dynamo\'s (2026-11-16)', () => {
+    expect(READY_DECKS).toHaveLength(7);
+    expect(READY_DECKS.map((d) => d.id)).toEqual(['headshot', 'spray', 'nuke', 'storm', 'lockdown', 'graveyard', 'aurora']);
+    expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(7);
     expect(READY_DECKS.find((d) => d.id === 'graveyard')?.heroes).toContain('hero_graves');
     // Aurora is the Healing Tempo deck: Dynamo's heal, and the line Healing Booster → Healing Tempo.
     const aurora = READY_DECKS.find((d) => d.id === 'aurora')!;
@@ -32,9 +34,9 @@ describe('ready decks', () => {
     for (const id of upgrades) expect(d.items, id).toContain(evolvesFrom(id));
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 28 souls at most at printed prices with at most two over 2, a counter, a draw card, mostly equipment', (_name, d) => {
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 4 copies (MAX_COPIES), 28 souls at most at printed prices with at most two over 2, a counter, a draw card, mostly equipment', (_name, d) => {
     const counts = copyCounts(d.items);
-    expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
+    expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(MAX_COPIES);
     // What the deck costs is what its cards print (a spell priced for one play counts its own
     // price): 28 souls at most, and at most two cards over 2 — its payoffs — none over 8 (56, 4 and 16 until prices halved).
     // (Until the redesign of 2026-11-16 the recipe counted tiers: 8 / 6 / 2.)
@@ -42,12 +44,12 @@ describe('ready decks', () => {
     const payoffs = d.items.filter((id) => itemPrice(id) > PRICE[2]);
     expect(payoffs.length, payoffs.join(', ')).toBeLessThanOrEqual(2);
     for (const id of payoffs) expect(itemPrice(id), id).toBeLessThanOrEqual(PRICE[4]);
-    // A counter in every deck; the draw card, Golden Goose Egg, once (twice in Graveyard, which
-    // also digs for its Ghouls); and a deck leans on equipment, which stays, over spells.
+    // A counter in every deck; the draw card, Golden Goose Egg, once (running out of cards loses
+    // since 2026-11-16); and a deck leans on equipment, which stays, over spells.
     expect(d.items.some((id) => ['counterspell', 'debuff_reducer', 'debuff_remover', 'knockdown'].includes(id))).toBe(true);
     const draws = d.items.filter((id) => /^Draw \d+ cards?/.test(itemCard(id)!.text ?? ''));
     expect(new Set(draws)).toEqual(new Set(['golden_goose_egg']));
-    expect(draws).toHaveLength(d.id === 'graveyard' ? 2 : 1);
+    expect(draws).toHaveLength(1);
     const spells = d.items.filter((id) => itemCard(id)!.type === 'spell').length;
     expect(spells).toBeGreaterThan(0);
     expect(spells).toBeLessThanOrEqual(DECK_SIZE / 2);
