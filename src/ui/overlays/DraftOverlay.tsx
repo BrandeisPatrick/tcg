@@ -281,7 +281,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
 
 /** Ink ground with the lobby's dial off to the left, the focused hero's
  *  splash bleeding through out of focus, and a vignette. */
-function LobbyBackdrop({ focused }: { focused: string | null }) {
+export function LobbyBackdrop({ focused }: { focused: string | null }) {
   return (
     <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
       <AnimatePresence>
@@ -367,7 +367,7 @@ function LobbyBackdrop({ focused }: { focused: string | null }) {
  * banners meet — the LOCK plate on desktop; both sides flex equally, so it
  * lands on the centre line.
  */
-function PickStrips({ mine, rival, myTurn, aiTurn, compact, centre }: {
+export function PickStrips({ mine, rival, myTurn, aiTurn, compact, centre }: {
   mine: string[];
   rival: string[];
   myTurn: boolean;
@@ -925,14 +925,18 @@ const LOCK_PLATE_W = 168;
 /** The LOCK plate, with the lobby's status lamp in it: green when the pick
  *  is yours, pulsing sapphire while the rival chooses, dim once the draft is done.
  *  A fixed width, so the line it sits on never shifts as the label changes.
- *  Compact (phone) drops the brackets and tightens the type. */
-function LockButton({ enabled, state, onClick, compact }: {
+ *  Compact (phone) drops the brackets and tightens the type. The deck draft
+ *  (DeckDraftOverlay) prints its own word on the same plate (`word`: "Play"),
+ *  with what it plays as the button's name (`name`). */
+export function LockButton({ enabled, state, onClick, compact, word, name }: {
   enabled: boolean;
   state: 'ready' | 'waiting' | 'done';
   onClick: () => void;
   compact: boolean;
+  word?: string;
+  name?: string;
 }) {
-  const label = state === 'done' ? 'Locked' : state === 'waiting' ? 'Rival…' : 'Lock';
+  const label = word ?? (state === 'done' ? 'Locked' : state === 'waiting' ? 'Rival…' : 'Lock');
   const lamp = state === 'ready' ? lobby.green : state === 'waiting' ? lobby.rival : lobby.dim;
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: compact ? 12 : 8, flexShrink: 0 }}>
@@ -941,7 +945,7 @@ function LockButton({ enabled, state, onClick, compact }: {
         type="button"
         disabled={!enabled}
         onClick={onClick}
-        aria-label={state === 'waiting' ? 'Rival picking' : label}
+        aria-label={name ?? (state === 'waiting' ? 'Rival picking' : label)}
         whileHover={enabled ? { scale: 1.04, y: -1 } : undefined}
         whileTap={enabled ? { scale: 0.97 } : undefined}
         transition={spring.snappy}
