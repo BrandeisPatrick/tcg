@@ -2323,13 +2323,13 @@ const skill_lady_geist: HeroAbilityDef = {
 const skill_shiv: HeroAbilityDef = {
   id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', cooldown: 4, charges: 2,
   name: 'Serrated Knives',
-  text: 'Deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns.',
+  text: 'Deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 1 turn.',
   base: 1,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
     damageUnit(G, target, 1 + spi(source), 'spirit');
-    addStatus(G, target, 'bleed', 1, 2);
+    addStatus(G, target, 'bleed', 1, 1);
   },
 };
 
@@ -2516,14 +2516,17 @@ const skill_yamato: HeroAbilityDef = {
 // waits 4. No charges: Deadlock gives it none (cooldown 48 s, its longest).
 // docs/hero-design.md, Dynamo.
 const skill_dynamo: HeroAbilityDef = {
-  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget',
+  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', cooldown: 4,
   name: 'Rejuvenating Aurora',
-  text: 'Your heroes heal {sp:5} each.',
+  text: 'Your heroes heal {sp:5} each and get +1 Attack for 2 turns.',
   base: 5,
   scalesSpirit: true,
   run: (G, ctx, { source }) => {
     const heal = 5 + spi(source);
-    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, heal, 'Rejuvenating Aurora');
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) {
+      healUnit(G, c, heal, 'Rejuvenating Aurora');
+      addStatus(G, c, 'weapon_power', 1, 2);
+    }
   },
 };
 
@@ -2567,12 +2570,13 @@ const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
-  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:6}, then returns to your bench.',
+  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:6} and giving it +1 Attack, then returns to your bench.',
   base: 6,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
     if (!source || !target || target === source) return;
     healUnit(G, target, 6 + spi(source), 'Tag Along');
+    addStatus(G, target, 'weapon_power', 1, TAG_ALONG_TURNS);
     rideOn(G, G.players[ctx.movingPlayer], source, target, TAG_ALONG_TURNS);
   },
 };

@@ -67,7 +67,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_shiv', name: 'Shiv', type: 'hero', rarity: 3,
-    atk: 1, hp: 6, growth: { atk: 2, hp: 1, spirit: 1 }, retreat: 1,
+    atk: 1, hp: 6, growth: { atk: 1, hp: 2, spirit: 1 }, retreat: 1,
     profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'late', gun: true },
     skills: ['skill_shiv'], ult: 'eff_ult_shiv',
     signature: ['slowing_bullets', 'berserker'],

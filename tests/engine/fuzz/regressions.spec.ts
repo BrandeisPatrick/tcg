@@ -816,7 +816,7 @@ describe('M2 the attack forecast matches what the attack does', () => {
     foe.statuses.push({ id: 'djinns_mark', value: 2, duration: 3 });
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
     const hit = swing(G);
-    expect(hit.hp).toBe(40 - 1 - 4); // Mirage's 1 Attack, then the detonation's 4 (Spirit 0)
+    expect(hit.hp).toBe(40 - 2 - 6); // Mirage's 2 Attack, then the detonation's 6 (Spirit 0)
     expect(hit.statuses.some((s) => s.id === 'djinns_mark')).toBe(false); // the marks went off
   });
 

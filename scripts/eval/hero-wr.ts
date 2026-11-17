@@ -4,6 +4,12 @@
 import { playGame } from '../../tests/engine/fuzz/driver';
 import { getAbility } from '@/engine/registry';
 import '@/abilities';
+import { DEFAULT_BUILDS } from '@/cards/builds';
+//   SAMEBUILD=1 deals every hero one neutral build, so a hero's rate is its kit's, not its items'.
+if (process.env.SAMEBUILD) {
+  const neutral = ['extra_health', 'extra_spirit', 'titanic_magazine', 'improved_spirit', 'fortitude', 'boundless_spirit'];
+  for (const id of Object.keys(DEFAULT_BUILDS)) DEFAULT_BUILDS[id] = [...neutral];
+}
 for (const id of (process.env.OFF ?? '').split(',').filter(Boolean)) {
   const a = getAbility(id as never) as { run?: unknown } | undefined;
   if (!a) throw new Error(`OFF: no ability ${id}`);

@@ -64,12 +64,12 @@ describe('her card', () => {
 });
 
 describe('Assassinate: a snipe that holds 2 charges and takes 5 turns to come back', () => {
-  it('4 + twice her Spirit to any enemy, a bench hero too', () => {
+  it('3 + twice her Spirit to any enemy, a bench hero too (3 since 2026-11-17)', () => {
     const { G, vindicta, foes } = board();
     vindicta.spiritMod = 2;
     const benched = G.players['1'].bench[1]!;
     act(G, '0', { type: 'useSkill', heroIid: vindicta.iid, targetIid: benched.iid });
-    expect(benched.hp).toBe(60 - (4 + 2 * 2)); // a skill counts Spirit twice
+    expect(benched.hp).toBe(60 - (3 + 2 * 2)); // a skill counts Spirit twice
     expect(foes.filter((f) => f !== benched).every((f) => f.hp === 60)).toBe(true);
   });
 

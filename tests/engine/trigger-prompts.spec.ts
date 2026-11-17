@@ -134,7 +134,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     expect(G.players['1'].souls).toBe(PURSE);                          // no souls paid
     expect(G.ultUsed?.['1']).toBe(true);                               // his side's one ultimate of the turn
     expect(victor.hp).toBe(Math.ceil(victor.hpMax / 2));
-    expect(victor.hp).toBe(3);                                         // 6 max → 3
+    expect(victor.hp).toBe(4);                                         // 7 max → 4
     expect(victor.respawnTurnsLeft).toBeUndefined();                   // no wait
     expect(G.players['1'].active).toBe(victor);                        // where he is
     expect(structureHp(G.players['1'])).toBe(before);                  // no push
@@ -193,7 +193,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     expect(promptOwed(state().G)).toBeUndefined();
     expect(state().ctx.activePlayers).toBeNull();
     const v = state().G.players['1'].active!;
-    expect([v.iid, v.hp]).toEqual([victor.iid, 3]);
+    expect([v.iid, v.hp]).toEqual([victor.iid, 4]); // half of 7, rounded up
     client.moves.endTurn();
     expect(state().ctx.currentPlayer).toBe('1');
     client.stop();

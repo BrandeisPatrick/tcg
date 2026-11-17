@@ -34,28 +34,43 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_abrams:     { atk: 2, hp: 7, growth: [1, 2, 0], retreat: 2, skill: null, ult: 'medium' },
   hero_mo_krill:   { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_viscous:    { atk: 1, hp: 6, growth: [0, 2, 1], retreat: 1, skill: [4, 1], ult: 'medium' },
-  hero_lady_geist: { atk: 1, hp: 7, growth: [0, 0, 2], retreat: 2, skill: [3, 1], ult: 'medium' },
-  hero_shiv:       { atk: 1, hp: 6, growth: [2, 1, 1], retreat: 1, skill: [3, 2], ult: 'medium' },
+  hero_lady_geist: { atk: 1, hp: 7, growth: [0, 1, 2], retreat: 2, skill: [3, 1], ult: 'medium' },
+  hero_shiv:       { atk: 1, hp: 6, growth: [1, 2, 1], retreat: 1, skill: [4, 2], ult: 'medium' },
   hero_warden:     { atk: 2, hp: 7, growth: [1, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium' },
-  hero_haze:       { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
-  hero_wraith:     { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
-  hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: [5, 2], ult: 'small' },
-  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [4, 1], ult: 'large' },
+  hero_haze:       { atk: 1, hp: 5, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
+  hero_wraith:     { atk: 1, hp: 5, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
+  hero_vindicta:   { atk: 2, hp: 5, growth: [1, 1, 0], retreat: 0, skill: [5, 2], ult: 'small' },
+  hero_seven:      { atk: 1, hp: 5, growth: [0, 1, 3], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
   // Grapple waits 2 (Patrick, 2026-11-17: "low cooldown"; the leap from the bench, attack ready again).
   hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [2, 1], ult: 'large' },
-  hero_mirage:     { atk: 1, hp: 4, growth: [1, 1, 2], retreat: 0, skill: null, ult: 'small' },
-  hero_yamato:     { atk: 2, hp: 5, growth: [1, 1, 1], retreat: 0, skill: [3, 1], ult: 'medium' },
-  hero_dynamo:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'large' },
+  hero_mirage:     { atk: 2, hp: 5, growth: [1, 1, 2], retreat: 0, skill: null, ult: 'small' },
+  hero_yamato:     { atk: 1, hp: 5, growth: [1, 1, 1], retreat: 0, skill: [3, 1], ult: 'medium' },
+  hero_dynamo:     { atk: 1, hp: 5, growth: [0, 2, 2], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_kelvin:     { atk: 1, hp: 6, growth: [0, 1, 2], retreat: 1, skill: [4, 2], ult: 'medium' },
   hero_paige:      { atk: 1, hp: 5, growth: [0, 0, 2], retreat: 1, skill: [3, 1], ult: 'medium' },
-  hero_rem:        { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 0, skill: [3, 1], ult: 'small' },
-  hero_sinclair:   { atk: 1, hp: 4, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'medium' },
+  hero_rem:        { atk: 1, hp: 5, growth: [0, 1, 3], retreat: 0, skill: [3, 1], ult: 'small' },
+  hero_sinclair:   { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [3, 1], ult: 'medium' },
   // The charged ultimates wait on damage (`charged`: what they need); their size is what the effect is worth.
-  hero_victor:     { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 10 },
-  hero_silver:     { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium', charged: 8 },
-  hero_graves:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'small' },
+  hero_victor:     { atk: 1, hp: 7, growth: [1, 3, 0], retreat: 2, skill: null, ult: 'medium', charged: 10 },
+  hero_silver:     { atk: 2, hp: 6, growth: [1, 2, 0], retreat: 1, skill: [3, 1], ult: 'medium', charged: 8 },
+  hero_graves:     { atk: 1, hp: 5, growth: [0, 2, 2], retreat: 1, skill: [4, 1], ult: 'small' },
 };
+
+/** The balance pass of 2026-11-17 (docs/hero-design.md, "Balance pass"): what a hero
+ *  carries over the formula, set from AI-vs-AI win rates and written beside each hero there.
+ *  The formula still holds for everything else. */
+const TUNED: Record<string, { atk?: number; hp?: number; growth?: number }> = {
+  hero_mirage:     { atk: 1 },    // her marks need hits that land: Attack 2
+  hero_victor:     { hp: 1 },     // a tank that hurts himself every turn
+  hero_dynamo:     { growth: 1 }, // +1 HP a level
+  hero_graves:     { growth: 1 }, // +1 HP a level
+  hero_lady_geist: { growth: 1 }, // +1 HP a level
+};
+const tune = (id: string) => ({ atk: TUNED[id]?.atk ?? 0, hp: TUNED[id]?.hp ?? 0, growth: TUNED[id]?.growth ?? 0 });
+/** No hero starts below HP 5 (2026-11-17; it was 4): a turn-1 snipe of 3 or 4 no longer
+ *  takes a fresh hero off the bench. */
+const HP_FLOOR = 5;
 
 /** Growth points a level, by curve (§2). */
 const GROWTH_POINTS = { early: 2, mid: 3, late: 4 } as const;
@@ -101,35 +116,42 @@ describe('the 22 heroes are the hero doc\'s cards', () => {
     }
   });
 
-  it('HP is 4 + the tank score at Level 1, adjusted by the curve; Attack is 1, or 2 for a gun hero with damage 2+; the floors are Attack 1 and HP 4', () => {
+  it('HP is 4 + the tank score at Level 1, adjusted by the curve; Attack is 1, or 2 for a gun hero with damage 2+; the floors are Attack 1 and HP 5', () => {
     for (const h of HEROES) {
       const { mix, curve, gun } = h.profile;
       const baseAtk = gun && mix.damage >= 2 ? 2 : 1;
-      // The curve's point goes on HP or Attack, never below the floors (Rem keeps them).
-      expect(h.hp + h.atk, h.id).toBe(Math.max(5, 4 + mix.tank + baseAtk + CURVE_POINT[curve]));
-      const onHp = h.hp - (4 + mix.tank);
-      const allowed = curve === 'early' ? [0, 1] : curve === 'late' ? [-1, 0] : [0];
-      expect(allowed, `${h.id}: HP ${h.hp} for tank ${mix.tank}, ${curve}`).toContain(onHp);
+      const t = tune(h.id);
+      // The curve's point goes on HP or Attack, then the floors lift what fell under them;
+      // a tuned hero carries its pass's points on top.
+      const points = CURVE_POINT[curve];
+      const ways = (curve === 'mid' ? [[0, 0]] : [[points, 0], [0, points]])
+        .map(([onHp, onAtk]) => [Math.max(1, baseAtk + onAtk) + t.atk, Math.max(HP_FLOOR, 4 + mix.tank + onHp) + t.hp]);
+      expect(ways, `${h.id}: Attack ${h.atk}, HP ${h.hp} for tank ${mix.tank}, ${curve}`).toContainEqual([h.atk, h.hp]);
       expect([1, 2], h.id).toContain(h.atk);
-      expect(h.hp, h.id).toBeGreaterThanOrEqual(4);
+      expect(h.hp, h.id).toBeGreaterThanOrEqual(HP_FLOOR);
     }
     // The doc's worked examples.
     expect(hero('hero_abrams').hp).toBe(4 + 3);      // tank 3, mid
     expect(hero('hero_lady_geist').hp).toBe(4 + 2 + 1); // tank 2, early: the point on HP
     expect(hero('hero_mo_krill').hp).toBe(4 + 3 - 1); // tank 3, late
     expect(hero('hero_haze').atk).toBe(2 - 1);        // a gun, late: the point off Attack
-    expect([hero('hero_rem').atk, hero('hero_rem').hp]).toEqual([1, 4]); // late, but already at the floors
+    expect([hero('hero_rem').atk, hero('hero_rem').hp]).toEqual([1, 5]); // late, but already at the floors
   });
 
   it('a level adds the curve\'s growth points (2 early, 3 mid, 4 late), and all three curves are even at Level 2', () => {
     for (const h of HEROES) {
       const { mix, curve, gun } = h.profile;
       const g = h.growth;
-      expect(g.atk + g.hp + g.spirit, h.id).toBe(GROWTH_POINTS[curve]);
+      const t = tune(h.id);
+      expect(g.atk + g.hp + g.spirit - t.growth, h.id).toBe(GROWTH_POINTS[curve]);
       const baseAtk = gun && mix.damage >= 2 ? 2 : 1;
-      // Level 2's points: the formula's, three more — Rem keeps the point the floor gave him (§7).
+      // Level 2's points: the formula's, three more, plus what the floors lifted at Level 1 (§7)
+      // and the balance pass's points.
+      const level1 = 4 + mix.tank + baseAtk + CURVE_POINT[curve];
+      const lifted = h.atk + h.hp - t.atk - t.hp - level1;
+      expect(lifted, h.id).toBeGreaterThanOrEqual(0);
       const atLevel2 = h.atk + h.hp + g.atk + g.hp + g.spirit;
-      expect(atLevel2, h.id).toBe(4 + mix.tank + baseAtk + 3 + (h.id === 'hero_rem' ? 1 : 0));
+      expect(atLevel2, h.id).toBe(4 + mix.tank + baseAtk + 3 + lifted + t.atk + t.hp + t.growth);
     }
   });
 

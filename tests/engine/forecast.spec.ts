@@ -132,14 +132,14 @@ const cases: Case[] = [
     oldPlanner: 'saw only the 3-damage bullet: 1 HP left, no push, 3 damage',
   },
   {
-    name: "Mirage's Djinn's Mark detonates when the swing makes the 3rd stack: the target takes 4 + twice his Spirit more",
+    name: "Mirage's Djinn's Mark detonates when the swing makes the 3rd stack: the target takes 6 + twice his Spirit more",
     build: () => {
       const { G, attacker, defender } = board('hero_mirage');
       attacker.spiritMod = 2; addStatus(G, defender, 'djinns_mark', 2, 3);
       return G;
     },
-    steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 29, predictedKO: false }],
-    damageToActive: 11, pushDamage: 0, ko: false,
+    steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 27, predictedKO: false }],
+    damageToActive: 13, pushDamage: 0, ko: false,
     oldPlanner: 'saw only the 3-damage bullet: 37 HP left, 3 damage',
   },
   {

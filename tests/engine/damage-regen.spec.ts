@@ -283,8 +283,8 @@ describe('heal sources: all respect Healing Blocked', () => {
     addStatus(G, kelvin, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['skill_kelvin'].run(G, { movingPlayer: '0' }, { source: kelvin, target: enemy });
     expect(kelvin.hp).toBe(kelvin.hpMax - 3); // heal blocked
-    // the damage still goes through: {sp:3}, 3 at Spirit 0
-    expect(enemy.hp).toBe(enemy.hpMax - 3);
+    // the damage still goes through: {sp:2}, 2 at Spirit 0
+    expect(enemy.hp).toBe(enemy.hpMax - 2);
   });
 
   it('Dynamo Rejuvenating Aurora (ally skill heal)', () => {
