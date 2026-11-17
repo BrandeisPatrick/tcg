@@ -24,7 +24,7 @@ with less to rebuild.
 - A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), read across as they are, upgrades included.
 - You draft 3 heroes (Patrick, 2026-11-16; it was 4). They are shuffled into your deck, with an animation, so the deck has 19 cards. The board keeps its 4 spots, so a full squad leaves one for a unit ([hero-design.md](hero-design.md), "Units").
 
-## Ready decks (2026-11-15; rebuilt 2026-11-16: seven archetypes)
+## Ready decks (2026-11-15; rebuilt 2026-11-16: seven archetypes; Crossfire 2026-11-17)
 
 Patrick, 2026-11-16: "For all the decks, we want them to have very different play styles …
 they have their own archetypes: bullet single target, bullet multi target, single burst
@@ -105,6 +105,21 @@ from the lane; Dynamo's Rejuvenating Aurora and Paige's Plot Armor keep the side
 Tempo (from Healing Booster ×2) turns each heal into +2 Bullet Power and a free Retreat.
 Healing Rite ×2, Restorative Locket, Sprint Boots → Enduring Speed, Extra Health ×3, Extra
 Regen, Restorative Shot, Extended Magazine, Debuff Reducer, the Egg.
+
+**Crossfire** (Haze, Mirage, Kelvin; 2026-11-17). Patrick: "if we have main is a gunner, the
+supporting hero should have equipment reduce bullet resistance when dealing spirit damage." Each
+damage type opens the target for the other. Kelvin's Frost Grenade from the bench, worn with
+Bullet Resist Shredder ×3 (its canon verb since 2026-11-17: spirit damage cuts Bullet Resist),
+leaves the enemy Active at −1, so every swing of Haze's and Mirage's that turn lands for 1 more;
+Alchemical Fire cuts every enemy's by 2. The other way, Spirit Strike ×2 on Haze and Spirit
+Shredder → Spirit Rend on Mirage make their swings cut Spirit Resist, so Kelvin's grenade,
+Cold Front and Mirage's Djinn's Mark burst (it cashes three swings for {sp:6}) land harder.
+Mirage's Retreat 0 gives the side two gun swings a turn: Mirage swings and steps out, Haze
+steps in and swings. A narrow bench suits the exp rule of the same day (the bench shares 1):
+Kelvin, the one bench caster, takes it every turn the third hero is in hand. Extra Spirit ×3
+(the grenade counts Spirit twice), Extended Magazine ×2, Knockdown, the Egg. 16 cards, 28 souls,
+two payoffs (Alchemical Fire, Spirit Rend). It is the one deck that repeats heroes: Haze is
+Spray's and Kelvin Storm's, and Mirage, the one hero no archetype seated, gets a home.
 
 **Left for testing** (only when Patrick asks by name): whether Spray's four Split Shots make
 every match a race; whether Lockdown can reach the rival's deck-out before its own; whether
