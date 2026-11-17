@@ -643,7 +643,7 @@ function buildFit(G: GameState, pid: PlayerID, a: Action): number {
 }
 
 interface MoveOption {
-  move: 'playCard' | 'placeHero' | 'discard' | 'chooseActive' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'useTrigger' | 'passTrigger' | 'draftPick';
+  move: 'playCard' | 'placeHero' | 'discard' | 'chooseDeck' | 'chooseActive' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'useTrigger' | 'passTrigger' | 'draftPick';
   args: any[];
   score: number;
 }
@@ -662,6 +662,7 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
     };
     case 'placeHero': return { move: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
     case 'discard': return { move: 'discard', args: [[...a.cardIids]] };
+    case 'chooseDeck': return { move: 'chooseDeck', args: [a.index] };
     case 'chooseActive': return { move: 'chooseActive', args: [a.cardIid] };
     case 'useSkill': {
       // The skill is named only when it is not the hero's first (the move's default),
@@ -810,6 +811,9 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
       return 22 + buildFit(G, pid, a) - (a.replaceIid !== undefined ? 2 : 0);
     }
     case 'discard': return 50_000;
+    // The deck draft: the deck of the heroes' builds, the one the AI's own
+    // seat brings (its items go on the heroes whose builds list them).
+    case 'chooseDeck': return 60_000 + (G.deckDraft?.offers[a.index]?.id === 'builds' ? 100 : 0) - a.index;
     // The opening's first Active, from the drafted heroes in the deck: the
     // hero with the most HP, then attack.
     case 'chooseActive': {
@@ -1005,7 +1009,7 @@ function enumerateMoves(G: GameState, ctx: Ctx, lookahead: boolean, options: AiO
 
   // A choice owed needs no weighing: the strongest hero opens, the healthiest
   // steps up.
-  if (G.pendingActive || G.pendingPromotion) {
+  if (G.deckDraft || G.pendingActive || G.pendingPromotion) {
     return actions
       .map((a): MoveOption => ({ ...toMove(G, a), score: crudeScore(G, pid, a) }))
       .sort((a, b) => b.score - a.score);

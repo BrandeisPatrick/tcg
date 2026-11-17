@@ -346,7 +346,7 @@ export function attackLine(plan: AttackPlan): string {
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();
-  if (G.pendingDiscard || G.pendingActive || G.triggers?.length) return ready;
+  if (G.pendingDiscard || G.deckDraft || G.pendingActive || G.triggers?.length) return ready;
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
     const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null);

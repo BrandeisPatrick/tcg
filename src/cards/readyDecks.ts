@@ -24,7 +24,9 @@ export interface ReadyDeck {
   name: string;
   /** One line: how it wins. */
   blurb: string;
-  /** The squad, in pick order: the first is the natural first Active. */
+  /** The heroes it was made for, in pick order (the first the natural first
+   *  Active). Since 2026-11-17 a deck does not bring them: the draft does, and
+   *  the deck draft offers this deck when they fit (cards/deckOffers.ts). */
   heroes: [CardId, CardId, CardId];
   /** The 16 items, cheapest tier first. */
   items: CardId[];
@@ -126,9 +128,10 @@ export const READY_DECKS: readonly ReadyDeck[] = [
   },
 ];
 
-/** The ready deck a squad and a deck match exactly (the same heroes in the
- *  same order, the same items in any order), or undefined. */
-export function readyDeckInUse(squad: readonly (CardId | null)[], deck: readonly CardId[]): ReadyDeck | undefined {
+/** The ready deck a saved deck is (the same items in any order), or undefined.
+ *  A deck no longer comes with heroes (2026-11-17): the heroes come from the
+ *  draft, and a ready deck's squad is the heroes it was made for. */
+export function readyDeckInUse(deck: readonly CardId[]): ReadyDeck | undefined {
   const sorted = [...deck].sort().join('|');
-  return READY_DECKS.find((d) => d.heroes.every((h, i) => squad[i] === h) && [...d.items].sort().join('|') === sorted);
+  return READY_DECKS.find((d) => [...d.items].sort().join('|') === sorted);
 }

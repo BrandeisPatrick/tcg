@@ -16,6 +16,8 @@ import { Client } from 'boardgame.io/client';
 import type { CardId, CardInstance, DeckFx, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
 import { defaultBuild } from '@/cards/builds';
+import { DECK_OFFERS, deckOffers } from '@/cards/deckOffers';
+import { READY_DECKS } from '@/cards/readyDecks';
 import { buildsAcross, copyCounts, deckFromBuilds, deckProblem, evolvesFrom, fitDeck, isBaseItem, isLegalDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
 import { DeadlockGame } from '@/engine/game';
 import { setupGame } from '@/engine/actions/setup';
@@ -46,7 +48,11 @@ const allCards = (G: GameState, pid: PlayerID) => {
 
 /** A drafted match through a client: seat 0 picks the first four of `picks`'
  *  snake slots, seat 1 the rest. Returns the state as the first turn opens. */
-function drafted(seed: number, opts: { human?: PlayerID | null; deck?: CardId[]; builds?: Record<CardId, CardId[]> } = {}) {
+/** A drafted match through the client. The human seat then owes the deck draft
+ *  (2026-11-17): it is answered with `deckId` (default: the saved deck when it
+ *  is offered, else the heroes' builds — the deck a match dealt before the deck
+ *  draft), or left owed with `deckId: null`. */
+function drafted(seed: number, opts: { human?: PlayerID | null; deck?: CardId[]; builds?: Record<CardId, CardId[]>; deckId?: string | null } = {}) {
   setMatchConfig({
     heroPreferences: [null, null, null], seed,
     humanSeat: opts.human === undefined ? '0' : opts.human,
@@ -56,6 +62,11 @@ function drafted(seed: number, opts: { human?: PlayerID | null; deck?: CardId[];
   client.start();
   const order = ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_kelvin', 'hero_lash'];
   for (const id of order) client.moves.draftPick(id);
+  const owed = (client.getState()!.G as GameState).deckDraft;
+  if (owed && opts.deckId !== null) {
+    const want = opts.deckId ?? (owed.offers.some((o) => o.id === 'own') ? 'own' : 'builds');
+    client.moves.chooseDeck(owed.offers.findIndex((o) => o.id === want));
+  }
   const G = structuredClone(client.getState()!.G) as GameState;
   client.stop();
   // SQUAD_SIZE (3) each: P0 at 0, 3, 5; P1 at 1, 2, 4.
@@ -293,6 +304,12 @@ describe('a drafted match deals the deck', () => {
     client.start();
     for (const id of ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_lash', 'hero_kelvin', 'hero_seven', 'hero_paige']) client.moves.draftPick(id);
     let st = client.getState()!;
+    // The deck draft first (2026-11-17): the draft's turn holds through it.
+    expect(st.G.deckDraft?.pid).toBe('0');
+    expect(st.G.pendingActive).toBeUndefined();
+    client.moves.chooseDeck(0);
+    st = client.getState()!;
+    expect(st.G.deckDraft).toBeUndefined();
     expect(st.G.pendingActive).toBe('0');
     expect(st.G.turnNumber).toBe(0);
     const pick = st.G.players['0'].deck.find((c) => canLead(c.cardId))!;
@@ -306,6 +323,40 @@ describe('a drafted match deals the deck', () => {
     expect(st.G.players['0'].hand).toHaveLength(OPENING_DRAW);
     expect(st.G.players['0'].active!.iid).toBe(pick.iid);
     client.stop();
+  });
+
+  it('the deck draft (2026-11-17): after the hero draft the human seat picks its deck from the offers for its heroes; only that is legal until it does', () => {
+    const { G, picks } = drafted(31, { deckId: null });
+    const owed = G.deckDraft!;
+    expect(owed.pid).toBe('0');
+    expect(G.pendingActive).toBeUndefined();
+    // Three offers, no saved deck: two ready decks, best fit first, then the heroes' builds.
+    expect(owed.offers.map((o) => o.id)).toEqual([...deckOffers(picks['0'], picks['0'].map(defaultBuild)).map((o) => o.id)]);
+    expect(owed.offers).toHaveLength(DECK_OFFERS);
+    expect(owed.offers[DECK_OFFERS - 1].id).toBe('builds');
+    for (const o of owed.offers) expect(isLegalDeck(o.items), o.id).toBe(true);
+    // The human seat's deck holds its heroes alone until it picks; the AI's is whole.
+    expect(ids(G.players['0'].deck).sort()).toEqual([...picks['0']].sort());
+    expect(G.players['1'].deck).toHaveLength(DECK_SIZE + SQUAD_SIZE);
+    // Nothing else is legal meanwhile; an offer past the last is refused.
+    expect(legalActions(G, '0')).toEqual(owed.offers.map((_, index) => ({ type: 'chooseDeck', index })));
+    const lead = G.players['0'].deck.find((c) => canLead(c.cardId))!;
+    expect(perform(G, '0', { type: 'chooseActive', cardIid: lead.iid })).toBe(INVALID);
+    expect(perform(G, '0', { type: 'chooseDeck', index: owed.offers.length })).toBe(INVALID);
+    // The pick: its items join the heroes, and the first Active is owed next.
+    const offer = owed.offers[0];
+    expect(perform(G, '1', { type: 'chooseDeck', index: 0 })).not.toBe(INVALID); // from either seat
+    expect(G.deckDraft).toBeUndefined();
+    expect(G.pendingActive).toBe('0');
+    expect(ids(G.players['0'].deck).filter((id) => !isHero(id)).sort()).toEqual([...offer.items].sort());
+  });
+
+  it('a saved deck is offered beside the three, as "Your deck"', () => {
+    const saved = [...READY_DECKS[0].items];
+    const { G } = drafted(32, { deck: saved, deckId: null });
+    const own = G.deckDraft!.offers.find((o) => o.id === 'own');
+    expect(G.deckDraft!.offers).toHaveLength(DECK_OFFERS + 1);
+    expect(own?.items).toEqual(saved);
   });
 
   it('with no human seat both Actives are chosen at once, the decks are dealt, and the board holds nothing else', () => {

@@ -128,6 +128,31 @@ the strongest single card in the set.
 
 ## Start of the match
 
+### The deck draft (2026-11-17)
+
+Patrick: "deck doesn't have to come with heroes because hero always come to draft … We first draft
+hero, then we transition to drafting deck … the system will recommend three decks [based on] what
+we drafted … So we draft hero and then draft deck."
+
+- **Hero draft → deck draft → first Active → play.** When the last hero is drafted, a screen of its
+  own (DeckDraftOverlay) offers your decks: your three heroes across the top, the decks under them.
+- **The three offers** (cards/deckOffers.ts), the same every time for the same heroes:
+  - the **two ready decks that fit best**, best first ("Best fit"). Fit = 3 for each drafted hero
+    the deck was made for, + 1 for each of its items a drafted hero's build lists, + up to 6 for
+    its slot lean against the heroes' growth (Attack → Weapon items, Spirit → Spirit, HP →
+    Vitality), so a gun team is offered gun decks when no deck names its heroes;
+  - **Hero builds**, the deck read across the heroes' own builds, which always fits.
+  - **Your deck**, the one saved in the Loadout, comes beside them when it is a legal deck.
+- Each offer says why ("Made for Haze, Mirage and Kelvin", "Built on guns, like your heroes"), its
+  line, the heroes it was made for and its 16 items, counted. Tap one (it lights in gold), or the
+  arrows; one button confirms ("Play Crossfire").
+- **The rival AI** brings the deck of its heroes' builds, as before (its items go on the heroes
+  whose builds list them).
+- **A ready deck brings no heroes now.** Its squad is the heroes it was made for: the fit reads it.
+  The Loadout's "Use deck" saves only its items, as your deck.
+
+### The first Active
+
 Patrick, 2026-11-09: "the player at beginning of the game, player should decide which hero to draw
 at turn 1, it is like rotation selection so it also fits a small screen like mobile."
 

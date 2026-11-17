@@ -1,10 +1,10 @@
 /**
- * Loadout — the one screen you set yourself up on: a ready deck to take as it
- * is (ReadyDecks: a squad and its 16 items in one press), or your own — the
- * squad you want the draft to hand you, your deck (DeckEditor: the items you draw from, which
- * every match deals with your three drafted heroes shuffled in), and each
- * hero's build (BuildEditor: what a deck made from your heroes is built from
- * when you have saved none).
+ * Loadout — the one screen you set yourself up on: a ready deck to take as
+ * your own (ReadyDecks: its 16 items in one press), or your own — the squad
+ * you want the draft to hand you, your deck (DeckEditor: the items you draw
+ * from, offered in every match's deck draft beside the decks that fit your
+ * drafted heroes), and each hero's build (BuildEditor: what the "Hero builds"
+ * deck of the deck draft is made from).
  *
  * Printed in the poster idiom — cream sheet on the blurred night scene, flat
  * ink, one red — so the menu reads as the same object as the title screen and
@@ -48,12 +48,12 @@ export function LoadoutScreen({ onBack }: Props) {
     setData(loadPlayerData());
   }
 
-  // A ready deck taken: its squad and its items are saved together, and the
-  // deck builder (which keeps its own copy of the deck) is opened afresh on it.
+  // A ready deck taken: its items are saved as your deck (2026-11-17: a deck
+  // brings no heroes; the draft does), and the deck builder (which keeps its
+  // own copy of the deck) is opened afresh on it.
   const [deckEpoch, setDeckEpoch] = useState(0);
-  const inUse = readyDeckInUse(slots, data.deck);
+  const inUse = readyDeckInUse(data.deck);
   function takeReadyDeck(deck: ReadyDeck) {
-    savePreferredHeroes([...deck.heroes]);
     saveDeck([...deck.items]);
     setData(loadPlayerData());
     setDeckEpoch((n) => n + 1);
@@ -140,12 +140,12 @@ export function LoadoutScreen({ onBack }: Props) {
         </header>
 
         <section aria-label="Ready decks" style={{ marginBottom: split ? 'clamp(22px, 3vh, 32px)' : 22 }}>
-          <SectionHead title="Ready decks" note="A squad and its 16 items" />
+          <SectionHead title="Ready decks" note="16 items each. After the hero draft, a match offers the ones that fit your heroes" />
           <ReadyDecks
             inUse={inUse}
-            // Something of the player's own would go: picks, or a deck. (One
-            // ready deck for another loses nothing.)
-            guarded={!inUse && (slots.some(Boolean) || data.deck.length > 0)}
+            // A deck of the player's own would go. (One ready deck for another
+            // loses nothing.)
+            guarded={!inUse && data.deck.length > 0}
             onUse={takeReadyDeck}
             compact={isMobile}
           />

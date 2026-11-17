@@ -188,8 +188,13 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
   };
   // The bookkeeping moves, now and then: they must be harmless outside their window.
   if (r() < 0.08) {
-    const extra = pick(['completeAction', 'draftPick'], r);
-    return { name: extra, args: extra === 'draftPick' ? [r() < 0.5 ? 'hero_haze' : anyIid()] : [] };
+    const extra = pick(['completeAction', 'draftPick', 'chooseDeck'], r);
+    return {
+      name: extra,
+      args: extra === 'draftPick' ? [r() < 0.5 ? 'hero_haze' : anyIid()]
+        : extra === 'chooseDeck' ? [Math.floor(r() * 6) - 1] // an offer, or none (−1, past the last)
+        : [],
+    };
   }
   const name = pick([...CHAOS_NAMES], r);
   switch (name) {
