@@ -399,15 +399,15 @@ export const LESSONS: Lesson[] = [
     blurb: 'A card drawn, two souls: put it on. Its swing is the kill.',
     face: 'hero_yamato',
     outro: `Every turn pays ${soulsText(LANE_INCOME)} and draws a card. Souls carry over: what you do not spend stays in your bank. Tap your souls to see what the next turn pays and what a kill is worth. An item waits in your hand until you pay to put it on a hero; once on, it stays, through death too. A hero you draw goes on the bench for free.`,
-    // Yamato swings for 2 at a Lash on 3. His deck is one card, Extended
+    // Yamato swings for 1 at a Lash on 2 (Attack 1 since the 2026-11-17 balance pass). His deck is one card, Extended
     // Magazine — his build's first item, a tier 1 for one of the turn's two
-    // souls (prices halved, 2026-11-16) — drawn as the turn opens; on him it makes his swing 3, and the
+    // souls (prices halved, 2026-11-16) — drawn as the turn opens; on him it makes his swing 2, and the
     // swing that ends the Act is the kill. Turn two, so there is an attack.
     setup: () => fight({
       startTurn: 2,
       playerHeroes: ['hero_yamato'],
       playerDeck: ['extended_magazine'],
-      enemyHeroStats: [{ hp: 3 }],
+      enemyHeroStats: [{ hp: 2 }],
     }),
     steps: [
       play('play', 'Put It On', 'extended_magazine', (v) => `Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}) and drew you a card: Extended Magazine, tier 1, +1 Bullet Power. Its price, ${soulsText(itemPrice('extended_magazine'))}, is on its coin. Played, it also makes one of its upgrades for your deck: pick either.`),

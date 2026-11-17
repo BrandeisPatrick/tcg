@@ -1181,7 +1181,10 @@ export function collectTransitionViolations(
         // bearer at 1 HP, a step-in item as its bearer steps in.
         const itemWait = Object.values(ITEM_WAITS).find((w) => w.ability === key.split('|')[1]);
         const wearer = bearerOfItem(after.G, owner);
-        if (itemWait && v0 === undefined && v1 === itemWait.turns && wearer && itemWait.fired(after.G, wearer)) want = v1;
+        // Fired at the start of its bearer's own turn (a Bleed tick that drops it to 1 HP), the
+        // start that fired it also counts down once: that turn is the first of its wait.
+        const full = v1 === itemWait?.turns || (started === pid && v1 === (itemWait?.turns ?? 0) - 1);
+        if (itemWait && v0 === undefined && full && wearer && itemWait.fired(after.G, wearer)) want = v1;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }
     }

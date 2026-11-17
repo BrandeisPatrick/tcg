@@ -2562,7 +2562,8 @@ const skill_paige: HeroAbilityDef = {
 
 // Rem — Tag Along (Patrick, 2026-11-09): she rides on another standing hero of
 // her side, bench or Active, as equipment for 2 of her owner's turns, and it
-// heals 4✦; then she returns to her bench (the engine's ride, `rideOn` and
+// heals 4✦ and gets +1 Attack a point of her Spirit more (Patrick, 2026-11-17: the
+// buff of a hero worn as gear grows with her Spirit); then she returns to her bench (the engine's ride, `rideOn` and
 // `returnRemToBench` in death.ts: her bench slot kept for her, the first free
 // one when she rode from the lane, the rescue when her bearer falls). Riding
 // off from the lane leaves it to be filled as when an Active falls.
@@ -2570,13 +2571,14 @@ const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
-  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:6} and giving it +1 Attack, then returns to your bench.',
-  base: 6,
+  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Attack, then returns to your bench.',
+  base: 4,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
     if (!source || !target || target === source) return;
-    healUnit(G, target, 6 + spi(source), 'Tag Along');
-    addStatus(G, target, 'weapon_power', 1, TAG_ALONG_TURNS);
+    healUnit(G, target, 4 + spi(source), 'Tag Along');
+    // The ride is Rem worn as gear: its Attack counts her Spirit once, as an item's stat does ({sp:1/2}).
+    addStatus(G, target, 'weapon_power', 1 + Math.floor(spi(source) / 2), TAG_ALONG_TURNS);
     rideOn(G, G.players[ctx.movingPlayer], source, target, TAG_ALONG_TURNS);
   },
 };

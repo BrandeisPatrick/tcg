@@ -326,12 +326,12 @@ describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with
     (ally.attached ??= []).push(rem);
   }
 
-  it('Tag Along heals the ally {sp:6}, gives it +1 Attack, and Rem rides on it for 2 turns (no max HP granted, Rem not healed)', () => {
+  it('Tag Along heals the ally {sp:4}, gives it +{sp:1/2} Attack, and Rem rides on it for 2 turns (no max HP granted, Rem not healed)', () => {
     const { G, ally, rem } = setup();
     ally.hp = 1; ally.hpMax = 20;
     rem.hp = 1; rem.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp).toBe(1 + 6);
+    expect(ally.hp).toBe(1 + 4);
     expect(ally.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 1, duration: 2 }));
     expect(rem.hp).toBe(1);
     expect(ally.hpMax).toBe(20); // no max HP granted
@@ -345,7 +345,8 @@ describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with
     rem.spiritMod = 2;
     ally.hp = 1; ally.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp).toBe(1 + 6 + 2 * 2); // a skill counts Spirit twice
+    expect(ally.hp).toBe(1 + 4 + 2 * 2); // a skill counts Spirit twice
+    expect(ally.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 1 + 2 })); // the Attack counts it once
   });
 
   it('after 3 ticks a merged Rem returns to the bench and the max-HP reverts', () => {

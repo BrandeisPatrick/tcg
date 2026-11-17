@@ -379,7 +379,7 @@ describe('what a hero card prints', () => {
     hero_abrams: ['passive', "Infernal Resilience", "At the start of your turn, if Abrams is Active, he heals 1."],
     hero_haze: ['passive', "Fixation", "Haze's attacks deal +1 bullet damage to an enemy below full HP."],
     hero_mo_krill: ['skill', "Sand Blast", "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn."],
-    hero_rem: ['skill', "Tag Along", "Rem rides on one of your heroes for 2 turns, healing it {sp:6} and giving it +1 Attack, then returns to your bench."],
+    hero_rem: ['skill', "Tag Along", "Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Attack, then returns to your bench."],
     hero_shiv: ['skill', "Serrated Knives", "Deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 1 turn."],
     hero_vindicta: ['skill', "Assassinate", "Snipe any enemy, bench too: deal {sp:3} spirit damage."],
     hero_wraith: ['skill', "Full Auto", "Wraith gets +2 Attack for 2 turns."],

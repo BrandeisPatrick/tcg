@@ -56,7 +56,7 @@ describe('the tutorial is staged so the taught move wins', () => {
     }
   });
 
-  it('Lesson 2: Extended Magazine is drawn as the turn opens, tier 1 for one of the turn\'s two souls; only once it is on Yamato is his swing at a Lash on 3 the kill', () => {
+  it('Lesson 2: Extended Magazine is drawn as the turn opens, tier 1 for one of the turn\'s two souls; only once it is on Yamato is his swing at a Lash on 2 the kill', () => {
     for (const line of ['skip', 'play'] as const) {
       const c = lesson('souls');
       expect(turn(c)).toEqual([2, ['extended_magazine']]); // Turn 2: there is an attack; the one card drawn
@@ -65,15 +65,15 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(state(c).G.players['0'].deck).toEqual([]);
       expect(itemCard('extended_magazine')!.tier).toBe(1);
       expect(playCost(yamato, 'extended_magazine')).toBe(PRICE[1]);         // …and the item costs one (prices halved, 2026-11-16)
-      expect(lash.hp).toBe(3);
-      expect(attackPower(yamato, lash).total).toBe(2);
+      expect(lash.hp).toBe(2);
+      expect(attackPower(yamato, lash).total).toBe(1);
       if (line === 'play') {
         const card = state(c).G.players['0'].hand[0];
         moves(c).playCard(card.iid, yamato.iid);
         const me = state(c).G.players['0'];
         expect(wornItems(me.active!).map((it) => it.cardId)).toEqual(['extended_magazine']);
         expect([me.hand, me.souls]).toEqual([[], LANE_INCOME - PRICE[1]]);  // a soul of the turn's income left
-        expect(attackPower(me.active!, lash).total).toBe(3);
+        expect(attackPower(me.active!, lash).total).toBe(2);
       }
       expect(attackBlocked(state(c).G, '0')).toBeNull();
       moves(c).attack();

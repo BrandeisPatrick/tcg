@@ -436,7 +436,7 @@ describe('status texts match the rules', () => {
     for (let i = 1; i < DJINN_CAP; i++) ABILITIES_BY_ID.passive_mirage_djinns_mark.run(G, { movingPlayer: '0' }, { source: mirage, target: t });
     expect(t.hp).toBe(30);
     ABILITIES_BY_ID.passive_mirage_djinns_mark.run(G, { movingPlayer: '0' }, { source: mirage, target: t });
-    expect(t.hp).toBe(30 - (4 + 2 * 1)); // a passive counts Spirit twice
+    expect(t.hp).toBe(30 - (6 + 2 * 1)); // a passive counts Spirit twice
     expect(t.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
   });
 });

@@ -7,7 +7,9 @@ import type { HeroCard } from '@/engine/types';
  *  - HP is 4 + its tank score at Level 1, Attack 1 — or 2 for a hero whose
  *    damage is mainly bullet or melee (`gun`) with damage 2 or more — and the
  *    curve moves a point: early +1 (on HP or Attack), late −1 (never below
- *    Attack 1 or HP 4). Rem keeps the floor.
+ *    Attack 1 or HP 5, the floor since the 2026-11-17 balance pass). Rem keeps the floor.
+ *    A few heroes carry a point or two over this formula from that pass
+ *    (docs/hero-design.md, "Balance pass").
  *  - Each level adds the hero's `growth`: 2 points a level early, 3 mid, 4
  *    late, into Attack for guns, Spirit for casters and HP for tanks. All three
  *    curves are even at Level 2.
@@ -74,7 +76,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_vindicta', name: 'Vindicta', type: 'hero', rarity: 3,
-    atk: 2, hp: 5, growth: { atk: 1, hp: 1, spirit: 0 }, retreat: 0,
+    atk: 2, hp: 5, growth: { atk: 1, hp: 1, spirit: 0 }, retreat: 1,
     profile: { role: 'Marksman', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'early', gun: true },
     skills: ['skill_vindicta'], ult: 'eff_ult_vindicta',
     signature: ['long_range', 'sharpshooter'],
@@ -134,14 +136,14 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_sinclair', name: 'Sinclair', type: 'hero', rarity: 3,
-    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 1, hp: 1, spirit: 2 }, retreat: 1,
     profile: { role: 'Controller', mix: { tank: 0, damage: 1, control: 3, support: 1 }, reach: 'one', curve: 'mid' },
     skills: ['skill_sinclair'], ult: 'eff_ult_sinclair',
     signature: ['slowing_hex', 'disarming_hex'],
   },
   {
     id: 'hero_viscous', name: 'Viscous', type: 'hero', rarity: 3,
-    atk: 1, hp: 6, growth: { atk: 0, hp: 2, spirit: 1 }, retreat: 1,
+    atk: 1, hp: 6, growth: { atk: 0, hp: 3, spirit: 1 }, retreat: 1,
     profile: { role: 'Tank', mix: { tank: 2, damage: 1, control: 3, support: 2 }, reach: 'many', curve: 'mid' },
     skills: ['skill_viscous'], ult: 'eff_ult_viscous',
     signature: ['reactive_barrier', 'spirit_resilience'],
@@ -162,7 +164,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_mirage', name: 'Mirage', type: 'hero', rarity: 3,
-    atk: 2, hp: 5, growth: { atk: 1, hp: 1, spirit: 2 }, retreat: 0,
+    atk: 2, hp: 5, growth: { atk: 2, hp: 1, spirit: 2 }, retreat: 0,
     profile: { role: 'Assassin', mix: { tank: 1, damage: 2, control: 1, support: 0 }, reach: 'one', curve: 'late' },
     skills: [], passives: ['passive_mirage_djinns_mark'], ult: 'eff_ult_mirage',
     signature: ['fleetfoot', 'tesla_bullets'],

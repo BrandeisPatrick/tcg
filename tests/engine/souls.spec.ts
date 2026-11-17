@@ -427,7 +427,7 @@ describe('souls economy', () => {
     expect(hpBefore - target.hp).toBe(10); // base 4 + 2 × 3 spirit (SKILL_SPIRIT_RATE)
   });
 
-  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 5); Rem's Tag Along prints {sp:6} and does", async () => {
+  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 5); Rem's Tag Along prints {sp:4} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const G = freshG();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
@@ -441,7 +441,7 @@ describe('souls economy', () => {
     expect(ally.hp - 1).toBe(5);
     ally.hp = 1;
     ABILITIES_BY_ID['skill_rem'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp - 1).toBe(6 + 2 * 2); // {sp:6}: a skill counts Spirit twice
+    expect(ally.hp - 1).toBe(4 + 2 * 2); // {sp:4}: a skill counts Spirit twice
   });
 
   it("a flat shield is flat — Spirit does NOT scale it (Warden's Willpower: Shield 2); Paige's Plot Armor prints {sp:2} and does", async () => {

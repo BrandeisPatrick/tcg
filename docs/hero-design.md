@@ -37,7 +37,7 @@ after 2 turns, keeping its level (section 7).
 |---|---|
 | HP | 4 + tank score at Level 1, adjusted by the curve. |
 | Attack | 1 at Level 1. It is 2 when the hero's damage is mainly bullet or melee and its damage score is 2 or more. Never above 2 at Level 1. |
-| Curve | **Early:** +1 point at Level 1 (on HP or Attack) and 2 growth points a level. **Mid:** no extra point and 3 growth points a level. **Late:** −1 point at Level 1 (never below Attack 1 or HP 4) and 4 growth points a level. All three are even at Level 2. |
+| Curve | **Early:** +1 point at Level 1 (on HP or Attack) and 2 growth points a level. **Mid:** no extra point and 3 growth points a level. **Late:** −1 point at Level 1 (never below Attack 1 or HP 5; the HP floor was 4 until the 2026-11-17 balance pass) and 4 growth points a level. All three are even at Level 2. |
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. Since 2026-11-16 a hero's own skill or passive counts its Spirit twice (`{sp:N}` there is N + 2 × Spirit), so a point put into Spirit pays about what a point put into Attack does ([balance-model.md](balance-model.md) §10). |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
@@ -869,3 +869,55 @@ committed, which the board animates.
   off in one line and Flight should last longer.
 - She flies 3 turns of every 4 once Flight is first used (it waits 4), and her side spends its one
   ultimate a turn on it each time.
+
+### Balance pass (2026-11-17)
+
+Patrick: "use your reasoning to see which hero needs a buff, which a nerf"; a few playthroughs, no
+long matchup study. The numbers below come from the budget (§4) and from three runs of 4,000
+AI-vs-AI games through the fuzz driver (`scripts/eval/hero-wr.ts`, rated by `hero-fit.ts`: a hero's
+rate is how often a team wins with it in place of an average hero; ±1.7 points).
+
+What the games showed, and why:
+- **Two damage sources decided most games: a 2-Attack body and damage that reaches the bench.**
+  Each hero attacks once a turn from the lane and a side retreats once, so a 2-Attack hero with
+  Retreat 0 swings and swaps for free, and a second hero swings. A turn-1 snipe of 4 took a 4-HP
+  hero off the bench before it played.
+- **Two charges front-load a skill.** All three charged skills were in the top five.
+- **Heroes whose Spirit fed nothing.** Victor's aura and Sinclair's Rabbit Hex print no
+  Spirit number, so their Spirit growth was wasted.
+- **A hero's rate carried its default build.** The AI is dealt a deck from its heroes' builds
+  (`deckFromBuilds`). With one neutral build for every hero, Shiv fell from 68% to 58%,
+  Yamato from 60% to 48% and Dynamo rose from 35% to 43%. Their builds (Berserker and
+  Crippling Headshot; cooldown and heal items) are worth a separate look. The final check
+  below uses the neutral build, so it rates kits.
+- **The AI under-plays Rem.** Tag Along makes Rem the host's gear for two turns, and the AI
+  does not value what that gives the host. Rem is set by reasoning, not by the games
+  (Patrick, 2026-11-17).
+
+| Hero | Before (own builds) | Change | Reasoning | After (same items) |
+|---|---|---|---|---|
+| Shiv | 71% | Serrated Knives waits 4 (was 3), Bleeds 1 turn (was 2); growth +1 Attack +2 HP +1 Spirit (was +2 +1 +1) | A charged skill: two uses on turns 1 and 2. Bleed 1 for 1 turn makes a use worth 2 at Level 1, inside a charged wait-4 skill's band (about 2/3 of 3–4.5) | 58% |
+| Vindicta | 71% | Assassinate {sp:3} (was 4); growth +1 Attack +1 HP (was +2 Attack); Retreat 1 (was 0) | 3 no longer kills a fresh hero on the bench; Silver's same growth change took 7 points off him; Retreat 1 ends the free swing-and-swap | 61% (still the highest) |
+| Yamato | 68% | Attack 1 (was 2): not a gun hero | Her damage is the katana's slashes, not her gun; the formula gives a non-gun hero Attack 1. Flying Slash keeps {sp:2}, wait 3 | 48% |
+| Kelvin | 64% | Frost Grenade {sp:2} damage and {sp:2} heal (was 3) | 2 + 0.5 = 2.5 a use with two charges and a wait of 4; his Spirit (+2 a level, counted twice) still makes it 6 + 6 at Level 2 | 53% |
+| Abrams | 64% | Infernal Resilience heals 1 (was 2) | 2 HP a turn on a 7-HP, 2-Attack body made him the lane's longest-lived Active | 53% |
+| Silver | 64% | Growth +1 Attack +2 HP (was +2 Attack +1 HP) | Attack growth is the strongest growth (every swing); the points move to HP | 57% |
+| Seven | 38% | Static Charge {sp:2} (was 1); HP 5 | 2 + a Stun is 4 points for a wait of 4, inside 3–4.5 | 49% |
+| Graves | 38% | Grasping Hands {sp:2} (was 1); growth +1 HP a level | As Seven: the hit was under its band | 48% |
+| Lady Geist | 39% | Essence Bomb costs 1 HP (was 2); growth +1 HP a level | No growth into HP and a skill that cost her HP: she ran out of HP first | 55% |
+| Victor | 38% | HP 7 (was 6); growth +1 Attack +3 HP (was +3 HP +1 Spirit) | His aura is a flat 1, so Spirit did nothing; the point goes on Attack | 44% |
+| Mirage | 35% | Attack 2, HP 5; Djinn's Mark {sp:6} (was 4); growth +2 Attack +1 HP +2 Spirit | A passive that pays only from the lane: her marks come from hits, so Attack, and a burst worth the three swings | 45% |
+| Dynamo | 34% | Rejuvenating Aurora also gives +1 Attack for 2 turns; growth +2 HP a level | Heals were worth half their budget in the games (the race is won on damage). Paige's +1 Attack is what made a 1/5 support win (51%) | 43% |
+| Rem | 30% | HP 5; Tag Along gives +{sp:1/2} Attack for the ride (1 + her Spirit) | Patrick: Rem worn as gear makes the host strong, and the buff grows with her Spirit. Counted once, as gear counts its stats: 1.5 points at Level 1, 6 at Level 2 (Spirit 3), with the heal of {sp:4} | 48% (the AI under-plays her) |
+| Sinclair | 42% | Rabbit Hex waits 3 (was 4); HP 5; growth +1 Attack a level | A turn of hard control is 2–3 points, the band of a wait-3 skill; his Spirit had nothing to grow | 44% |
+| Viscous | 46% | Growth +1 HP a level | The Cube keeps its wait of 4: at 3, Transcendent Cooldown would encase someone every turn | 44%* |
+| Haze, Wraith | 45%, 42% | HP 5 | The floor (below) | 44%, 51% |
+
+\* The check ran with The Cube at a wait of 3; the growth change replaced it afterwards, unchecked.
+
+**The HP floor is 5** (was 4): no hero starts where one skill can take it off the bench. The six
+heroes at 4 move to 5. The formula in §2 is otherwise unchanged. The heroes that carry a point
+over it are listed in `tests/engine/hero-cards.spec.ts` (`TUNED`) with their reasons.
+
+Left as they are: Mo & Krill 56%, Lash 54%, Warden 54%, Paige 47%, Drifter 45% (within reach of 50).
+Vindicta at 61% is the one hero still above the rest; a next step would be Assassinate's wait (5 → 6).
