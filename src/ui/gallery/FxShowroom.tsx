@@ -93,7 +93,7 @@ export const GROUPS: Group[] = [
     title: 'Skill triggers',
     blurb: 'The caster flares in its identity colour with its ability on a plate, a bolt flies to the target, and the impact lands with the stat change.',
     demos: [
-      { label: 'Kelvin · Frost Grenade → Abrams', events: [cast('skill', '0', 'hero_kelvin', 'y0', 'r0'), hit('r0', 2, 'spirit', { source: 'y0' }), heal('y0', 2)] },
+      { label: 'Kelvin · Frost Grenade → Abrams', events: [cast('skill', '0', 'hero_kelvin', 'y0', 'r0'), hit('r0', 3, 'spirit', { source: 'y0' }), heal('y0', 3)] },
       { label: 'Lady Geist · Life Drain → Abrams', events: [cast('skill', '0', 'hero_lady_geist', 'y2', 'r0'), hit('r0', 3, 'spirit', { source: 'y2', tag: 'life_drain' }), heal('y2', 1, { tag: 'lifesteal', from: 'r0', source: 'y2' })] },
       { label: 'Seven · Static Charge → Kelvin', events: [cast('skill', '1', 'hero_seven', 'r2', 'y0'), hit('y0', 1, 'spirit', { source: 'r2' }), status('y0', 'charged', 1, 2, true)] },
       { label: 'Buff skill → ally (Shield + Bullet Resist)', events: [cast('skill', '0', 'hero_kelvin', 'y0', 'y1'), status('y1', 'shield', 2, 999, false), status('y1', 'bullet_resist', 2, 2, false)] },

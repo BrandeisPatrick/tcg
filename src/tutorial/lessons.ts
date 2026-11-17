@@ -382,13 +382,13 @@ export const LESSONS: Lesson[] = [
     blurb: "Income, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
     outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs no souls: after a use it waits a few turns, and some hold two charges. The ultimate is the other button on the card: from Level 3, no souls either, one ultimate a turn.",
-    // Lash already hurt to a single point: Frost Grenade's one spirit damage
-    // (to every enemy, and he is the only one) is the whole fight. A skill
-    // costs no souls; Frost Grenade holds two charges.
+    // Lash already hurt to a single point: Frost Grenade's three spirit damage
+    // at the enemy Active (and Kelvin heals as much) is the whole fight. A
+    // skill costs no souls; Frost Grenade holds two charges.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
       look('look', 'One on One', mine, (v) => `Every turn runs three beats: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
-      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to every enemy. A skill costs no souls; what it costs is time. ${paceOf(mine(v))}`),
+      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: three damage to their Active, and ${nameOf(mine(v))} heals three. A skill costs no souls; what it costs is time. ${paceOf(mine(v))}`),
     ],
   },
 

@@ -454,12 +454,16 @@ HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
   - **The wait.** 4 turns, the heavier skills' wait, and no charges: Deadlock gives it none (48 s, Dynamo's longest cooldown), and Kinetic Pulse's two were its own.
   - Healing Tempo (card-design.md, 2026-11-16) turns the heal into tempo: a hero it heals that wears it swings harder this turn and retreats for nothing.
 
-**Kelvin** · in the game today — peaks mid, many targets; mix tank 2 · damage 1 · control 2 · support 3  
+**Kelvin** · in the game today — peaks mid, one and many targets; mix tank 2 · damage 1 · control 2 · support 3  
 HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 2 charges, 4 turns each — **Frost Grenade**: Deal 1 spirit damage to every enemy. Your heroes heal 1✦ each.
+- Skill, 2 charges, 4 turns each — **Frost Grenade**: Deal 3✦ spirit damage to the enemy Active and heal Kelvin 3✦.
 - Ultimate, medium, waits 6 — **Frozen Shelter**: Heal your heroes 4✦. Root the enemy Active 2 turns.
 - Why: Kelvin heals his whole team and chills every enemy with each grenade, and his dome both saves his side and traps their Active.
 - Changed from today: Attack 2 to 1 (spirit, damage 1), HP stays 6; Frost Grenade now hits every enemy and heals the whole team (reach many). Frozen Shelter's flat heal 7 becomes 4✦ plus a root, which gives control 2 its control in the ultimate.
+- **Changed 2026-11-17 (Patrick): "Frost Grenade should damage X to active hero and heal self X."** The grenade lands on the enemy Active alone and Kelvin heals the same X; it no longer touches the bench or his team. His reach becomes both: the grenade is one target, Frozen Shelter's heal is the whole side.
+  - **The number.** X = 3✦. 3 on the Active is 3.0. The heal is Kelvin's own, 3 × 0.5, and lands in full about half the time (he is not always hurt): 0.75. **3.75** a throw, inside a wait-4 skill's 3–4.5, against the area grenade's 4.0 it replaces (card-design.md, Extra Charge). 2 would be 2.5, under the band. With a skill's Spirit counted twice it is 3 at Level 1, 7 at Level 2 and 11 at Level 3, beside Essence Bomb's 4 / 8 / 12, which waits 3 but costs Lady Geist 2 HP.
+  - **The charges** stay: 2, 4 turns each, as in Deadlock.
+  - **Range items.** A hit on one enemy is what the Expansion items widen: with Greater Expansion every enemy takes the same X (Mystic Expansion: 1 to each neighbour). The heal is not widened.
 
 **Paige** · in the game today — peaks early, many targets; mix tank 0 · damage 1 · control 1 · support 3  
 HP 5 · Attack 1 · Retreat 1 · per level +2 Spirit

@@ -304,11 +304,12 @@ describe('Graves', () => {
     act(G, '0', { type: 'useSkill', heroIid: graves.iid, skillId: 'eff_ult_graves' });
     const stone = G.players['0'].bench[2]!;
     nextTurn(G, '0');
-    // The rival's Kelvin throws a Frost Grenade, 1 to every enemy: the stone goes. (Lash's
-    // Ground Strike hit every enemy until 2026-11-17; it now lands on the Active alone.)
-    const kelvin = makeInstance(allocatorOf(G), 'hero_kelvin', '1', 'bench', 1);
-    G.players['1'].bench[0] = kelvin;
-    act(G, '1', { type: 'useSkill', heroIid: kelvin.iid });
+    // The rival plays Alchemical Fire, 1 to every enemy: the stone goes. (Lash's Ground
+    // Strike and Kelvin's Frost Grenade hit every enemy until 2026-11-17; both now land on
+    // the Active alone.)
+    G.players['1'].souls = 10;
+    const fire = giveCard(G, '1', 'alchemical_fire');
+    act(G, '1', { type: 'playCard', cardIid: fire.iid });
     expect(G.players['0'].bench[2]).toBeNull();
     expect(G.players['0'].discard).toContain(stone);
     nextTurn(G, '1');

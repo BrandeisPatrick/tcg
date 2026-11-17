@@ -346,6 +346,7 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     const { G, me, rem } = withRem(1);
     rem.level = 2; // Naptime unlocked
     const haze = me.active!;
+    haze.hp = haze.hpMax = 30; // the area spell and the swing below must not fell her
     tagAlong(G, rem, haze);
     // Not on the board's sweeps, nor among anyone's targets.
     expect(findCardOnBoard(G, rem.iid)).toBeNull();
@@ -357,9 +358,10 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     // An attack and a spell at every enemy pass her by.
     const hp = rem.hp;
     G.turnNumber = 3; // the rival's turn
-    const kelvin1 = G.players['1'].active = makeHero('hero_kelvin', '1', 'active', 0);
+    G.players['1'].active = makeHero('hero_kelvin', '1', 'active', 0);
     G.players['1'].souls = 10;
-    act(G, '1', { type: 'useSkill', heroIid: kelvin1.iid, skillId: 'skill_kelvin' }); // 1 spirit damage to every enemy
+    const fire = giveCard(G, '1', 'alchemical_fire');
+    act(G, '1', { type: 'playCard', cardIid: fire.iid }); // 1 spirit damage to every enemy
     expect(attackTargets(G, '1').map((t) => t.iid)).not.toContain(rem.iid);
     act(G, '1', { type: 'attack' });
     expect(rem.hp).toBe(hp);

@@ -384,7 +384,7 @@ describe('what a hero card prints', () => {
     hero_vindicta: ['skill', "Assassinate", "Snipe any enemy, bench too: deal {sp:4} spirit damage."],
     hero_wraith: ['skill', "Full Auto", "Wraith gets +2 Attack for 2 turns."],
     hero_dynamo: ['skill', "Rejuvenating Aurora", "Your heroes heal {sp:5} each."],
-    hero_kelvin: ['skill', "Frost Grenade", "Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each."],
+    hero_kelvin: ['skill', "Frost Grenade", "Deal {sp:3} spirit damage to the enemy Active and heal Kelvin {sp:3}."],
     hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active."],
     hero_lash: ['skill', "Grapple", "Leap in from the bench; attack again."],
     hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],

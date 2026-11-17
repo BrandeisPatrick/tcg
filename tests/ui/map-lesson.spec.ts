@@ -68,7 +68,7 @@ describe('Lesson 5: the map', () => {
     const lash = state(c).G.players['1'].active!;
     const souls = state(c).G.players['0'].souls;
     expect(lash.hp).toBe(1);
-    moves(c).useSkill(kelvin.iid);
+    moves(c).useSkill(kelvin.iid, state(c).G.players['1'].active!.iid);
     const G = state(c).G;
     expect(structureOf(G.players['1'], 'guardian').hp).toBe(0);
     expect(kitCost(kelvin)).toBe(0);                             // the skill costs no souls
@@ -93,7 +93,7 @@ describe('Lesson 5: the map', () => {
     expect(boss.steps.map((s) => s.id)).toEqual(['look', 'skill', 'attack', 'end']);
     const c = lesson(boss.setup());
     expect(state(c).G.boss).toMatchObject({ hp: BOSS_HP });
-    moves(c).useSkill(state(c).G.players['0'].active!.iid);
+    moves(c).useSkill(state(c).G.players['0'].active!.iid, state(c).G.players['1'].active!.iid);
     expect(attackTargets(state(c).G, '0').map((t) => t.zone)).toEqual(['pit']);
     moves(c).attack();
     const G = state(c).G;

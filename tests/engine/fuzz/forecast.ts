@@ -14,6 +14,7 @@ import { attackTargets, blocked } from '@/engine/legality';
 import { forecastAttack, simulate, type AttackPlan } from '@/engine/forecast';
 import { isRespawning, otherPlayer, structureHp } from '@/engine/query';
 import { DeadlockGame } from '@/engine/game';
+import { withBlindRolls } from '@/engine/chance';
 import type { Snapshot, StepInfo } from './driver';
 import { signatureOf, type Hit } from './hits';
 import { boardOf, callMove, describeUnit, diffPaths, isUnitCard } from './oracle';
@@ -121,8 +122,16 @@ export function probeForecast(snap: Snapshot, info: StepInfo, hits: Hit[], mix: 
   }
 
   // The AI's verdict: an attack that wins the game on the engine's own clone must
-  // lead the legal-move list (score 1_000_000), and nothing else may claim to.
-  const wins = DeadlockGame.endIf?.({ G: e.after } as never) as { winner?: PlayerID } | undefined;
+  // lead the legal-move list (score 1_000_000), and nothing else may claim to. The
+  // AI's look is blind to chance (engine/chance.ts: a flying hero's dodge is assumed
+  // not to happen), so its verdict is judged on blind clones; the forecast checks
+  // above stay on the real roll.
+  return withBlindRolls(() => lethalVerdict(G, ctx, pid, base, tags, hits));
+}
+
+function lethalVerdict(G: GameState, ctx: Ctx, pid: PlayerID, base: Omit<Hit, 'signature' | 'tags' | 'message'>, tags: string[], hits: Hit[]): number {
+  const blindAfter = callMove(G, ctx, pid, 'attack', []);
+  const wins = blindAfter.outcome === 'accepted' ? DeadlockGame.endIf?.({ G: blindAfter.G } as never) as { winner?: PlayerID } | undefined : undefined;
   const lethal = wins?.winner === pid;
   const top = enumerateAIMoves(G, ctx, false)[0];
   if (lethal && !(top && top.move === 'attack')) {

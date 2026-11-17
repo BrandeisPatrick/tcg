@@ -81,7 +81,7 @@ casts a skill again for 1 soul; Infuser makes the nukes heal their caster (Lady 
 for hers). Extra Spirit ×2 → Improved Spirit ×2 (a skill counts Spirit twice), Spirit
 Lifesteal, Knockdown, the Egg.
 
-**Storm** (Kelvin, Lash, Seven). Area skills on every enemy: Frost Grenade. Lash (since 2026-11-17)
+**Storm** (Kelvin, Lash, Seven). One-target skills the range items widen: Frost Grenade (3✦ on the Active since 2026-11-17, and Kelvin heals as much). Lash (since 2026-11-17)
 swings, slips out and Grapples back in for a second swing with 3✦ more, and on him Greater Expansion
 makes Death Slam lift the whole enemy side back to the hand. Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion ×2
 first, a neighbour's 1). Mystic Vulnerability ×2 and Mystic Slow land on everything an area
