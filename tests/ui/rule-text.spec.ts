@@ -228,9 +228,10 @@ describe('the colour per kind', () => {
     expect(out).toMatch(/ and 5<\/span>$/);
   });
 
-  it('on an action plate the colour becomes the number\'s ground', () => {
-    const out = html('Deal {sp:3} spirit damage.', undefined, poster.paper);
+  it('on an action plate (`plate`) the colour becomes the number\'s ground; a keyword colour alone no longer boxes it (2026-11-17)', () => {
+    const out = renderToStaticMarkup(createElement(RuleText, { text: 'Deal {sp:3} spirit damage.', plate: poster.paper }));
     expect(out).toContain(`background:${poster.stat.spirit};color:${poster.paper}`);
+    expect(html('Deal {sp:3} spirit damage.', undefined, poster.ink)).not.toContain('background:');
     // And the contrast of that pill: paper type on purple, and on brown.
     expect(contrast(poster.paper, poster.stat.spirit)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(poster.paper, poster.stat.bullet)).toBeGreaterThanOrEqual(4.5);
