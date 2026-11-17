@@ -48,7 +48,7 @@ import {
 } from '../hud';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
-import { RuleText, type Scale } from '../card/RuleText';
+import { RuleText, TypedText, type Scale } from '../card/RuleText';
 import { parseMarkup, shownNumber } from '../card/scaling';
 import { useViewport } from '../hooks/useViewport';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
@@ -166,9 +166,22 @@ const shortReason = (reason: string) =>
     : /^Asked when/i.test(reason) ? 'When asked'
     : reason.replace(/^Unlocks at (Level \d+)$/, '$1');
 
-/** A rule's first sentence as plain words, its scaling numbers read live. */
+/** A rule as the row's words: its scaling numbers read live, and a damage
+ *  number kept typed (`{s:5}` / `{b:2}`, drawn in its colour by TypedText:
+ *  "deal 5 damage", 2026-11-17). */
+function liveRule(rule: string, scale: Scale): string {
+  return parseMarkup(rule).map((t) => {
+    if (t.type === 'text') return t.text;
+    const shown = shownNumber(t, scale);
+    return t.dmg && /^\d+$/.test(shown) ? `{${t.dmg === 'spirit' ? 's' : 'b'}:${shown}}` : shown;
+  }).join('');
+}
+/** How long a row's words are on screen: a typed mark prints as its number. */
+const shownLength = (line: string) => line.replace(/\{[sb]:(\d+)\}/g, '$1').length;
+
+/** A rule's first sentence as the row's words, its scaling numbers read live. */
 function firstSentence(rule: string, scale: Scale): string {
-  const plain = parseMarkup(rule).map((t) => (t.type === 'text' ? t.text : shownNumber(t, scale))).join('');
+  const plain = liveRule(rule, scale);
   const m = plain.match(/^.*?[.!?](?=\s|$)/);
   return sentence((m ? m[0] : plain).trim());
 }
@@ -183,8 +196,8 @@ function shortLine(rule: string, scale: Scale, max: number): string {
   const lead = s.match(/^[^:]+:\s+((?:deal|shield|heal|stun)\b.*)$/i);
   if (lead) s = lead[1];
   s = s.replace(' to the enemy Active', '');
-  if (s.length > max) {
-    const head = s.slice(0, max + 1);
+  if (shownLength(s) > max) {
+    const head = s.slice(0, max + 1 + (s.length - shownLength(s)));
     const clause = Math.max(head.lastIndexOf(': '), head.lastIndexOf(', '), head.lastIndexOf(' and '));
     const at = clause > 16 ? clause : head.lastIndexOf(' ');
     s = `${s.slice(0, at).replace(/[,;:]$/, '')}\u2026`;
@@ -195,7 +208,7 @@ function shortLine(rule: string, scale: Scale, max: number): string {
 /** A passive's rule as its row prints it: whole (a passive has no other
  *  line to give), its scaling numbers read live. */
 function fullLine(rule: string, scale: Scale): string {
-  return sentence(parseMarkup(rule).map((t) => (t.type === 'text' ? t.text : shownNumber(t, scale))).join('').trim());
+  return sentence(liveRule(rule, scale).trim());
 }
 
 type Kind = 'weapon' | 'spirit' | 'vitality';
@@ -358,8 +371,8 @@ export function HeroDetailSheet({
     // the turn it is live, the line says what the swing deals.
     const rule = heroAttackRule(data);
     const attackText = attack.spirit
-      ? `Deal ${dmg} bullet and ${attack.spirit} spirit damage.`
-      : rule ? `Deal ${dmg} bullet damage. ${fullLine(rule.text, kitScale)}` : `Deal ${dmg} bullet damage.`;
+      ? `Deal {b:${dmg}} + {s:${attack.spirit}} damage.`
+      : rule ? `Deal {b:${dmg}} damage. ${fullLine(rule.text, kitScale)}` : `Deal {b:${dmg}} damage.`;
     rows.push({
       key: 'attack',
       node: (
@@ -703,7 +716,7 @@ function ActionRow({
       </AbilityTile>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
-        {caption && <span style={{ ...CAPTION, ...(passive || wrap ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
+        {caption && <span style={{ ...CAPTION, ...(passive || wrap ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}><TypedText text={caption} /></span>}
       </span>
       <span style={{ flexShrink: 0, maxWidth: '42%', display: 'flex', justifyContent: 'flex-end' }}>
         {dim && !reasonBelow && said

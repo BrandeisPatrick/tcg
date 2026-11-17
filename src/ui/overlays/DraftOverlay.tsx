@@ -30,7 +30,7 @@ import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
-import { plainText } from '../card/scaling';
+import { TypedText } from '../card/RuleText';
 import { HpSegments, hpNumberStyle, scale } from '../hud';
 import { SwordIcon } from '../card/Icons';
 
@@ -727,7 +727,7 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
       {[...heroAbilities(data).map(({ ability }) => ability), ...(heroAttackRule(data) ? [heroAttackRule(data)!] : [])].map((ability) => (
         <span key={ability.id} style={{ ...text.body, fontSize: 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
           <span style={{ color: lobby.cream, fontWeight: 700 }}>{ability.name}</span>
-          {ability.text ? ` — ${plainText(ability.text)}` : ''}
+          {ability.text ? <> — <TypedText text={ability.text} dark /></> : ''}
         </span>
       ))}
     </motion.div>

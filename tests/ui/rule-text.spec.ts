@@ -29,11 +29,17 @@ const sp = (base: number, per = 1): NumberSpec => ({ kind: 'sp', base, per });
 const bp = (base: number, per = 1): NumberSpec => ({ kind: 'bp', base, per });
 
 describe('the markup', () => {
-  it('reads {sp:3} and {bp:2} as scaling numbers among plain runs', () => {
+  it('reads {sp:3} and {bp:2} as scaling numbers among plain runs; a damage number drops its type word', () => {
+    // Since 2026-11-17 (Patrick: "deal 1 damage", the colour says the type) the word goes.
     expect(parseMarkup('Deal {sp:3} spirit damage.')).toEqual([
       { type: 'text', text: 'Deal ' },
-      { type: 'num', raw: '{sp:3}', kind: 'sp', base: 3, per: 1 },
-      { type: 'text', text: ' spirit damage.' },
+      { type: 'num', raw: '{sp:3}', kind: 'sp', base: 3, per: 1, dmg: 'spirit' },
+      { type: 'text', text: ' damage.' },
+    ]);
+    expect(parseMarkup('Shield {sp:2}.')).toEqual([
+      { type: 'text', text: 'Shield ' },
+      { type: 'num', raw: '{sp:2}', kind: 'sp', base: 2, per: 1 },
+      { type: 'text', text: '.' },
     ]);
     expect(parseMarkup('{bp:2}')).toEqual([{ type: 'num', raw: '{bp:2}', kind: 'bp', base: 2, per: 1 }]);
   });
@@ -66,8 +72,33 @@ describe('the markup', () => {
     const out = html('Stun enemy Active and deal {sp:3} spirit damage.');
     expect(out).toContain('<strong');
     expect(out).toContain('>Stun<');
-    expect(out).toContain('>spirit damage<');
-    expect(readable(out)).toBe('Stun enemy Active and deal 3 spirit damage.');
+    expect(readable(out)).toBe('Stun enemy Active and deal 3 damage.');
+  });
+
+  it('a flat damage number is typed by its colour too: "3 spirit damage", "+2 bullet damage", "1 more spirit damage"', () => {
+    expect(parseMarkup('deal 3 spirit damage to every enemy')).toEqual([
+      { type: 'text', text: 'deal ' },
+      { type: 'num', raw: '3', kind: 'sp', base: 3, per: 1, dmg: 'spirit', flat: true },
+      { type: 'text', text: ' damage' },
+      { type: 'text', text: ' to every enemy' },
+    ]);
+    expect(plainText('His attacks deal +2 bullet damage to a hero below half HP.')).toBe('His attacks deal +2 damage to a hero below half HP.');
+    expect(plainText('his attacks deal {sp:3} more spirit damage.')).toBe('his attacks deal 3 more damage.');
+    expect(plainText('takes 2 more pure damage')).toBe('takes 2 more pure damage');
+    expect(plainText('Reduce spirit damage by 2.')).toBe('Reduce spirit damage by 2.');
+    // The sheet's own lines write a typed number outright.
+    expect(parseMarkup('Deal {b:1} + {s:3} damage.').filter((t) => t.type === 'num')).toMatchObject([{ dmg: 'bullet', flat: true, base: 1 }, { dmg: 'spirit', flat: true, base: 3 }]);
+    expect(plainText('Deal {b:1} + {s:3} damage.')).toBe('Deal 1 + 3 damage.');
+  });
+
+  it('drawn in the type\'s colour: spirit purple, bullet brown; only a number that scales is underlined', () => {
+    expect(html('deal 3 spirit damage')).toMatch(/style="color:#7a4a8a/);
+    expect(html('deal 2 bullet damage')).toMatch(new RegExp(`style="color:${poster.stat.bullet}`));
+    expect(readable(html('deal 2 bullet damage'))).toBe('deal 2 damage');
+  });
+
+  it('a search or a voice keeps the type word (`typed`)', () => {
+    expect(plainText('Deal {sp:4} spirit damage and 2 bullet damage.', { typed: true })).toBe('Deal 4 spirit damage and 2 bullet damage.');
   });
 });
 
@@ -102,7 +133,7 @@ describe('the live value', () => {
 
   it('RuleText prints the live total in the number\'s colour', () => {
     const out = html('Deal {sp:1} spirit damage.', { spirit: 2, who: 'Kelvin' });
-    expect(readable(out)).toBe('Deal 3 spirit damage.');
+    expect(readable(out)).toBe('Deal 3 damage.');
     expect(out).toMatch(/data-scales="sp" style="color:#7a4a8a/);
   });
 
@@ -134,7 +165,7 @@ describe('the live value', () => {
 
 describe('plainText', () => {
   it('strips the markup to the bare number', () => {
-    expect(plainText('Deal {sp:4} spirit damage to enemy Active.')).toBe('Deal 4 spirit damage to enemy Active.');
+    expect(plainText('Deal {sp:4} spirit damage to enemy Active.')).toBe('Deal 4 damage to enemy Active.');
     expect(plainText('Heal an ally 2 and grant +{sp:1/2} Bullet Power for 2 turns.')).toBe('Heal an ally 2 and grant +1 Bullet Power for 2 turns.');
   });
 

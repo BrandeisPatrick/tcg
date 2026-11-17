@@ -32,7 +32,8 @@ function initialShow(): Show {
 }
 
 /** The rules text a card prints: its own, or — a hero — its abilities'. */
-const rulesOf = (c: CardData) => plainText(c.type === 'hero' ? heroAbilities(c).map((x) => x.ability.text).join(' ') : c.text);
+// The search reads the type words too ("spirit damage"), though the card prints only the colour.
+const rulesOf = (c: CardData) => plainText(c.type === 'hero' ? heroAbilities(c).map((x) => x.ability.text).join(' ') : c.text, { typed: true });
 
 const hit = (c: CardData, q: string) =>
   !q || c.name.toLowerCase().includes(q) || c.id.includes(q) || rulesOf(c).toLowerCase().includes(q);

@@ -49,6 +49,7 @@ after 2 turns, keeping its level (section 7).
 
 - **Damage always names its type** (Patrick, 2026-11-09).
   - Write "deal N bullet damage" or "deal N spirit damage", never bare "damage".
+  - The game prints it as "deal N damage", N in the type's colour: purple spirit, brown bullet (Patrick, 2026-11-17: "There's no need to say the full word … we will have less words"). The data keeps the word; the renderer drops it.
   - Attacks deal bullet damage, and melee counts as bullet. Purple numbers (`{sp:N}`, N plus the hero's Spirit) are spirit damage.
   - A modifier such as "takes +1 damage" applies to both types and needs no type.
 - **Ultimates stay simple** (Patrick: "keep word and effect simple").

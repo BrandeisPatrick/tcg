@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import type { StatusId } from '@/engine/types';
-import { poster } from '../poster';
+import { poster, shopInk } from '../poster';
 import { Explain } from '../explain/Explain';
 import { numberContent, statusContent } from '../explain/content';
-import { KINDS, parseMarkup, shownNumber, type NumberSpec, type Scale } from './scaling';
+import { numberInk, parseMarkup, shownNumber, type DamageType, type NumberSpec, type Scale } from './scaling';
 
 export type { Scale } from './scaling';
 
@@ -157,10 +157,12 @@ export function RuleText({ text, keywordColor, scale, passTaps }: Props) {
 
 /** One scaling number: the figure in its colour, asked for its arithmetic. */
 function ScalingNumber({ spec, scale, plate, passTaps }: { spec: NumberSpec; scale?: Scale; plate?: string; passTaps?: boolean }) {
-  const ink = KINDS[spec.kind].ink;
+  // Its damage type's colour, or what it scales with (scaling.ts); only a
+  // number that scales is underlined as one with arithmetic to show.
+  const ink = numberInk(spec);
   const word = shownNumber(spec, scale);
   return (
-    <Explain content={numberContent(spec, scale)} underline={!plate} passTaps={passTaps}>
+    <Explain content={numberContent(spec, scale)} underline={!plate && !spec.flat} passTaps={passTaps}>
       <span
         data-scales={spec.kind}
         style={plate
@@ -190,4 +192,24 @@ function Keywords({ text, keywordColor, passTaps }: { text: string; keywordColor
     );
   });
   return <>{out}</>;
+}
+
+/** The two damage types' inks on the dark lobby (Deadlock's own shop colours,
+ *  bright enough on the dark ground). */
+const DARK_DAMAGE_INK: Record<DamageType, string> = { spirit: shopInk('spirit').ink, bullet: shopInk('weapon').ink };
+
+/**
+ * A line of rule text with only its numbers drawn (Patrick, 2026-11-17: "deal 1
+ * damage", the colour saying bullet or spirit): the hero sheet's row lines and
+ * the draft list, where the full RuleText (bold keywords, explanations) would
+ * be too loud. `dark` uses the inks for the dark lobby.
+ */
+export function TypedText({ text, scale, dark }: { text: string; scale?: Scale; dark?: boolean }) {
+  return (
+    <>
+      {parseMarkup(text).map((tok, i) => (tok.type === 'num'
+        ? <span key={i} style={{ color: dark && tok.dmg ? DARK_DAMAGE_INK[tok.dmg] : numberInk(tok), fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{shownNumber(tok, scale)}</span>
+        : <span key={i}>{tok.text}</span>))}
+    </>
+  );
 }
