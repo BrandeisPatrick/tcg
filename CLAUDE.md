@@ -18,8 +18,9 @@ Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redes
   that scales keeps its dotted underline.
 - Hero cards follow [docs/hero-design.md](docs/hero-design.md): role first, then the TCG; no Weakness;
   an ultimate is one or two effects in 15 words or fewer.
-- Every hero skill and passive scales with Spirit Power (`{sp:N}`) or Bullet Power (`{bp:N}`), as
-  Deadlock's do (Patrick, 2026-11-17). A rider may stay flat; the main number scales.
+- Every hero skill, passive and ultimate scales with Spirit Power (`{sp:N}`) or Bullet Power (`{bp:N}`),
+  as Deadlock's do (Patrick, 2026-11-17). A rider may stay flat; the main number scales. Where the main
+  effect is control with no number (a lift, a Sleep, a revival), a scaling rider sits beside it.
 - A hero's strength is a curve, not one number (Patrick, 2026-11-17): judge it in its own phase
   (early, mid, late) and with the items it needs. Win rates from short AI games under-rate late heroes.
 

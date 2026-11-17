@@ -2429,10 +2429,10 @@ const passive_ghoul: HeroAbilityDef = {
 const passive_gravestone: HeroAbilityDef = {
   id: 'passive_gravestone', trigger: 'startOfTurn', target: 'self',
   name: 'Borrowed Decree',
-  text: 'At the start of your turn, shuffle a Ghoul into your deck. Any damage destroys the Gravestone.',
+  text: 'At the start of your turn, shuffle the Ghouls Borrowed Decree printed into your deck. Any damage destroys the Gravestone.',
   base: 1,
   run: (G, _ctx, { source }) => {
-    if (source) raiseIntoDeck(G, seatOf(source), GHOUL, 1, 'Gravestone');
+    if (source) raiseIntoDeck(G, seatOf(source), GHOUL, source.tally?.passive_gravestone ?? 1, 'Gravestone');
   },
 };
 
@@ -2592,7 +2592,7 @@ const skill_sinclair: HeroAbilityDef = {
   id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Rabbit Hex',
   text: 'Deal {sp:1} spirit damage to the enemy Active and turn it into a Rabbit for 1 turn.',
-  base: 1,
+  base: 3,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
@@ -2844,6 +2844,9 @@ const eff_ult_lash: AbilityDef = {
       pushLog(G, `Death Slam lifts ${cardName(hero.cardId)} off the board.`);
       bounceToHand(G, enemy, hero);
     }
+    // The slam lands on the rest: {sp:1} to every enemy still on the board.
+    const slam = 1 + ultSpi();
+    eachBoard(G, enemyPid, (c) => { if (c.hp > 0 && !isRespawning(c) && !lifted.includes(c)) damageUnit(G, c, slam, 'spirit', 'Death Slam'); });
     resolve(G);
   },
 };
@@ -2871,7 +2874,11 @@ const eff_ult_paige: AbilityDef = {
 const eff_ult_rem: AbilityDef = {
   id: 'eff_ult_rem', trigger: 'onPlay', target: 'enemyActive',
   base: 4,
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 1, 2); },
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    damageUnit(G, target, 2 + ultSpi(), 'spirit', 'Naptime');
+    if (target.hp > 0 && !isRespawning(target)) addStatus(G, target, 'sleep', 1, 2); // after the hit, so the hit does not wake it
+  },
 };
 // Storm Cloud is a channel (Patrick, 2026-11-15): Seven is locked in it for 2
 // turns, and at the end of each of them it deals 2 + his Spirit to every enemy
@@ -2919,7 +2926,11 @@ const eff_ult_graves: AbilityDef = {
   id: 'eff_ult_graves', trigger: 'onPlay', target: 'noTarget',
   base: 3,
   aim: (G, pid) => (freeBenchSlot(G.players[pid]) === undefined ? null : { target: 'noTarget' }),
-  run: (G, ctx) => { raiseUnit(G, G.players[ctx.movingPlayer], GRAVESTONE); },
+  run: (G, ctx) => {
+    const stone = raiseUnit(G, G.players[ctx.movingPlayer], GRAVESTONE);
+    // {sp:1/2} Ghouls a turn: 1 + half Graves' Spirit, set as the stone is raised.
+    if (stone) stone.tally = { ...stone.tally, passive_gravestone: 1 + Math.floor(ultSpi() / 2) };
+  },
 };
 const eff_ult_sinclair: AbilityDef = {
   id: 'eff_ult_sinclair', trigger: 'onPlay', target: 'noTarget',
@@ -2964,7 +2975,7 @@ const eff_ult_yamato: AbilityDef = {
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
     if (!t) return;
-    addStatus(G, t, 'weapon_power', 3, 2);
+    addStatus(G, t, 'weapon_power', 3 + ultSpi(), 2);
     addStatus(G, t, 'unstoppable', 1, 2);
   },
 };
@@ -2999,9 +3010,10 @@ const eff_ult_mirage: AbilityDef = {
     const ps = G.players[ctx.movingPlayer];
     if (!source || !target || ps.active !== source) { pushLog(G, 'Traveler fizzled.'); return; }
     if (!swapIntoActive(G, ps, target, { quiet: true })) { pushLog(G, 'Traveler fizzled.'); return; }
-    addStatus(G, source, 'shield', 2, 999);
-    addStatus(G, target, 'shield', 2, 999);
-    pushLog(G, `Traveler: ${cardName(source.cardId)} swaps with ${cardName(target.cardId)} (Shield 2 each).`);
+    const shield = 2 + ultSpi();
+    addStatus(G, source, 'shield', shield, 999);
+    addStatus(G, target, 'shield', shield, 999);
+    pushLog(G, `Traveler: ${cardName(source.cardId)} swaps with ${cardName(target.cardId)} (Shield ${shield} each).`);
   },
 };
 // Eternal Night: one target alone in the dark, taking +1 damage of either type
@@ -3030,6 +3042,9 @@ const eff_ult_victor: AbilityDef = {
     source.hp = Math.ceil(source.hpMax / 2);
     pushLog(G, `Shocking Reanimation: ${cardName(source.cardId)} revives with ${source.hp} HP.`);
     pushFx(G, { kind: 'revive', iid: source.iid, cancelled: true });
+    // The shock as he stands back up: {sp:1} to every enemy (an ultimate counts Spirit once).
+    const shock = 1 + effectiveSpirit(source);
+    eachBoard(G, otherPlayer(seatOf(source)), (c) => { if (c.hp > 0 && !isRespawning(c)) damageUnit(G, c, shock, 'spirit', 'Shocking Reanimation', { source }); });
   },
 };
 // Lycan Curse (Silver): a charged ultimate. Wolf form for 2 of her turns (the
@@ -3043,7 +3058,7 @@ const eff_ult_silver: AbilityDef = {
     const t = target ?? source;
     if (!t) return;
     addStatus(G, t, 'wolf_form', 1, 2);
-    addStatus(G, t, 'weapon_power', 3, 2);
+    addStatus(G, t, 'weapon_power', 1 + Math.floor(effectiveAtk(t) / 2), 2); // {bp:1/2}, read before the wolf's own bonus
     addStatus(G, t, 'shield', 6, 999);
   },
 };

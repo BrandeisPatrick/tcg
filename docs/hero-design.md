@@ -949,4 +949,19 @@ Power is its Attack, counted once; `{bp:1/2}` is 1 + half of it. The nine that w
 | Lash: Grapple | no number | unchanged | its payoff is an attack (Bullet Power) and Ground Strike's {sp:3} |
 
 Riders stay flat where the main number scales (Paige's and Dynamo's +1 Attack, Shiv's Bleed 1).
-Ultimates are not covered by this rule yet.
+
+**Ultimates too** (Patrick, 2026-11-17: "yep"). An ultimate counts Spirit once, so {sp:N} is N + Spirit.
+Where the main effect is control with no number, the scaling rides beside it; the ability's `base`
+stays that control's worth to the AI.
+
+| Ultimate | Was | Now | Budget |
+|---|---|---|---|
+| Haze: Bullet Dance | "Haze's Attack" | {bp:0}: her Attack, printed | unchanged, now marked |
+| Rem: Naptime | Sleep 2 turns | {sp:2} spirit damage, then Sleep 2 turns | small: 4 + 2 = 6, the band's top |
+| Yamato: Shadow Transformation | +3 Attack | +{sp:3} Attack | medium; grows with her Spirit |
+| Mirage: Traveler | Shield 2 each | Shield {sp:2} each | small |
+| Silver: Lycan Curse | +3 Attack | +{bp:1/2} Attack | 3 at her Level-3 Attack 4, as before; grows with her gun |
+| Victor: Shocking Reanimation | revive at half HP | revive at half HP and {sp:1} spirit damage to every enemy | Deadlock's revive shocks the area; about 10 + 2.5, the top of medium |
+| Lash: Death Slam | lift to hand, items to deck | the same, and every other enemy takes {sp:1} | about 15, inside large (12–18) |
+| Graves: Borrowed Decree | a Ghoul a turn | {sp:1/2} Ghouls a turn (1 + half his Spirit) | 3 a turn at Level 3: the mill grows with him |
+| Sinclair: Audience Participation | unchanged | | the copied ultimate is cast as his own, with his Spirit |
