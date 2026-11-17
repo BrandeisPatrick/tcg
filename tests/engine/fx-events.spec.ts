@@ -348,6 +348,8 @@ describe('board FX stream — casts and the turn flush', () => {
     addStatus(G0, p0.active!, 'casting_light', 2, 3);
     const lash = p0.bench[1]!;
     lash.level = 1; lash.exp = 4;
+    // The bench's exp goes to the hero furthest behind (2026-11-17): the others are ahead.
+    for (const b of p0.bench) if (b && b !== lash) b.level = 2;
     G0.fx = [{ kind: 'revive', iid: 'stale', seq: 1 }];
     G0.counters.fx = 1;
 

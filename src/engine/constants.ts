@@ -218,14 +218,17 @@ export const RESPAWN_TURNS = 2;
 // ---------- Leveling ----------
 // Heroes start at Lv1, climb to Lv4 (cap). Step costs are 5 → 7 → 9 exp
 // (cumulative cap 21). Exp is earned in the lane: at the end of the owner's
-// turn the Active earns EXP_PER_TURN_ACTIVE and each bench hero
-// EXP_PER_TURN_BENCH; attaching equipment and landing a kill blow earn more.
-// It persists across respawn.
+// turn the Active earns EXP_PER_TURN_ACTIVE, and the bench shares
+// EXP_PER_TURN_BENCH, which goes to the bench hero furthest behind (Patrick,
+// 2026-11-17: more heroes on the board split it, a soft cost for flooding);
+// attaching equipment and landing a kill blow earn more. It persists across
+// respawn.
 
 /** Exp the Active earns at the end of its owner's turn — the lane is where a
  *  hero grows, and where it is at risk. */
 export const EXP_PER_TURN_ACTIVE = 2;
-/** Exp a bench hero earns at the end of its owner's turn. */
+/** Exp the bench shares at the end of its owner's turn: all of it goes to one
+ *  bench hero, the one that has earned the least (expSystem `benchExpTaker`). */
 export const EXP_PER_TURN_BENCH = 1;
 /** Exp the bearer earns when equipment is attached to it. */
 export const EXP_ON_EQUIP = 1;

@@ -19,7 +19,7 @@ import { laneIncome } from '../bank';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { fireTriggers, type Trigger } from '../triggers';
-import { grantExp } from '../expSystem';
+import { benchExpTaker, grantExp } from '../expSystem';
 import { damageUnit } from '../damage';
 import { lapseRevives, pushStructures, riseBoss } from '../map';
 import { drawCards, heroToHand } from '../deck';
@@ -129,14 +129,15 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   pushIntoEmptyLane(G, pid);
   // The Mid-Boss hits back at the hero that attacked it this turn.
   bossStrikesBack(G, pid);
-  // Hero leveling: the lane is where a hero grows. The Active earns more for
-  // standing the turn than a bench hero does.
+  // Hero leveling: the lane is where a hero grows. The Active earns its own
+  // for standing the turn; the bench shares one smaller pot, which goes to the
+  // bench hero furthest behind (Patrick, 2026-11-17: a wide board splits it).
   // (A hero whose fall waits on a trigger prompt — felled in this End step —
   // stood no turn.)
   const ps = G.players[pid];
-  for (const c of liveBoardCards(ps)) {
-    if (heroData(c) && c.hp > 0) grantExp(G, c, c === ps.active ? EXP_PER_TURN_ACTIVE : EXP_PER_TURN_BENCH);
-  }
+  if (ps.active && !isRespawning(ps.active) && heroData(ps.active) && ps.active.hp > 0) grantExp(G, ps.active, EXP_PER_TURN_ACTIVE);
+  const benchTaker = benchExpTaker(ps);
+  if (benchTaker) grantExp(G, benchTaker, EXP_PER_TURN_BENCH);
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);

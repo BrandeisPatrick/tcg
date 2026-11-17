@@ -411,8 +411,9 @@ is a check on him too: every spirit skill aimed at him hits harder.
 Patrick: "I think ultimate should be Level 3 unlock." It was Level 2
 (`ULT_UNLOCK_LEVEL`). Level 3 takes 12 exp (5 + 7); nothing else changed.
 
-**When a hero gets there.** The Active earns 2 exp a turn, a bench hero 1,
-and a hero 1 the first time it wears an item and 2 for a kill blow.
+**When a hero gets there.** The Active earns 2 exp a turn, a bench hero 1
+(since 2026-11-17 the bench shares that 1, §14), and a hero 1 the first time it
+wears an item and 2 for a kill blow.
 
 | Hero | Level 2 (before) | Level 3 (now) |
 |---|---|---|
@@ -536,6 +537,45 @@ their own deck). Under the old cap of 12 a match ended before any deck ran out.
 **Left for testing** (only when Patrick asks by name): how often a match
 reaches deck-out; whether the first mover needs a dial for it; whether 4
 Golden Goose Egg is ever right.
+
+## 14. The bench shares its exp (2026-11-17)
+
+Patrick: exp should go to fewer heroes the more there are on the board, "like a
+soft punishment to have too many heroes on board". He proposed a random hero
+each turn; the dilution is kept and the dice are not. Random exp is luck on
+the one resource a player plans around (when the ultimate comes), it can land
+on a hero about to fall or at the cap, and it would pay a hero hiding on the
+bench as much as the one taking the hits.
+
+**The rule.** At the end of its owner's turn the Active earns 2, as before. The
+bench shares 1 (`EXP_PER_TURN_BENCH`), and it goes to the bench hero that has
+earned the least in all (`benchExpTaker`, the leftmost on a tie), skipping a
+hero at the cap, a corpse and a unit. Kills (+2) and a first equip (+1) still go
+to the hero that earned them. It is Deadlock's lane: allies who share a lane
+share its souls.
+
+| Heroes on the board | Before: Active / each bench hero | Now: Active / each bench hero | Board total a turn |
+|---|---|---|---|
+| 1 | 2 | 2 | 2 → 2 |
+| 2 | 2 / 1 | 2 / 1 | 3 → 3 |
+| 3 | 2 / 1 | 2 / ½ | 4 → 3 |
+| 4 (full) | 2 / 1 | 2 / ⅓ | 5 → 3 |
+
+**What it changes.**
+- **The lane hero is untouched:** Level 3 at the end of own turn 6, as §11.
+- **A bench of one is untouched.** A full bench levels a third as fast: a hero
+  that never stands in the lane reaches Level 2 around turn 13, not 5, and its
+  ultimate mostly never comes. A bench caster's level now comes from the lane
+  (the second swing puts it there, §9) and from its items.
+- **Going wide costs.** Before, each extra hero on the board was +1 exp a turn
+  on top of its body and its skill; now the board earns 3 at most. A narrow
+  board of two levels both heroes as before.
+- **Late heroes want a narrow board.** A hero whose curve is late (docs/hero-design.md
+  "By curve") wants to stand in the lane or to share the bench with one other.
+
+**Left for testing** (only when Patrick asks by name): whether full-bench
+squads now see too few ultimates; whether the bench's share should be 2 (one
+more knob: `EXP_PER_TURN_BENCH`).
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).

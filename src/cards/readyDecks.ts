@@ -4,9 +4,10 @@ import type { CardId } from '@/engine/types';
  * Ready decks: a squad of three heroes (SQUAD_SIZE) and the 16 items of their deck, made to
  * be picked and played as they are (the Loadout's "Ready decks" row). Since 2026-11-16 there
  * are seven, one for each archetype Patrick named ("bullet one target, bullet many targets,
- * spirit burst, spirit area, CC, Graves, tank and support"): every hero is in one of them
- * (Mirage, the twenty-second, is in none), and each plays a different way. Every choice is
- * reasoned in docs/deck-plan.md ("Rebuilt 2026-11-16: seven archetypes"). No sim ran.
+ * spirit burst, spirit area, CC, Graves, tank and support"), each hero in one of them; the
+ * eighth, Crossfire (2026-11-17), mixes the two damage types, each opening the target for
+ * the other, so it seats Mirage, the one hero left out, beside Haze and Kelvin. Every
+ * choice is reasoned in docs/deck-plan.md. No sim ran.
  *
  *  - 16 items at most 28 souls at the prices they print, and at most two of them over 2
  *    souls: the deck's payoffs. The lane pays 2 a turn, so a side has about 30 souls by its
@@ -110,6 +111,17 @@ export const READY_DECKS: readonly ReadyDeck[] = [
       ...n(3, 'extra_health'), 'extra_regen', ...n(2, 'healing_rite'), 'sprint_boots', 'restorative_shot', 'extended_magazine', 'golden_goose_egg',
       ...n(2, 'healing_booster'), 'enduring_speed', 'restorative_locket', 'debuff_reducer',
       'healing_tempo',
+    ],
+  },
+  {
+    id: 'crossfire',
+    name: 'Crossfire',
+    blurb: "Spirit opens them for the gun and the gun for spirit: Kelvin's grenade cuts Bullet Resist, Haze's swings cut Spirit Resist, Mirage's mark cashes it.",
+    heroes: ['hero_haze', 'hero_mirage', 'hero_kelvin'],
+    items: [
+      ...n(3, 'extra_spirit'), ...n(2, 'spirit_strike'), ...n(2, 'extended_magazine'), 'golden_goose_egg',
+      ...n(3, 'bullet_resist_shredder'), 'spirit_shredder', 'cold_front',
+      'knockdown', 'alchemical_fire', 'spirit_rend',
     ],
   },
 ];

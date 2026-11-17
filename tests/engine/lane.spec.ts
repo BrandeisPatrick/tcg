@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, setTrack } from './_helpers';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
-import { grantExp } from '@/engine/expSystem';
+import { benchExpTaker, grantExp, totalExp } from '@/engine/expSystem';
 import { INVALID, perform } from '@/engine/engine';
 import { skillBlocked } from '@/engine/legality';
 import { forecastAttack } from '@/engine/forecast';
@@ -16,7 +16,7 @@ import { checkWinner, killPush, kitAbilityIds, seatOf, structureHp } from '@/eng
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import {
-  EXP_ON_KILL, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LEVEL_THRESHOLDS, ULT_UNLOCK_LEVEL,
+  EXP_ON_KILL, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL,
 } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 
@@ -42,15 +42,49 @@ const ultBlock = (G: GameState, hero: CardInstance) =>
   skillBlocked(G, seatOf(hero), hero, undefined, (CARDS_BY_ID[hero.cardId] as { ult: string }).ult);
 
 describe('exp comes from the lane', () => {
-  it('at the end of the turn the Active earns EXP_PER_TURN_ACTIVE and each bench hero EXP_PER_TURN_BENCH', () => {
+  it('at the end of the turn the Active earns EXP_PER_TURN_ACTIVE and the bench shares EXP_PER_TURN_BENCH, to the hero furthest behind', () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
+    const bench = ps.bench.filter((b): b is CardInstance => !!b);
+    expect(bench.length).toBeGreaterThan(1);
     endTurnEffects(G, '0');
     expect(ps.active!.exp).toBe(EXP_PER_TURN_ACTIVE);
-    for (const b of ps.bench) expect(b!.exp).toBe(EXP_PER_TURN_BENCH);
+    // All level: the leftmost takes it; the rest get nothing.
+    expect(bench.map((b) => b.exp)).toEqual([EXP_PER_TURN_BENCH, ...bench.slice(1).map(() => 0)]);
+    // Next turn the one behind takes it.
+    endTurnEffects(G, '0');
+    expect(bench[1].exp).toBe(EXP_PER_TURN_BENCH);
     // The other side earned nothing: it was not its turn.
     expect(G.players['1'].active!.exp).toBe(0);
     for (const b of G.players['1'].bench) expect(b!.exp).toBe(0);
+  });
+
+  it('a wide board splits the bench\'s exp; a bench of one keeps it all (Patrick, 2026-11-17)', () => {
+    const G = freshReadyGame();
+    const ps = G.players['0'];
+    const bench = ps.bench.filter((b): b is CardInstance => !!b);
+    const n = bench.length;
+    for (let t = 0; t < 3 * n; t++) endTurnEffects(G, '0');
+    // 3n turns: the Active earned every one, each bench hero one turn in n.
+    expect(totalExp(ps.active!)).toBe(3 * n * EXP_PER_TURN_ACTIVE);
+    for (const b of bench) expect(totalExp(b)).toBe(3 * EXP_PER_TURN_BENCH);
+    // Alone on the bench, a hero takes the share every turn.
+    const G1 = freshReadyGame();
+    const ps1 = G1.players['0'];
+    const solo = ps1.bench.find((b) => !!b)!;
+    ps1.bench = ps1.bench.map((b) => (b === solo ? b : null));
+    for (let t = 0; t < 3; t++) endTurnEffects(G1, '0');
+    expect(totalExp(solo)).toBe(3 * EXP_PER_TURN_BENCH);
+  });
+
+  it('the bench\'s share skips a hero at the cap, a corpse and a unit', () => {
+    const G = freshReadyGame();
+    const ps = G.players['0'];
+    const [a, b] = ps.bench as CardInstance[];
+    a.level = MAX_LEVEL; a.exp = 0;
+    expect(benchExpTaker(ps)).toBe(b);
+    b.hp = 0; b.respawnTurnsLeft = 2;
+    expect(benchExpTaker(ps)).not.toBe(b);
   });
 
   it('the Active reaches Level 2 before a bench hero does', () => {
@@ -58,13 +92,13 @@ describe('exp comes from the lane', () => {
     const ps = G.players['0'];
     const turnsToLevel = (c: CardInstance) => {
       let n = 0;
-      while ((c.level ?? 1) < 2 && n < 20) { endTurnEffects(G, '0'); n++; }
+      while ((c.level ?? 1) < 2 && n < 40) { endTurnEffects(G, '0'); n++; }
       return n;
     };
     const active = turnsToLevel(ps.active!);
     expect(active).toBe(Math.ceil(LEVEL_THRESHOLDS[0] / EXP_PER_TURN_ACTIVE));
     const bench = turnsToLevel(ps.bench[0]!);
-    expect(active + bench).toBe(Math.ceil(LEVEL_THRESHOLDS[0] / EXP_PER_TURN_BENCH));
+    expect(active + bench).toBeGreaterThan(Math.ceil(LEVEL_THRESHOLDS[0] / EXP_PER_TURN_BENCH));
   });
 
   it('a corpse earns nothing for the turn', () => {

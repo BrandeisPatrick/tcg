@@ -1,13 +1,15 @@
 /**
  * Hero leveling. Heroes start at Lv1 and climb to the cap (the numbers are in
- * constants.ts). Exp comes from the lane: the Active earns more at the end of
- * its owner's turn than a bench hero does, and attaching equipment and landing
- * a kill blow earn more still. It persists across respawn. Each level adds the
+ * constants.ts). Exp comes from the lane: at the end of its owner's turn the
+ * Active earns its own, and the bench shares one smaller pot, which goes to
+ * the bench hero furthest behind (`benchExpTaker`, Patrick 2026-11-17: a wide
+ * board splits the lane's exp, a soft cost for flooding it). Attaching
+ * equipment and landing a kill blow earn more still. It persists across respawn. Each level adds the
  * hero's own `growth` (docs/hero-design.md §2). A hero that reaches
  * ULT_UNLOCK_LEVEL has unlocked its ultimate, the button on its card
  * (legality's `skillBlocked` reads the level); the log says so.
  */
-import type { CardInstance, GameState } from './types';
+import type { CardInstance, GameState, PlayerState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
@@ -56,4 +58,32 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
     }
   }
   return gained;
+}
+
+/** Exp a hero has earned in all: the level steps behind it plus what fills the next. */
+export function totalExp(card: CardInstance): number {
+  const level = card.level ?? START_LEVEL;
+  let sum = card.exp ?? 0;
+  for (let l = START_LEVEL; l < level; l++) sum += LEVEL_THRESHOLDS[(l - 1) as 0 | 1 | 2];
+  return sum;
+}
+
+/** Whether `card` can still earn exp: a living hero (no unit), not respawning, below the cap. */
+function canEarnExp(card: CardInstance): boolean {
+  const data = CARDS_BY_ID[card.cardId];
+  if (!data || data.type !== 'hero' || data.unit) return false;
+  return card.hp > 0 && !isRespawning(card) && (card.level ?? START_LEVEL) < MAX_LEVEL;
+}
+
+/** The bench hero that takes the bench's share of the turn's exp: the one that
+ *  has earned the least in all, the leftmost on a tie; none if no bench hero
+ *  can earn. A bench of one gets it every turn; a bench of three, each one
+ *  turn in three. */
+export function benchExpTaker(ps: PlayerState): CardInstance | undefined {
+  let taker: CardInstance | undefined;
+  for (const c of ps.bench) {
+    if (!c || !canEarnExp(c)) continue;
+    if (!taker || totalExp(c) < totalExp(taker)) taker = c;
+  }
+  return taker;
 }

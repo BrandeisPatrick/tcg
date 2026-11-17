@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { READY_DECKS, readyDeckInUse } from '@/cards/readyDecks';
 import { copyCounts, deckProblem, evolvesFrom } from '@/cards/decks';
-import { CARDS_BY_ID, itemCard } from '@/cards';
+import { CARDS_BY_ID, HEROES, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
 import { DECK_SIZE, PRICE, SQUAD_SIZE, MAX_COPIES } from '@/engine/constants';
 
@@ -9,11 +9,12 @@ import { DECK_SIZE, PRICE, SQUAD_SIZE, MAX_COPIES } from '@/engine/constants';
 // and a legal 16-item deck built to one recipe.
 describe('ready decks', () => {
   // Seven since 2026-11-16, one an archetype Patrick named: bullet one target, bullet many,
-  // spirit burst, spirit area, crowd control, Graves, tank and support.
+  // spirit burst, spirit area, crowd control, Graves, tank and support; Crossfire, the
+  // eighth (2026-11-17), mixes bullet and spirit.
   it('there are seven, each with its own name and id; Graveyard is Graves\'s, Aurora Dynamo\'s (2026-11-16)', () => {
-    expect(READY_DECKS).toHaveLength(7);
-    expect(READY_DECKS.map((d) => d.id)).toEqual(['headshot', 'spray', 'nuke', 'storm', 'lockdown', 'graveyard', 'aurora']);
-    expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(7);
+    expect(READY_DECKS).toHaveLength(8);
+    expect(READY_DECKS.map((d) => d.id)).toEqual(['headshot', 'spray', 'nuke', 'storm', 'lockdown', 'graveyard', 'aurora', 'crossfire']);
+    expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(8);
     expect(READY_DECKS.find((d) => d.id === 'graveyard')?.heroes).toContain('hero_graves');
     // Aurora is the Healing Tempo deck: Dynamo's heal, and the line Healing Booster → Healing Tempo.
     const aurora = READY_DECKS.find((d) => d.id === 'aurora')!;
@@ -58,9 +59,18 @@ describe('ready decks', () => {
     expect(listed).toEqual([...listed].sort((a, b) => a - b));
   });
 
-  it('no hero is in two ready decks', () => {
-    const all = READY_DECKS.flatMap((d) => d.heroes);
-    expect(new Set(all).size).toBe(all.length);
+  it('no hero is in two of the seven archetype decks; Crossfire seats Mirage, the one left out, and two of theirs (2026-11-17)', () => {
+    const archetypes = READY_DECKS.filter((d) => d.id !== 'crossfire').flatMap((d) => d.heroes);
+    expect(new Set(archetypes).size).toBe(archetypes.length);
+    const crossfire = READY_DECKS.find((d) => d.id === 'crossfire')!;
+    expect(crossfire.heroes.filter((h) => !archetypes.includes(h))).toEqual(['hero_mirage']);
+    // Every hero is in a ready deck now.
+    expect(new Set(READY_DECKS.flatMap((d) => d.heroes)).size).toBe(HEROES.length);
+  });
+
+  it('Crossfire carries both directions of cross-type shred: spirit damage that cuts Bullet Resist, swings that cut Spirit Resist', () => {
+    const d = READY_DECKS.find((x) => x.id === 'crossfire')!;
+    expect(d.items).toEqual(expect.arrayContaining(['bullet_resist_shredder', 'alchemical_fire', 'spirit_strike', 'spirit_shredder']));
   });
 
   it('readyDeckInUse names the deck a squad and a deck match exactly, in any item order', () => {
