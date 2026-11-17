@@ -32,6 +32,10 @@ export const SOULS_START = 0;
  *  docs/balance-model.md §7. */
 export const LANE_INCOME = 2;
 
+/** Own turns Cheat Death waits after it saves its bearer (2026-11-16): a hit
+ *  that would fell the bearer leaves it at 1 HP, then the item waits. */
+export const CHEAT_DEATH_WAIT = 3;
+
 /** What Trophy Collector adds to its side's lane income each turn while a
  *  hero of the side wears it (2026-11-16; two do not add up). */
 export const TROPHY_COLLECTOR_INCOME = 1;

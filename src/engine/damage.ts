@@ -1,13 +1,13 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { chargedUlt, fallPending, incomingDamage, isBoss, isRespawning, isUnit, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
+import { chargedUlt, cheatDeathReady, fallPending, incomingDamage, isBoss, isRespawning, isUnit, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
 import { tallyBossHit } from './map';
-import { COUNTERSPELL_HEAL, EXP_ON_KILL, FLIGHT_DODGE_IN } from './constants';
+import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, EXP_ON_KILL, FLIGHT_DODGE_IN } from './constants';
 import { rollsBlind } from './chance';
 import { nextRandom } from './deck';
 
@@ -146,6 +146,18 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
       if (absorbed > 0) {
         pushFx(G, { kind: 'shield', iid: target.iid, absorbed, broken, type, cast: fxCast, source: fxFrom });
       }
+    }
+  }
+
+  // Cheat Death (2026-11-16): a hit that would fell its bearer leaves it at
+  // 1 HP, and the item waits CHEAT_DEATH_WAIT own turns.
+  if (dmg > 0 && dmg >= target.hp) {
+    const saver = cheatDeathReady(target);
+    if (saver) {
+      dmg = Math.max(0, target.hp - 1);
+      saver.cooldowns = { ...(saver.cooldowns ?? {}), eff_cheat_death: CHEAT_DEATH_WAIT };
+      pushLog(G, `${cardName(target.cardId)} cheats death: left at 1 HP. Cheat Death waits ${CHEAT_DEATH_WAIT} turns.`);
+      pushFx(G, { kind: 'immune', iid: target.iid, what: 'damage', cast: fxCast });
     }
   }
 

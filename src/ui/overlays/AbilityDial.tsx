@@ -87,13 +87,16 @@ export function AbilityTile({ ink, size = 44, dim = false, dial, memo, calm = fa
   );
 }
 
-/** The dial alone: an overlay the size of its tile (which must be positioned). */
-export function AbilityDial({ model, ink, size = 44, calm = false, memo }: {
+/** The dial alone: an overlay the size of its tile (which must be positioned).
+ *  `numeral` false leaves the number out (a worn item's wait, Patrick
+ *  2026-11-16: "I don't want a number"): the segments and the wipe say it. */
+export function AbilityDial({ model, ink, size = 44, calm = false, memo, numeral: showNumeral = true }: {
   model: DialModel;
   ink: string;
   size?: number;
   calm?: boolean;
   memo?: string;
+  numeral?: boolean;
 }) {
   const clip = useId();
   const shade = dialShade(model);
@@ -122,7 +125,7 @@ export function AbilityDial({ model, ink, size = 44, calm = false, memo }: {
   const framed = shade > 0;
   const wait = model.kind === 'wait' ? model : undefined;
   const charges = wait?.charges;
-  const numeral = wait && framed ? wait.left : undefined;
+  const numeral = showNumeral && wait && framed ? wait.left : undefined;
   const move = (delay: number, duration: number) => (calm ? { duration: 0 } : { delay, duration, ease: EASE });
 
   return (

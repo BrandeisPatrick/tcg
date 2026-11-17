@@ -115,7 +115,8 @@ export function OverlaysTab() {
           { id: 'shield', value: 5, duration: 999 },
           { id: 'spirit_power', value: 2, duration: 2 },
         ],
-        attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2)],
+        // Cheat Death mid-wait: its tile wears the wait as a dial with no number.
+        attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2), { ...mockEquipInstance('cheat_death'), cooldowns: { eff_cheat_death: 2 } }],
       };
       props.retreat = { cost: shown.retreat, incomingName: 'Yamato' };
       props.onRetreat = () => setToast('Retreated');

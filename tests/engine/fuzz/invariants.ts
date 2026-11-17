@@ -452,9 +452,28 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     const d = itemData(a.cardId)!;
     if (d.type === 'spell') add('item-worn-spell', a.iid, `the spell ${a.cardId}#${a.iid} is worn: a spell is played from the hand and goes to the discard pile`);
     for (const [k, v] of Object.entries(a.cooldowns ?? {})) {
+      // An item with a wait of its own (Cheat Death, 2026-11-16) keeps it under its ability's id,
+      // 1 to its wait; any other cooldown on an item is wrong.
+      const wait = ITEM_WAITS[a.cardId];
+      if (d.type === 'equipment' && wait && k === wait.ability && (v ?? 0) >= 1 && (v ?? 0) <= wait.turns) continue;
       add('item-cooldown-key', `${a.iid}-${k}`, `${d.type === 'spell' ? 'spell' : 'equipment'} ${a.cardId}#${a.iid} has a cooldown entry ${k}=${v}`);
     }
   }
+}
+
+/** Items with a wait of their own, written from their card text: the ability that keeps it and
+ *  its turns. Cheat Death: "…leaves it at 1 HP; then Cheat Death waits 3 turns." */
+const ITEM_WAITS: Readonly<Record<string, { ability: string; turns: number }>> = {
+  cheat_death: { ability: 'eff_cheat_death', turns: 3 },
+};
+
+/** The hero on either side's board that wears the item `itemIid`. */
+function bearerOfItem(G: GameState, itemIid: string): CardInstance | undefined {
+  for (const pid of PIDS) {
+    const ps = G.players[pid];
+    for (const h of [ps.active, ...ps.bench]) if (h && (h.attached ?? []).some((a) => a.iid === itemIid)) return h;
+  }
+  return undefined;
 }
 
 /** String form, as the task statement asks for: `[id] message`. */
@@ -1148,6 +1167,9 @@ export function collectTransitionViolations(
         }
         else if (key === usedSkill || key === usedTrigger) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
+        // Cheat Death (2026-11-16): its wait starts when it saves its bearer, who is left at 1 HP.
+        const itemWait = Object.values(ITEM_WAITS).find((w) => w.ability === key.split('|')[1]);
+        if (itemWait && v0 === undefined && v1 === itemWait.turns && bearerOfItem(after.G, owner)?.hp === 1) want = v1;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }
     }

@@ -11,6 +11,7 @@ import { HeroBadge, HeroPortrait, heroForm, heroPortraitFile } from '@/cards/art
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { STATUSES_BY_ID } from '@/statuses';
 import { ItemIcon } from '../card/ItemIcon';
+import { ItemWaitDial } from '../overlays/ItemWaitDial';
 import { StatusIcon, statusChipText } from '../card/StatusIcon';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
@@ -387,6 +388,8 @@ export function HeroSlot({
                   ) : (
                     <ItemIcon itemId={eq.cardId} size={dim} chip />
                   )}
+                  {/* An item with a wait of its own (Cheat Death): the wait as a dial, no number. */}
+                  {!isMerged && <ItemWaitDial item={eq} size={dim} calm={calm} />}
                   {/* The ride's turns left (Rem) — green sticker in the corner. */}
                   {isMerged && eq.remMergeTurnsLeft != null && (
                     <span aria-label={`${eq.remMergeTurnsLeft} turns left`} style={{

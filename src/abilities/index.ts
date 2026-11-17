@@ -8,7 +8,7 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
+import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -156,6 +156,11 @@ export interface AbilityDef {
    *  (Duration Extender, Superior Duration, 2026-11-16). Read before the
    *  target's own `debuffDuration` (Debuff Reducer still shortens it). */
   ccDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
+  /** An item's own wait, in own turns, after it fires (Cheat Death): kept on
+   *  the worn item's `cooldowns` under this ability's id, counted down with
+   *  the owner's turns (`tickCooldowns` walks worn items). The item tile's dial
+   *  draws it (`itemDial`). */
+  itemWait?: number;
   /** Souls off the bearer's Retreat while it stands in the Active slot (Sprint
    *  Boots: 1). Summed over what the hero leaving the slot carries by
    *  `retreatCost` (engine/legality.ts), never below 0. */
@@ -1773,11 +1778,16 @@ const eff_veil_walker: AbilityDef = {
 // death instead. TCG: Bullet Resist 2 while worn, and a hit that would fell
 // the bearer from 2 HP or more leaves it at 1 HP (the incoming hook, read
 // before any status). At 1 HP it can fall.
+// Cheat Death (canon Vitality T4 passive: death immunity on a 90 s cooldown).
+// Since 2026-11-16 (Patrick: "like a Victor ultimate, but by cooldown"): a hit
+// that would fell the bearer leaves it at 1 HP, then the item waits
+// CHEAT_DEATH_WAIT own turns. The save is the damage pipeline's (damage.ts,
+// `cheatDeathReady`); here only its Bullet Resist and its wait.
 const eff_cheat_death: AbilityDef = {
   id: 'eff_cheat_death', trigger: 'ongoing', target: 'self',
-  base: 3,
+  base: 4,
+  itemWait: CHEAT_DEATH_WAIT,
   resist: (_self, type) => (type === 'attack' ? 2 : 0),
-  incoming: (self, amount) => (self.hp >= 2 && amount >= self.hp ? self.hp - 1 : amount),
   run: () => {},
 };
 

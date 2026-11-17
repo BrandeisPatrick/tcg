@@ -669,6 +669,13 @@ export function statusDuration(card: CardInstance, statusId: StatusId, duration:
   return n;
 }
 
+/** The Cheat Death `card` wears, when it is ready to save it (no wait
+ *  running): a hero standing on the board. */
+export function cheatDeathReady(card: CardInstance): CardInstance | undefined {
+  if (CARDS_BY_ID[card.cardId]?.type !== 'hero' || card.hp <= 0 || isRespawning(card)) return undefined;
+  return wornItems(card).find((it) => it.cardId === 'cheat_death' && !((it.cooldowns?.eff_cheat_death ?? 0) > 0));
+}
+
 /** How long crowd control `caster` casts on an enemy lands for, after the
  *  `ccDuration` hooks of what the caster carries (Duration Extender, Superior
  *  Duration). The target's own hooks (`statusDuration`) are read after it. */

@@ -928,6 +928,18 @@ the effects they lack; Patrick picked these. None was simulated.
   (12–24). The cut never takes a wait past its last turn, so the turn's tick
   still readies the skill (and returns a charge). Cheat Death was already a
   card (Vitality T4, 2026-11-05).
+- **Cheat Death** (Vitality T4, 8; changed 2026-11-16, Patrick: "like a
+  Victor ultimate sort of thing, but by cooldown"): "+4 HP. Bullet Resist 2.
+  A hit that would fell the bearer leaves it at 1 HP; then Cheat Death waits
+  3 turns." It saved from every lethal hit taken at 2 HP or more, so a healer
+  could keep its bearer up forever; Deadlock's has a 90-second cooldown. Worn
+  3 turns: +4 HP 4 × 0.7 × 3 = 8.4; Bullet Resist 2, 1.8 × 0.5 × 3 = 2.7; a
+  front-liner wearing it would fall about once in those turns (0.7), and a
+  fall denied is its push (level + 1, about 3) and the bounty (about 3):
+  0.7 × 6 = 4.2 → **15.3**, its tier's 16. It is the first item with a wait
+  of its own (`AbilityDef.itemWait`, kept on the worn item and counted down
+  with its owner's turns); its tile wears the wait as the skills' dial, with
+  no number (`ItemWaitDial`).
 - **Next to on the board** (Mystic Expansion): the board as it is drawn. A
   side's bench is a row of three slots; its Active stands in the lane in the
   column of one of them (the human seat's under its bench slot 2, the other
