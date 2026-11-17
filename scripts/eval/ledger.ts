@@ -23,7 +23,10 @@
  */
 import type { CardId, CardInstance, GameState, ItemTier, PlayerID, PlayerState } from '@/engine/types';
 import { itemCard } from '@/cards';
-import { heroesOf, itemCooldown, wornItems } from '@/engine/query';
+import { heroesOf, wornItems } from '@/engine/query';
+
+/** An item's longest running wait (Cheat Death's, a draw card's): the helper the engine dropped when actives became one-shot spells. */
+const itemCooldown = (it: CardInstance): number => Math.max(0, ...Object.values(it.cooldowns ?? {}).map((n) => n ?? 0));
 import { round } from '@/engine/rounds';
 
 const SEATS: readonly PlayerID[] = ['0', '1'];
