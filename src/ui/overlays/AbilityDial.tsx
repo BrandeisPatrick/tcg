@@ -10,9 +10,13 @@
  *   the wipe    a clock-wipe of ink over the glyph: the dark part is the
  *               wait left, and the lit part grows clockwise from twelve.
  *   the number  the own turns left, stencilled in cream on the clock's hub.
- *   the pips    a charged skill's charges, on the tile's foot: full, spent,
- *               and the next one back as a small clock of its own. With a
- *               charge in hand the glyph stays lit and the frame whole.
+ *   the bar     a charged skill's charges, as Deadlock prints them (Patrick,
+ *               2026-11-17: "charge icon should not be dot"): a bar across
+ *               the tile's top, one segment a charge, split by thin ink
+ *               lines. A charge in hand is white; the next one back fills
+ *               in Deadlock's spirit purple as its wait is served; a spent
+ *               one is grey. With a charge in hand the glyph stays lit and
+ *               the frame whole.
  *   the fill    a charged ultimate waits on damage, not turns, so its glyph
  *               fills from the foot like a level, and its frame has a
  *               segment for each point it needs. Its row prints the count.
@@ -30,7 +34,7 @@
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { fonts } from '../tokens';
-import { poster } from '../poster';
+import { poster, shopInk } from '../poster';
 import {
   dialLabel, dialReadiness, dialSegments, dialShade, framePath, segmentDash, type DialModel,
 } from './abilityDialModel';
@@ -44,6 +48,8 @@ const SHADE = 0.8;
 /** When the open sheet has landed and the dial may move, in seconds. */
 const LAND = 0.14;
 const EASE = [0.3, 0, 0.15, 1] as const;
+/** The charge on its way back fills in Deadlock's spirit purple, as its HUD's does. */
+const SPIRIT = shopInk('spirit').ink;
 
 /** How ready each dial was when it was last looked at, by its `memo` key, so
  *  a sheet opened after an ability came back can say so once. */
@@ -226,42 +232,38 @@ export function AbilityDial({ model, ink, size = 44, calm = false, memo, numeral
         >{numeral}</motion.text>
       )}
 
-      {/* THE PIPS: a charged skill's charges, on the tile's foot. */}
-      {wait && charges && (
-        <g>
-          {Array.from({ length: Math.max(charges.max, charges.left) }, (_, i) => {
-            const n = Math.max(charges.max, charges.left);
-            const cx = mid + (i - (n - 1) / 2) * 11;
-            const cy = S - 1.5;
-            const held = i < charges.left;
-            // The next one back: a small clock of the wait it has served.
-            const next = i === charges.left && wait.left > 0;
-            const served = next ? (wait.full - wait.left) / wait.full : 0;
-            const pr = 1.6;
-            const pround = 2 * Math.PI * pr;
-            return (
-              <g key={i} transform={`translate(${cx} ${cy})`}>
-                <circle r={4.6} style={{ fill: poster.ink }} />
-                {held
-                  ? <circle r={3.2} style={{ fill: ink }} />
-                  : <circle r={2.6} fill="none" strokeWidth={1.2} style={{ stroke: next ? ink : poster.creamFaint }} />}
-                {next && served > 0 && (
-                  <g transform="rotate(-90)">
-                    <motion.circle
-                      r={pr} fill="none" strokeWidth={2 * pr}
-                      strokeDasharray={`${pround} ${pround}`}
-                      initial={calm ? false : { strokeDashoffset: pround }}
-                      animate={{ strokeDashoffset: pround * (1 - served) }}
+      {/* THE BAR: a charged skill's charges, a segment each, across the tile's top. */}
+      {wait && charges && (() => {
+        const n = Math.max(charges.max, charges.left);
+        const x0 = 5, w = S - 10, h = 7.5, y = -h / 2 + FRAME / 2, line = 1.5;
+        const seg = (w - line * (n + 1)) / n;
+        const served = wait.left > 0 ? (wait.full - wait.left) / wait.full : 0;
+        return (
+          <g data-charge-bar={`${charges.left}/${n}`}>
+            {/* The ink under it: the thin lines between the segments, and its keyline. */}
+            <rect x={x0} y={y} width={w} height={h} rx={1.2} style={{ fill: poster.ink }} />
+            {Array.from({ length: n }, (_, i) => {
+              const x = x0 + line + i * (seg + line);
+              const held = i < charges.left;
+              const next = i === charges.left && served > 0;
+              return (
+                <g key={i}>
+                  <rect x={x} y={y + line} width={seg} height={h - 2 * line} style={{ fill: held ? poster.cream : poster.creamFaint }} />
+                  {next && (
+                    <motion.rect
+                      x={x} y={y + line} height={h - 2 * line}
+                      initial={calm ? false : { width: 0 }}
+                      animate={{ width: seg * served }}
                       transition={move(LAND + 0.1, 0.4)}
-                      style={{ stroke: ink }}
+                      style={{ fill: SPIRIT }}
                     />
-                  </g>
-                )}
-              </g>
-            );
-          })}
-        </g>
-      )}
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })()}
 
       {/* THE READY MOMENT: the tile flashes its colour and a keyline rings out. */}
       {flash > 0 && !calm && (
