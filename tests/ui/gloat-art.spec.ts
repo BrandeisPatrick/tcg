@@ -12,7 +12,7 @@ import { UNITS } from '@/cards/units';
 import { heroPortraitFile } from '@/cards/art/heroArt';
 import { addStatus } from '@/engine/statusOps';
 import { MAX_LEVEL } from '@/engine/constants';
-import { freshReadyGame, giveCard } from '../engine/_helpers';
+import { freshReadyGame, giveCard, makeHero } from '../engine/_helpers';
 
 const file = (name: string) => resolve(__dirname, '../../public/heroes', name);
 
@@ -34,7 +34,9 @@ describe('the gloat portrait', () => {
 
   it('a form comes first: Silver in her wolf form shows the wolf, at Level 4 too', () => {
     const G = freshReadyGame();
-    const silver = giveCard(G, '0', 'hero_silver');
+    // On the board: a card in the hand or the deck takes no status.
+    const silver = makeHero('hero_silver', '0', 'bench', 1);
+    G.players['0'].bench[0] = silver;
     silver.level = MAX_LEVEL;
     expect(heroPortraitFile(silver)).toBe('hero_silver_gloat.webp');
     addStatus(G, silver, 'wolf_form', 1, 2);

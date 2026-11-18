@@ -258,9 +258,9 @@ purple 1 is 1 + 2 × Spirit there); an ultimate or a spell counts it once.
   it (a tie goes to the side behind on net worth, then to the last hit): the
   Rejuvenator, 2 revives good through the end of the second round after. It
   rises again 4 rounds after the round it fell in.
-- A fallen hero waits in its slot for 2 of its side's turns (`RESPAWN_TURNS`
-  in `src/engine/constants.ts`; 0 sends it straight to the hand), then goes
-  back to your hand at full HP with its level and items, to be benched again.
+- A fallen hero is shuffled back into your deck at once (2026-11-18): its slot
+  is left empty, it keeps its level, and what it wore is shuffled in beside it
+  as cards of their own. Drawn again, it is benched again at its rank.
 - The round cap: after round 20 (12 until 2026-11-16), the side with more structure HP wins, then
   the side with more net worth, then the second mover.
 

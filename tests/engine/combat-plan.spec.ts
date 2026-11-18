@@ -243,7 +243,7 @@ describe('the attack is one-way', () => {
     const step = plan.steps.find((s) => s.attackerIid === atk.iid)!;
     expect(step.predictedKO).toBe(true);
     makeAttack(G, '0');
-    expect(def.hp).toBe(0);
+    expect(def.zone).toBe('deck');           // fell: shuffled into its deck
     expect(atk.hp).toBe(atkHpBefore);
   });
 

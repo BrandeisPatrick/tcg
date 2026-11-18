@@ -287,11 +287,10 @@ export interface CardInstance {
   steppedInTurn?: number;
   remMergeHpBuff?: number;
   /**
-   * Own turns left before a fallen hero goes back to its owner's hand. `> 0`
-   * means the hero is KO'd and occupying its slot as a corpse (greyed in UI,
-   * can't act / be targeted). On reaching 0 it leaves the board for the hand,
-   * at full HP with its level and its items (`RESPAWN_TURNS`). `undefined` /
-   * `0` means alive.
+   * Own turns left before a fallen hero, a corpse in its slot, went back to
+   * its owner's hand. Nothing sets it since 2026-11-18: a fallen hero leaves
+   * the board at once for its owner's deck (`heroToDeck`). The guards that
+   * read it (`isRespawning`) are kept: they are false for every card.
    */
   respawnTurnsLeft?: number;
   /**
@@ -591,7 +590,7 @@ export interface BossFx extends FxBase {
  *  deck, the discard pile and the hand animate: 'shuffle' (the deck was
  *  shuffled: the opening, the drafted heroes going in), 'draw' (deck → hand),
  *  'discard' (hand → discard pile; 'mill': the top of the deck → discard pile),
- *  'raise' (a card an effect made is shuffled into the deck), 'toHand' (a fallen hero back in the hand). `iid` /
+ *  'raise' (a card an effect made, or a fallen hero's item, is shuffled into the deck), 'toHand' (a hero lifted back to the hand), 'toDeck' (a fallen hero shuffled into the deck). `iid` /
  *  `cardId` name the card ('shuffle' names none). */
 export interface DeckFx extends FxBase {
   kind: 'deck';
@@ -600,7 +599,7 @@ export interface DeckFx extends FxBase {
    *  left its slot to ride on an ally as equipment (Rem's Tag Along;
    *  `bearerIid` the ally). `rideOff`: the ride is over and it is back on the
    *  bench (`slot`), off `bearerIid`. */
-  what: 'shuffle' | 'draw' | 'discard' | 'mill' | 'raise' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
+  what: 'shuffle' | 'draw' | 'discard' | 'mill' | 'raise' | 'toHand' | 'toDeck' | 'place' | 'rideOn' | 'rideOff';
   pid: PlayerID;
   iid?: string;
   cardId?: CardId;

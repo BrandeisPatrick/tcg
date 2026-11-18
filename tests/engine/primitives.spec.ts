@@ -820,7 +820,8 @@ describe('an attack that names its target', () => {
       const plan = forecastAttack(G, '0', target.iid);
       const real = structuredClone(G) as GameState;
       expect(perform(real, '0', { type: 'attack', targetIid: target.iid })).not.toBe(INVALID);
-      const after = findCardOnBoard(real, target.iid)!.card;
+      // A target that fell is in its deck (2026-11-18): it ended on 0.
+      const after = findCardOnBoard(real, target.iid)?.card ?? { hp: 0 };
       expect(plan.steps).toHaveLength(1);
       expect(plan.steps[0], target.cardId).toMatchObject({
         attackerIid: atk.iid, targetIid: target.iid, rawDamage: 3, predictedHpAfter: Math.max(0, after.hp),

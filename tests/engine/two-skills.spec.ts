@@ -202,7 +202,7 @@ describe('a skill\'s cooldown', () => {
     expect(G().players['0'].bench[0]!.cooldowns).toEqual({ [CHILL]: 2 });
   });
 
-  it('is not cleared by a fall, and counts the owner\'s turns whether the hero is up or down', () => {
+  it('is cleared by a fall: the hero goes into its deck with no skill wait (2026-11-18)', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     const cool = makeHero(COOL, '0', 'bench', 1);
@@ -210,10 +210,8 @@ describe('a skill\'s cooldown', () => {
     cool.cooldowns = { [CHILL]: 3 };
     damageUnit(G, cool, 99, 'pure');
     resolve(G);
-    expect(isRespawning(cool)).toBe(true);
-    expect(cool.cooldowns).toEqual({ [CHILL]: 3 });          // the fall left it as it was
-    beginTurn(G, '0', 4);                                    // P0's turn starts: the timer counts it down, corpse or not
-    expect(cool.cooldowns).toEqual({ [CHILL]: 2 });
+    expect(cool.zone).toBe('deck');
+    expect(cool.cooldowns).toBeUndefined();                  // drawn and put down again, it starts ready
   });
 
   it('ticks every entry, drops the ones that reach 0, and drops an empty map (a merged Rem ticks too)', () => {

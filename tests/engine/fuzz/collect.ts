@@ -6,9 +6,9 @@
 import { playGame, type GameRecord, type Policy, type Snapshot, type StepInfo } from './driver';
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { moveTags, signatureOf, type Hit } from './hits';
-import { resolveSkill, isRespawning } from '@/engine/query';
+import { resolveSkill } from '@/engine/query';
 import {
-  DRAW_CARDS, PIDS, handCardOf, handOf, heroesOfSide, itemData, slottedHeroOf, upgradeComponentOracle,
+  DRAW_CARDS, handCardOf, itemData, slottedHeroOf, upgradeComponentOracle,
 } from './oracle';
 
 interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
@@ -75,8 +75,8 @@ export interface Coverage {
   /** Draw cards cast, and discards made. */
   drawCards: number;
   discards: number;
-  /** Fallen heroes back in a hand. */
-  backToHand: number;
+  /** Fallen heroes shuffled back into their deck (2026-11-18). */
+  toDeck: number;
 }
 interface MixRun { hits: Hit[]; games: GameRecord[]; coverage: Coverage }
 
@@ -86,7 +86,7 @@ export function runInvariantMix(mixIndex: number, games: number): MixRun {
   const records: GameRecord[] = [];
   const coverage: Coverage = {
     remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, plays: 0, evolves: 0, replaces: 0, spellsPlayed: 0,
-    heldPlays: 0, heroesPlaced: 0, firstActives: 0, drawCards: 0, discards: 0, backToHand: 0,
+    heldPlays: 0, heroesPlaced: 0, firstActives: 0, drawCards: 0, discards: 0, toDeck: 0,
   };
   for (let i = 0; i < games; i++) {
     const seed = seedFor(mixIndex, i);
@@ -154,14 +154,11 @@ function tally(c: Coverage, before: Snapshot, after: Snapshot, m: StepInfo) {
   if (m.name === 'placeHero') c.heroesPlaced++;
   if (m.name === 'chooseActive') c.firstActives++;
   if (m.name === 'discard') c.discards++;
-  // Fallen heroes whose wait ended: back in a hand.
-  for (const p of PIDS) {
-    const was = new Set(heroesOfSide(before.G.players[p]).map((h) => h.iid));
-    c.backToHand += handOf(after.G, p).filter((h) => was.has(h.iid)).length;
-  }
-  // Heroes that fell during the move, on either side.
-  for (const p of PIDS) {
-    const alive = new Set(heroesOfSide(before.G.players[p]).filter((h) => !isRespawning(h)).map((h) => h.iid));
-    c.kos += heroesOfSide(after.G.players[p]).filter((h) => alive.has(h.iid) && isRespawning(h)).length;
-  }
+  // Heroes that fell during the move, on either side: shuffled into the deck
+  // (the stream's fresh 'toDeck' events), or brought straight back by the Rejuvenator.
+  const seen = before.G.fx.reduce((n, e) => Math.max(n, e.seq), 0);
+  const fresh = after.G.fx.filter((e) => e.seq > seen);
+  const shuffled = fresh.filter((e) => e.kind === 'deck' && e.what === 'toDeck').length;
+  c.toDeck += shuffled;
+  c.kos += shuffled + fresh.filter((e) => e.kind === 'revive').length;
 }

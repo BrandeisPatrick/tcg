@@ -66,7 +66,7 @@ describe('a spell is played from the hand, and spends no hero\'s ability', () =>
     const [hazeHp, vinExp] = [haze.hp, vindicta.exp];
     expect(spellCaster(G, '0')).toBe(haze);
     useItem(G, '0', 'cold_front', foe.iid);
-    expect(foe.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(foe.zone).toBe('deck');
     expect(haze.exp).toBe(EXP_ON_KILL);
     expect(vindicta.exp).toBe(vinExp);
     expect(haze.hp).toBe(hazeHp + 1);

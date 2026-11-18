@@ -1,7 +1,7 @@
 /**
  * Death and the state-based pass that follows every change to the board: a
- * hero at 0 HP falls in place (the push into its side's structures, then the
- * Rejuvenator's revive or the wait before it goes back to the hand), the
+ * hero at 0 HP falls (the push into its side's structures, then the
+ * Rejuvenator's revive, or it leaves the board for its owner's deck), the
  * Mid-Boss at 0 HP falls (map.ts), and a fallen Active is replaced. `resolve`
  * is the one entry point; call it after ANY mutation (combat, ability, status
  * tick, turn start, promotion).
@@ -11,7 +11,7 @@ import { CARDS_BY_ID, cardName, itemCard } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import {
-  fallPending, findCardOnBoard, freeBenchSlot, isRespawning, isUnit, killPush, laneOpen, otherPlayer, promptOwed, respawnTimer, reviveReady, stepInCandidates,
+  fallPending, findCardOnBoard, freeBenchSlot, isRespawning, isUnit, killPush, laneOpen, otherPlayer, promptOwed, reviveReady, stepInCandidates,
   unitData,
 } from './query';
 import { enteredFromBench, fireTriggers } from './triggers';
@@ -35,13 +35,11 @@ export { awardSouls };
  * theirs — and none of them for a fall to the Mid-Boss's blow, `unpaid`). The
  * bounty is the round's (`killBounty`): little early, a lot late.
  * Then the statuses are wiped, and either the hero is revived on the spot
- * (its side's Rejuvenator, a credit spent) or it waits RESPAWN_TURNS of its
- * owner's turns in its slot as a corpse (`respawnTimer`) before it goes back
- * to the hand — straight there when the wait is 0. Level / exp / equipment /
- * atkMod / spiritMod / hpMax and the cooldowns (timers of the owner's turns,
- * not of the hero's life) all persist — only the live combat state (hp,
- * statuses, turn flags) resets. `tickRespawn` sends it to the hand when the
- * wait is over.
+ * (its side's Rejuvenator, a credit spent) or it leaves the board at once and
+ * is shuffled into its owner's deck, its worn items with it (`heroToDeck`;
+ * Patrick, 2026-11-18: "when hero dies, the board is just empty … just
+ * shuffle back to the deck"). Until then a fallen hero waited in its slot as
+ * a corpse for two of its owner's turns and went back to the hand.
  */
 export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, opts: { unpaid?: boolean } = {}) {
   pushLog(G, `${cardName(hero.cardId)} fell.`);
@@ -60,7 +58,6 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, o
     const rival = G.players[oppId].active;
     if (rival && !isRespawning(rival) && rival.hp > 0) fireTriggers(G, rival, 'onRivalFall', { only: 'passives', target: hero, movingPlayer: oppId });
   }
-  const timer = respawnTimer(G, hero);
   // The rescue: a riding Rem (Tag Along) jumps back to the bench instead of
   // falling with her bearer — to the hand when the bench has no room — and any
   // max HP a ride granted is taken back here too. (A riding hero is the only
@@ -87,17 +84,66 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, o
     pushFx(G, { kind: 'revive', iid: hero.iid, credit: true });
     return;
   }
-  hero.exhausted = true;
-  hero.hp = 0;
-  // No wait: the hero goes straight to the hand, its slot left empty.
-  if (timer <= 0) {
-    heroToHand(G, ps, hero);
-    return;
+  // Off the board, its slot left empty, and into the deck with what it wore.
+  heroToDeck(G, ps, hero);
+}
+
+/** `hero`'s worn items, taken off it and shuffled into `ps`'s deck, each to
+ *  be drawn and paid for again (a riding Rem has jumped off before). Returns
+ *  how many went. */
+function wornIntoDeck(G: GameState, ps: PlayerState, hero: CardInstance): number {
+  const worn = (hero.attached ?? []).filter((a) => !!itemCard(a.cardId));
+  for (const it of worn) {
+    detachItem(hero, it);
+    it.zone = 'deck';
+    it.slot = undefined;
+    it.cooldowns = undefined;
+    ps.deck.splice(Math.floor(nextRandom(G) * (ps.deck.length + 1)), 0, it);
+    pushFx(G, { kind: 'deck', what: 'raise', pid: ps.id, iid: it.iid, cardId: it.cardId });
   }
-  hero.respawnTurnsLeft = timer;
-  // Level + exp + stat mods INTENTIONALLY persist — the hero comes back to the
-  // hand with its rank intact (see leveling.spec).
-  pushLog(G, `${cardName(hero.cardId)} goes back to the hand in ${timer} turn${timer === 1 ? '' : 's'}.`);
+  syncVitalitySpike(hero);
+  return worn.length;
+}
+
+/**
+ * A fallen `hero` of `ps` leaves the board (Patrick, 2026-11-18: "when hero
+ * dies, the board is just empty, dont leave a dead hero on the board … just
+ * shuffle back to the deck"): out of its slot, which is left empty (an
+ * Active's lane opens and its side steps a hero up, `resolve`), and shuffled
+ * into its owner's deck at full HP, with no statuses and no skill waits (its
+ * ultimate's opening wait runs on); its worn items are shuffled in beside it,
+ * each its own card again. Its level and exp stay on the card: drawn and put
+ * down again, it comes back at its rank.
+ */
+export function heroToDeck(G: GameState, ps: PlayerState, hero: CardInstance) {
+  if (ps.active === hero) {
+    leaveActive(G, hero);
+    ps.active = null;
+  } else {
+    const i = ps.bench.indexOf(hero);
+    if (i >= 0) ps.bench[i] = null;
+  }
+  hero.zone = 'deck';
+  hero.slot = undefined;
+  hero.respawnTurnsLeft = undefined;
+  hero.exhausted = false;
+  hero.statuses = [];
+  hero.skillUsedThisTurn = false;
+  if (hero.lastSkillUsed !== undefined) hero.lastSkillUsed = undefined;
+  // A card in the deck is set going by nothing: its skills' waits go. The
+  // ultimate's opening wait runs from the match's first turn wherever the
+  // hero is, so it stays.
+  const ult = (CARDS_BY_ID[hero.cardId] as { ult?: string } | undefined)?.ult;
+  if (hero.cooldowns) {
+    const kept = Object.fromEntries(Object.entries(hero.cooldowns).filter(([k]) => k === ult));
+    hero.cooldowns = Object.keys(kept).length ? kept : undefined;
+  }
+  hero.chargesSpent = undefined;
+  ps.deck.splice(Math.floor(nextRandom(G) * (ps.deck.length + 1)), 0, hero);
+  pushFx(G, { kind: 'deck', what: 'toDeck', pid: ps.id, iid: hero.iid, cardId: hero.cardId });
+  const items = wornIntoDeck(G, ps, hero);
+  hero.hp = hero.hpMax;
+  pushLog(G, `${cardName(hero.cardId)} is shuffled into P${ps.id}'s deck${items > 0 ? ` with ${items === 1 ? 'its item' : `its ${items} items`}` : ''}.`);
 }
 
 /** The kill exp a hero that may cancel its own fall held back (`downedBy`,
@@ -212,8 +258,8 @@ export function rideOn(G: GameState, ps: PlayerState, rider: CardInstance, beare
  * With no free slot (she rode from the lane and the bench has filled since)
  * she is never dropped. At the countdown she rides on one more turn, with a
  * log line saying so, and tries again at her owner's next turn start; when
- * her bearer falls (`bearerFalls`) she cannot stay on a corpse, and goes back
- * to the hand instead, as a fallen hero does (`heroToHand`).
+ * her bearer falls (`bearerFalls`) she cannot go down with it, and jumps back
+ * to the hand instead (`heroToHand`): she did not fall.
  */
 export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInstance, rem: CardInstance, opts: { bearerFalls?: boolean } = {}) {
   const own = (rem.slot ?? 1) - 1;
@@ -246,8 +292,8 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
  * Lash's Death Slam (Patrick, 2026-11-17: "pick one hero, return to player
  * hand"; its items "back to deck"): `hero`, standing on `ps`'s board, goes back
  * to its owner's hand, and what it wears is shuffled into its owner's deck —
- * to be drawn and paid for again. The hero comes back as a fallen one does (`heroToHand`: full HP,
- * its level and exp, no statuses); its slot is left empty, so an Active's lane
+ * to be drawn and paid for again. The hero comes back at full HP with its
+ * level and exp and no statuses (`heroToHand`); its slot is left empty, so an Active's lane
  * opens and its side steps a hero up (`resolve`). A riding Rem jumps off first,
  * as she does when her bearer falls. No bounty, no push: nobody fell.
  */
@@ -258,24 +304,15 @@ export function bounceToHand(G: GameState, ps: PlayerState, hero: CardInstance) 
   if (sDrain) hero.hpMax += sDrain.value;
   const sGain = hero.statuses.find((s) => s.id === 'siphon_gain');
   if (sGain) hero.hpMax -= sGain.value;
-  const worn = (hero.attached ?? []).filter((a) => !!itemCard(a.cardId));
-  for (const it of worn) {
-    detachItem(hero, it);
-    it.zone = 'deck';
-    it.slot = undefined;
-    it.cooldowns = undefined;
-    ps.deck.splice(Math.floor(nextRandom(G) * (ps.deck.length + 1)), 0, it);
-    pushFx(G, { kind: 'deck', what: 'raise', pid: ps.id, iid: it.iid, cardId: it.cardId });
-  }
-  syncVitalitySpike(hero);
-  if (worn.length > 0) pushLog(G, `${cardName(hero.cardId)}'s ${worn.length === 1 ? 'item is' : `${worn.length} items are`} shuffled into P${ps.id}'s deck.`);
+  const worn = wornIntoDeck(G, ps, hero);
+  if (worn > 0) pushLog(G, `${cardName(hero.cardId)}'s ${worn === 1 ? 'item is' : `${worn} items are`} shuffled into P${ps.id}'s deck.`);
   heroToHand(G, ps, hero, { lifted: true });
 }
 
 /**
- * Sweep a player's board for heroes that just hit 0 HP. The hero stays in its
- * slot — `killInPlace` arms the respawn timer instead of moving them out.
- * (`resolve` then promotes a bench hero into a fallen Active's slot.)
+ * Sweep a player's board for heroes that just hit 0 HP: each falls, and
+ * leaves the board for its deck (`killInPlace`). (`resolve` then promotes a
+ * bench hero into a fallen Active's empty slot.)
  */
 export function reapDead(G: GameState, ps: PlayerState) {
   // A hero whose fall waits on a trigger prompt is left where it is.

@@ -10,12 +10,12 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Ctx } from 'boardgame.io';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { resolve } from '@/engine/death';
+import { heroToDeck, resolve } from '@/engine/death';
 import { DeadlockGame } from '@/engine/game';
 import * as query from '@/engine/query';
 import { ITEMS } from '@/cards';
 import {
-  BOSS_CARD_ID, BOSS_HP, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_WAIT,
+  BOSS_CARD_ID, BOSS_HP, LANE_INCOME, MAX_HAND, PRICE, REVIVE_CREDITS, ROUND_CAP, ULT_WAIT,
 } from '@/engine/constants';
 import { flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack, stackDeck, withBenchOnly } from '../_helpers';
 import { allocatorOf } from '@/engine/ids';
@@ -57,6 +57,9 @@ const flex = (G: GameState, pid: PlayerID) => {
   for (const s of G.players[pid === '0' ? '1' : '0'].structures) if (s.kind !== 'patron') s.hp = 0;
 };
 /** Push `n` off `pid`'s structures, front first, as the engine does. */
+/** `pid`'s bench hero at `at` falls as the engine has it fall (2026-11-18): out of its slot
+ *  and shuffled into its deck, with the 'toDeck' event that says so. */
+const fell = (G: GameState, pid: PlayerID = '1', at = 0) => heroToDeck(G, G.players[pid], G.players[pid].bench[at]!);
 const pushOff = (G: GameState, pid: PlayerID, n: number) => {
   for (const s of G.players[pid].structures) { const k = Math.min(s.hp, n); s.hp -= k; n -= k; }
 };
@@ -421,30 +424,28 @@ describe('the transition rules fire', () => {
     expect(ids2(pair((G) => { pushOff(G, '1', 1); }))).toContain('structure-delta');
   });
   it('a hero falls and pushes nothing', () => {
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; }))).toContain('structure-delta');
+    expect(ids2(pair((G) => { fell(G); }))).toContain('structure-delta');
   });
   it('a hero falls and pushes its level + 1 (2 for a fresh one): fine; the old 1 is not', () => {
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; pushOff(G, '1', 2); }))).not.toContain('structure-delta');
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; pushOff(G, '1', 1); }))).toContain('structure-delta');
+    expect(ids2(pair((G) => { fell(G); pushOff(G, '1', 2); }))).not.toContain('structure-delta');
+    expect(ids2(pair((G) => { fell(G); pushOff(G, '1', 1); }))).toContain('structure-delta');
   });
-  it('a fallen hero waits RESPAWN_TURNS of its owner\'s turns, whatever the round — not the old one turn of round 1', () => {
-    expect(RESPAWN_TURNS).toBe(2);
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 2; pushOff(G, '1', 2); }))).not.toContain('respawn-timer-start');
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; pushOff(G, '1', 2); }))).toContain('respawn-timer-start');
-    // …and with no wait it would be off the board, in the hand: with a wait of 2, that is a breach.
+  it('a fallen hero goes into its deck (2026-11-18): there, fine; put in the discard pile instead, a breach', () => {
+    expect(ids2(pair((G) => { fell(G); pushOff(G, '1', 2); }))).not.toContain('fall-to-deck');
     expect(ids2(pair((G) => {
       const ps = G.players['1'];
       const h = ps.bench[0]!;
-      ps.bench[0] = null;
-      h.zone = 'hand'; h.slot = undefined;
-      ps.hand.push(h);
+      fell(G);
       pushOff(G, '1', 2);
-    }))).toContain('respawn-timer-start');
+      ps.deck = ps.deck.filter((c) => c !== h);
+      h.zone = 'discard';
+      ps.discard.push(h);
+    }))).toContain('fall-to-deck');
   });
   it('a side with a live Rejuvenator has its fallen hero back in place, a credit spent', () => {
     const base = clean();
     base.players['1'].reviveCredits = 2; base.players['1'].reviveUntilRound = 3;
-    const stayedDown = pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; pushOff(G, '1', 2); }, base);
+    const stayedDown = pair((G) => { fell(G); pushOff(G, '1', 2); }, base);
     expect(ids2(stayedDown)).toContain('revive-owed');
     const kept = pair((G) => { G.players['1'].reviveCredits = 1; }, base);
     expect(ids2(kept)).toContain('revive-spend');
@@ -528,7 +529,7 @@ describe('the transition rules fire', () => {
     expect(moveIds(r, 'useSkill', [heroIid(r)])).not.toContain('souls-delta');
   });
   it('a kill pays the round\'s bounty and nothing more: a fall left unpaid, or overpaid, is reported', () => {
-    const fall = (G: GameState) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; pushOff(G, '1', 2); };
+    const fall = (G: GameState) => { fell(G); pushOff(G, '1', 2); };
     const bounty = killBounty(clean());
     expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += bounty; }), 'attack', [])).not.toContain('souls-delta');
     expect(moveIds(pair((G) => { fall(G); }), 'attack', [])).toContain('souls-delta');
@@ -909,63 +910,57 @@ describe('the transition rules fire', () => {
     expect(use.check()).toEqual([]);
     expect(use.check((A) => { A.players['0'].bench[0]!.cooldowns = { skill_vindicta: 1 }; })).toContain('cooldown-bookkeeping');
   });
-  it('the wait of a fallen hero, the income and the draw at a new turn', () => {
+  it('the income and the draw at a new turn', () => {
     const before = clean();
-    const corpse = before.players['1'].bench[0]!;
-    corpse.hp = 0; corpse.respawnTurnsLeft = 2;
     const base = (mutate: (g: GameState) => void, from: GameState = before) => {
       const after = structuredClone(from) as GameState;
       mutate(after);
       return { before: { G: from, ctx: ctx() }, after: { G: after, ctx: ctx({ currentPlayer: '1', turn: 3 }) } };
     };
     const startP1 = (G: GameState) => { G.turnNumber = 3; G.players['1'].souls = LANE_INCOME; };
-    // P1's turn starts: the corpse must tick to 1 — not tick, wrong
-    let p = base((G) => { startP1(G); });
-    let ids3 = moveIds(p, 'endTurn', [], p.after.ctx);
-    expect(ids3).toContain('respawn-timer');
-    expect(ids3).not.toContain('souls-income');
     // the income: LANE_INCOME on top of what was kept — no comeback, however far behind
     before.players['0'].souls = 30;
-    p = base((G) => { startP1(G); G.players['1'].bench[0]!.respawnTurnsLeft = 1; });
+    let p = base((G) => { startP1(G); });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toEqual([]);
-    p = base((G) => { startP1(G); G.players['1'].souls += 1; G.players['1'].bench[0]!.respawnTurnsLeft = 1; });
+    p = base((G) => { startP1(G); G.players['1'].souls += 1; });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('souls-income');
     // the side whose turn ended keeps its souls
-    p = base((G) => { startP1(G); G.players['0'].souls += 1; G.players['1'].bench[0]!.respawnTurnsLeft = 1; });
+    p = base((G) => { startP1(G); G.players['0'].souls += 1; });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('souls-income');
     before.players['0'].souls = 0;
-    // a wait that ends: the hero leaves its slot for the hand, at full HP
-    const last = structuredClone(before) as GameState;
-    last.players['1'].bench[0]!.respawnTurnsLeft = 1;
-    const toHand = (G: GameState) => {
+    // a hero that fell as the turn changed hands (a Bleed tick) is shuffled into its deck,
+    // and the turn's draw may take it
+    p = base((G) => {
+      startP1(G);
       const ps = G.players['1'];
       const h = ps.bench[0]!;
-      ps.bench[0] = null;
-      Object.assign(h, { zone: 'hand', slot: undefined, respawnTurnsLeft: undefined, hp: h.hpMax, exhausted: false });
+      fell(G);
+      pushOff(G, '1', 2);
+      G.players['0'].souls += killBounty(G);
+      ps.deck = ps.deck.filter((c) => c !== h);
+      h.zone = 'hand';
       ps.hand.push(h);
-    };
-    p = base((G) => { startP1(G); toHand(G); }, last);
-    expect(moveIds(p, 'endTurn', [], p.after.ctx)).toEqual([]);
-    p = base((G) => { startP1(G); const h = G.players['1'].bench[0]!; h.respawnTurnsLeft = undefined; h.hp = h.hpMax; }, last); // revived in place, the old way
-    expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('respawn-timer');
+      G.fx.push({ kind: 'deck', what: 'draw', pid: '1', iid: h.iid, seq: G.fx.reduce((n, e) => Math.max(n, e.seq), 0) + 1 } as never);
+    });
+    expect(moveIds(p, 'endTurn', [], p.after.ctx)).not.toContain('fall-to-deck');
     // the draw: the top card of the deck, one; none into a full hand
     const deck = structuredClone(before) as GameState;
     stackDeck(deck, '1', ['grit', 'cold_front']);
     const draw = (G: GameState, n: number) => { for (let i = 0; i < n; i++) { const c = G.players['1'].deck.pop()!; c.zone = 'hand'; G.players['1'].hand.push(c); } };
-    p = base((G) => { startP1(G); G.players['1'].bench[0]!.respawnTurnsLeft = 1; draw(G, 1); }, deck);
+    p = base((G) => { startP1(G); draw(G, 1); }, deck);
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toEqual([]);
-    p = base((G) => { startP1(G); G.players['1'].bench[0]!.respawnTurnsLeft = 1; }, deck);
+    p = base((G) => { startP1(G); }, deck);
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('draw-per-turn');
-    p = base((G) => { startP1(G); G.players['1'].bench[0]!.respawnTurnsLeft = 1; draw(G, 2); }, deck);
+    p = base((G) => { startP1(G); draw(G, 2); }, deck);
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('draw-per-turn');
     const full = structuredClone(deck) as GameState;
     for (let i = 0; i < MAX_HAND; i++) giveCard(full, '1', 'grit');
-    p = base((G) => { startP1(G); G.players['1'].bench[0]!.respawnTurnsLeft = 1; }, full);
+    p = base((G) => { startP1(G); }, full);
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toEqual([]);
-    p = base((G) => { startP1(G); G.players['1'].bench[0]!.respawnTurnsLeft = 1; draw(G, 1); }, full);
+    p = base((G) => { startP1(G); draw(G, 1); }, full);
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('draw-per-turn');
     // the turn counter must step by one
-    p = base((G) => { G.turnNumber = 7; G.players['1'].souls = LANE_INCOME; G.players['1'].bench[0]!.respawnTurnsLeft = 1; });
+    p = base((G) => { G.turnNumber = 7; G.players['1'].souls = LANE_INCOME; });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('turn-number-step');
   });
   it('a card play, a hero placed, a first Active, a discard or a spell the rules refuse, accepted', () => {
@@ -1004,17 +999,17 @@ describe('the transition rules fire', () => {
     const N = clean();
     N.players['0'].souls = 10;
     const late = giveCard(N, '0', 'cold_front');
-    for (const h of heroesOfSide(N.players['0'])) { h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; }
+    for (const h of heroesOfSide(N.players['0'])) heroToDeck(N, N.players['0'], h);
     expect(moveIds(pair(() => undefined, N), 'playCard', [late.iid, N.players['1'].active!.iid])).toContain('accepted-illegal');
   });
   it('a wiped board is no loss: nothing is reported while the game runs on', () => {
     const G = clean();
-    for (const c of [G.players['1'].active!, ...G.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
+    for (const c of [G.players['1'].active!, ...G.players['1'].bench]) heroToDeck(G, G.players['1'], c!);
     expect(ids(G)).toEqual([]);
   });
   it('the empty-lane push: at the end of a turn the rival\'s structures may lose the Active\'s bullet power', () => {
     const before = clean();
-    for (const c of [before.players['1'].active!, ...before.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
+    for (const c of [before.players['1'].active!, ...before.players['1'].bench]) heroToDeck(before, before.players['1'], c!);
     const after = structuredClone(before) as GameState;
     const bullet = query.effectiveAtk(p0(before).haze); // Haze's Bullet Power: her card's 1 Attack at Level 1
     expect(bullet).toBe(1);

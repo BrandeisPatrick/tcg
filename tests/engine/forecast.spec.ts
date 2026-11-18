@@ -199,7 +199,10 @@ describe('forecastAttack reads the real attack', () => {
     // …and it equals what the real attack, made through perform on a clone, does.
     const real = structuredClone(G);
     expect(perform(real, '0', { type: 'attack' })).not.toBe(INVALID);
-    const realTarget = [real.players['1'].active, ...real.players['1'].bench].find((x) => x?.iid === target.iid)!;
+    // A target that fell is in its deck (2026-11-18): it ended on 0.
+    const onBoard = [real.players['1'].active, ...real.players['1'].bench].find((x) => x?.iid === target.iid);
+    expect(onBoard ?? real.players['1'].deck.find((x) => x.iid === target.iid)).toBeDefined();
+    const realTarget = { hp: onBoard ? onBoard.hp : 0 };
     expect(plan.damageToActive).toBe(Math.max(0, target.hp - realTarget.hp));
     expect(plan.pushDamage).toBe(structureHp(G.players['1']) - structureHp(real.players['1']));
     expect(plan.defenderActiveKO).toBe(realTarget.hp <= 0 ? target.iid : null);

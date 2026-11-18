@@ -58,7 +58,7 @@ describe('invariants hold in every state of seeded games', () => {
       expect(coverage.plays, 'no card was ever played').toBeGreaterThan(0);
       expect(coverage.spellsPlayed, 'no spell was ever played').toBeGreaterThan(0);
       expect(coverage.evolves, 'no upgrade ever evolved').toBeGreaterThan(0);
-      expect(coverage.backToHand, 'no fallen hero ever came back to the hand').toBeGreaterThan(0);
+      expect(coverage.toDeck, 'no fallen hero was ever shuffled into its deck').toBeGreaterThan(0);
       if (Object.values(mix.policies).some((p) => p !== 'heuristic')) {
         expect(coverage.heldPlays, 'no card held from an earlier turn was ever played').toBeGreaterThan(0);
         // A random seat plays onto full heroes, each time in place of a worn item it names.

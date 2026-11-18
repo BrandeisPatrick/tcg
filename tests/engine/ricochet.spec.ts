@@ -217,7 +217,7 @@ describe('A bounce that knocks a hero out', () => {
     G.players['0'].souls = 0;
     const structures = structureHp(G.players['1']);
     makeAttack(G, '0');
-    expect(bench[0].respawnTurnsLeft).toBeGreaterThan(0);
+    expect(bench[0].zone).toBe('deck');
     expect(G.players['0'].souls).toBe(killBounty(G));
     expect(G.record['0'].kills).toBe(1);
     expect(atk.exp).toBe(EXP_ON_KILL);

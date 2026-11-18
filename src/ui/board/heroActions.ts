@@ -112,7 +112,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       // Lash's Grapple: used from the bench, into an Active that can be swapped.
       if (skill?.ability.fromBench) return hero?.zone === 'bench' ? 'Cannot swap now (Rooted)' : 'Used from the bench';
       return 'No valid target';
-    case 'down': return 'Down until it respawns';
+    case 'down': return 'That hero has fallen';
     case 'noSkill': return '';
   }
 }
@@ -142,7 +142,7 @@ export function attackBlockReason(block: AttackBlock, rival?: CardInstance | nul
       return domed ? 'Their Active cannot be attacked this turn' : 'No rival Active to hit';
     }
     case 'target': return 'That hero cannot be attacked';
-    case 'noActive': return 'Down until it respawns';
+    case 'noActive': return 'No Active in the lane';
   }
 }
 
@@ -225,7 +225,7 @@ export function moveBlockReason(block: MoveBlock, cost?: number): string {
     case 'retreated': return 'One Retreat a turn';
     case 'empty': return 'There is no hero in that slot';
     case 'benchOnly': return 'That hero can only fight from the bench';
-    case 'down': return 'Down until it respawns';
+    case 'down': return 'That hero has fallen';
     case 'rooted': return 'Rooted or in The Cube: cannot retreat or be swapped';
     case 'souls': return cost === undefined ? 'Not enough souls' : `Need ${souls(cost)}`;
     case 'illegal': return 'Not a place on the board';
@@ -252,7 +252,7 @@ export function promoteBlockReason(block: PromoteBlock): string {
   switch (block) {
     case 'notOnBench': return 'That hero is not on your bench';
     case 'notOwed': return 'Your Active is still standing';
-    case 'down': return 'Down until it respawns';
+    case 'down': return 'That hero has fallen';
     case 'benchOnly': return 'That hero can only fight from the bench';
   }
 }

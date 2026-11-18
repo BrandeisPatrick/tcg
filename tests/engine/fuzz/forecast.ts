@@ -43,8 +43,10 @@ function evaluate(G: GameState, ctx: Ctx, pid: PlayerID):
   const t2 = tgt.zone === 'pit'
     ? (r.G.boss?.iid === tgt.iid ? r.G.boss : { ...tgt, hp: 0 })
     : boardOf(r.G.players[foe]).find((c) => c.iid === tgt.iid)
-      // A unit destroyed leaves the board for the discard pile: it fell.
-      ?? (isUnitCard(tgt) && r.G.players[foe].discard.some((c) => c.iid === tgt.iid) ? { ...tgt, hp: 0 } : undefined);
+      // A unit destroyed leaves the board for the discard pile, and a hero
+      // that falls for its deck (2026-11-18): it fell.
+      ?? (isUnitCard(tgt) && r.G.players[foe].discard.some((c) => c.iid === tgt.iid) ? { ...tgt, hp: 0 } : undefined)
+      ?? (!isUnitCard(tgt) && r.G.players[foe].deck.some((c) => c.iid === tgt.iid) ? { ...tgt, hp: 0 } : undefined);
   if (!t2) return { kind: 'missing' };
 
   const mismatches: Mismatch[] = [];

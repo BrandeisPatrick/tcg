@@ -46,7 +46,7 @@ import {
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
   skillChargesLeftOracle, skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
   freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
-  playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
+  playBlockedOracle, playCostOracle, pushMultiplierOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
   upgradeComponentOracle, wornItemsOf,
 } from './oracle';
@@ -376,6 +376,8 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     }
     const corpse = isRespawning(c);
     if (corpse) {
+      // A fallen hero leaves the board for its deck (2026-11-18): none stands in a slot.
+      add('corpse-state', `${c.iid}-board`, `a fallen hero stays on the board: ${label}`);
       if (c.hp !== 0) add('corpse-state', c.iid, `corpse has hp ${c.hp}: ${label}`);
       if (c.statuses.length > 0) add('corpse-state', `${c.iid}-status`, `corpse carries statuses: ${label}`);
     } else {
@@ -521,8 +523,8 @@ function freshEvents(before: GameState, after: GameState, handOver: boolean): Fx
 interface Fall { hero: CardInstance; levels: number[]; paid: boolean }
 
 /** The falls of `pid`'s heroes during a move: every hero standing before it that ends it a
- *  corpse — or off the board and in the hand (a fall with no wait, RESPAWN_TURNS 0) — and
- *  every 'revive' the move pushed for a hero standing before it (the Rejuvenator's revive
+ *  off the board and in its deck (a fall shuffles it in, 2026-11-18; a 'toDeck' event says
+ *  so) — and every 'revive' the move pushed for a hero standing before it (the Rejuvenator's revive
  *  in place) — each revive is a fall that came back. A boss's knockout hit marks one of
  *  them unpaid. */
 function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: FxEvent[]): Fall[] {
@@ -542,13 +544,17 @@ function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: 
   const now = heroesByIid(after.players[pid]);
   // A hero lifted to the hand by Lash's Death Slam (the 'toHand' event says `lifted`) did not fall.
   const lifted = new Set(fresh.filter((e) => e.kind === 'deck' && e.what === 'toHand' && e.lifted).map((e) => (e as { iid?: string }).iid));
-  const backInHand = new Map(handOf(after, pid).filter(isHeroCard).filter((h) => !lifted.has(h.iid)).map((h) => [h.iid, h]));
+  const shuffled = new Set(fresh.filter((e) => e.kind === 'deck' && e.what === 'toDeck').map((e) => (e as { iid?: string }).iid));
+  // Where a hero the stream says was shuffled in is now: its deck, or (shuffled in as the turn
+  // changed hands) already drawn into the hand. Anywhere else off the board is the
+  // 'fall-to-deck' breach, so it is looked for there too.
+  const ps1 = after.players[pid];
+  const offBoard = new Map([...deckOf(after, pid), ...handOf(after, pid), ...ps1.discard].filter(isHeroCard).filter((h) => shuffled.has(h.iid)).map((h) => [h.iid, h]));
   const out: Fall[] = [];
   for (const [iid, prev] of was) {
-    if (isRespawning(prev)) continue; // a corpse that goes back to the hand is no fall
-    const h = now.get(iid) ?? backInHand.get(iid);
+    const h = now.get(iid) ?? offBoard.get(iid);
     if (!h) continue;
-    const n = (revives.get(iid) ?? 0) + (isRespawning(h) || (!now.has(iid) && backInHand.has(iid)) ? 1 : 0);
+    const n = (revives.get(iid) ?? 0) + (!now.has(iid) && offBoard.has(iid) ? 1 : 0);
     let unpaid = bossBlows.get(iid) ?? 0;
     const levels = [...new Set([prev.level ?? 1, h.level ?? 1])];
     for (let k = 0; k < n; k++) out.push({ hero: h, levels, paid: unpaid-- <= 0 });
@@ -702,11 +708,10 @@ export function collectTransitionViolations(
     if (r1.kills - r0.kills !== paidKills) add('record-kills', pid, `P${pid}'s kills went ${r0.kills} -> ${r1.kills} after ${move.name}; ${paidKills} enemy heroes fell to it`);
   }
 
-  // A fallen hero waits RESPAWN_TURNS of its owner's turns in its slot (docs/deck-plan.md),
-  // whatever the round. A side with a live Rejuvenator spends a credit instead and the hero
-  // is back in place at full HP; a side whose credits outlast the move had none of its heroes
-  // end the move as a corpse. (An end of turn is left out: the next turn's start ticks its
-  // own timers.)
+  // A fallen hero leaves the board for its owner's deck (2026-11-18), at full HP and clean
+  // (the deck's own check). A side with a live Rejuvenator spends a credit instead and the
+  // hero is back in place at full HP; a side whose credits outlast the move had none of its
+  // heroes go to the deck.
   if (!duplicated && !handOver) {
     for (const pid of PIDS) {
       const ps0 = before.G.players[pid];
@@ -720,10 +725,9 @@ export function collectTransitionViolations(
       if (ps1.reviveCredits !== want) add('revive-spend', `${pid}-count`, `P${pid}'s revive credits ${ps0.reviveCredits} -> ${ps1.reviveCredits} after ${credited} revive(s)${took ? ' and the Mid-Boss taken' : ''}; the rules give ${want}`);
       for (const f of fallen) {
         const onBoard = heroesByIid(ps1).has(f.hero.iid);
-        if (onBoard && !isRespawning(f.hero)) continue; // revived in place
-        const timer = respawnTimerOracle(after.G, f.hero, roundOracle(before.G));
-        if (onBoard ? f.hero.respawnTurnsLeft !== timer : timer !== 0) add('respawn-timer-start', f.hero.iid, `${describeUnit(f.hero)} fell in round ${roundOracle(before.G)} and ${onBoard ? `waits ${f.hero.respawnTurnsLeft}` : 'went straight to the hand'}; the rules give a wait of ${timer}`);
-        if (live && ps0.reviveCredits - credited > 0) add('revive-owed', f.hero.iid, `${describeUnit(f.hero)} fell while P${pid} held ${ps0.reviveCredits - credited} live revive credit(s) after the others, and stayed down`);
+        if (onBoard) continue; // revived in place
+        if (![...deckOf(after.G, pid), ...handOf(after.G, pid)].some((c) => c.iid === f.hero.iid)) add('fall-to-deck', f.hero.iid, `${describeUnit(f.hero)} fell and is not in P${pid}'s deck (nor drawn from it)`);
+        if (live && ps0.reviveCredits - credited > 0) add('revive-owed', f.hero.iid, `${describeUnit(f.hero)} fell while P${pid} held ${ps0.reviveCredits - credited} live revive credit(s) after the others, and went to the deck`);
       }
     }
   }
@@ -1195,28 +1199,6 @@ export function collectTransitionViolations(
     }
   }
 
-  // The wait of a fallen hero: -1 on its owner's turn start, untouched otherwise; at 0 it
-  // leaves its slot for the hand, at full HP, clean.
-  if (!duplicated && !after.ctx.gameover) {
-    const started = newTurn ? (after.ctx.currentPlayer as PlayerID) : undefined;
-    for (const pid of PIDS) {
-      const now = heroesByIid(after.G.players[pid]);
-      for (const [iid, h0] of heroesByIid(B.players[pid])) {
-        if (!isRespawning(h0)) continue;
-        const want = started === pid ? (h0.respawnTurnsLeft ?? 0) - 1 : h0.respawnTurnsLeft ?? 0;
-        const h1 = now.get(iid);
-        if (want > 0) {
-          if (!h1 || h1.respawnTurnsLeft !== want) add('respawn-timer', iid, `${h0.cardId}#${iid} wait ${h0.respawnTurnsLeft} -> ${h1 ? h1.respawnTurnsLeft : 'off the board'} after ${move.name}; expected ${want}`);
-        } else {
-          const inHand = handOf(after.G, pid).find((c) => c.iid === iid);
-          if (h1 || !inHand || inHand.hp !== inHand.hpMax || inHand.respawnTurnsLeft !== undefined) {
-            add('respawn-timer', iid, `${h0.cardId}#${iid} should be back in P${pid}'s hand at full HP (${h1 ? `still on the board, wait ${h1.respawnTurnsLeft}` : inHand ? `hp ${inHand.hp}/${inHand.hpMax}` : 'nowhere in the hand'})`);
-          }
-        }
-      }
-    }
-  }
-
   // A new turn: the turn counter steps by one, the income lands on top of what was kept
   // (LANE_INCOME, and the second mover's bonus on its first turn), each side is paid the
   // bounty of what fell to it as the turn changed hands (an End step's pulse, a start-of-turn
@@ -1243,15 +1225,18 @@ export function collectTransitionViolations(
     if (!wantEnded.includes(after.G.players[ended].souls)) add('souls-income', `${ended}-ended`, `P${ended}'s souls went ${B.players[ended].souls} -> ${after.G.players[ended].souls} as its turn ended; its kills' bounty says ${wantEnded.join(' or ')}`);
     if (!duplicated) {
       const deck0 = deckOf(B, cur);
-      const deckIids = new Set(deck0.map((c) => c.iid));
+      // A hero that fell as the turn changed hands (an End step's pulse, a start-of-turn
+      // tick) was shuffled into the deck, with what it wore, before the draw: it may be drawn.
+      const shuffledIn = fresh.filter((e) => e.kind === 'deck' && e.pid === cur && (e.what === 'toDeck' || e.what === 'raise')).map((e) => (e as { iid?: string }).iid);
+      const deckIids = new Set([...deck0.map((c) => c.iid), ...shuffledIn]);
       const hand1 = handOf(after.G, cur);
       const drawn = hand1.filter((c) => deckIids.has(c.iid)).length;
-      const back = hand1.filter((c) => isHeroCard(c) && heroesByIid(B.players[cur]).has(c.iid)).length;
-      const room = MAX_HAND - (handOf(B, cur).length + back);
+      const back = 0;
+      const room = MAX_HAND - handOf(B, cur).length;
       // The first turn begun by the opening's choice: the deal of OPENING_DRAW came first (after
       // the seat's own lane pick left the deck), then the turn's draw.
       const opening = move.name === 'chooseActive';
-      const avail = deck0.length - (opening && !B.players[cur].active ? 1 : 0);
+      const avail = deck0.length + shuffledIn.length - (opening && !B.players[cur].active ? 1 : 0);
       const wantDrawn = Math.max(0, Math.min((opening ? OPENING_DRAW : 0) + DRAW_PER_TURN, avail, room));
       if (drawn !== wantDrawn) add('draw-per-turn', cur, `P${cur} drew ${drawn} at the start of turn ${after.G.turnNumber}; deck ${deck0.length}, hand ${handOf(B, cur).length} (+${back} back from a fall): the rules give ${wantDrawn}`);
       if (drawn > 0 && hand1.length > Math.max(MAX_HAND, handOf(B, cur).length + back)) add('hand-cap', `${cur}-draw`, `P${cur}'s hand holds ${hand1.length} after its draw (MAX_HAND ${MAX_HAND})`);

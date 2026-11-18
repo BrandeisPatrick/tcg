@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
-import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/engine/types';
+import type { AbilityId, GameState, CardId, CardInstance, DeckFx, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import {
   abilityAim, findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, promptOwed, resolveSkill, slotCap,
   stepInCandidates, ultimateCard,
 } from '@/engine/query';
 import { bankForecast } from '@/engine/bank';
-import { RESPAWN_TURNS } from '@/engine/constants';
 import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
@@ -25,6 +24,8 @@ import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { DraftOverlay } from './overlays/DraftOverlay';
 import { DeckDraftOverlay } from './overlays/DeckDraftOverlay';
+import { FALLEN_BEAT } from './board/fallenHold';
+import { useFallenHold } from './board/useFallenHold';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
@@ -209,7 +210,10 @@ export function Board(props: BoardProps<GameState>) {
   // The deck's motion (ui/motion): the batch's `deck` events as flights
   // between the deck, the hand and the discard pile, planned on this render
   // so the hand knows which cards are landing.
-  const deckMotion = useDeckMotion(freshFx, freshFxKey, G, me);
+  const deckMotion = useDeckMotion(freshFx, freshFxKey, G, me, fxTimeline.koCorpse);
+  // A fallen hero leaves the board at once (shuffled into its deck); the board
+  // draws it in its slot until its knockout has played (board/fallenHold.ts).
+  const boardG = useFallenHold(G, freshFx, freshFxKey, deckMotion.before, fxTimeline.koCorpse, deckMotion.calm);
   // The tiles' recoil channel (FxLayer / CombatChoreographer emit, HeroSlot
   // listens) and the calm-motion switch every FX primitive reads. The FX
   // stage — the canvas where sparks, bolts and debris have height — is
@@ -221,9 +225,14 @@ export function Board(props: BoardProps<GameState>) {
     [fxTimeline],
   );
   // When our Active is KO'd by a skill / spell, the promotion prompt waits for
-  // the shatter to play instead of covering it.
+  // the shatter to play instead of covering it. The fallen hero has left the
+  // board for the deck: the batch's `toDeck` names it.
+  const myFallen = freshFx.find((e): e is DeckFx => e.kind === 'deck' && e.what === 'toDeck' && e.pid === me);
   const myActiveIid = G.players[me].active?.iid;
-  const koSettleDelay = myActiveIid ? (fxTimeline.koSettle[myActiveIid] ?? 0) : 0;
+  const koSettleDelay = Math.max(
+    myActiveIid ? (fxTimeline.koSettle[myActiveIid] ?? 0) : 0,
+    myFallen?.iid ? (fxTimeline.koSettle[myFallen.iid] ?? FALLEN_BEAT) : 0,
+  );
   const pendingPromotionShown = useDelayedValue(G.pendingPromotion, koSettleDelay);
   // The first-Active prompt waits for the opening's deal (the heroes into the
   // deck, the draw) to play.
@@ -656,9 +665,11 @@ export function Board(props: BoardProps<GameState>) {
   /** A tap on a card in the hand. A hero is picked up: the free slots of
    *  your board light, and the next tap on one of them places it there (free).
    *  Equipment is armed: the heroes it may go on glow, and the next tap on one
-   *  of them puts it on for its price. A spell is armed too: the heroes it
-   *  may be played on glow, on either side; one that takes no target is
-   *  played by a second tap on the card. */
+   *  of them puts it on for its price. A spell that takes a target is armed
+   *  too: the heroes it may be played on glow, on either side. One that takes
+   *  none (Golden Goose Egg's draw, Grit's Shield on your Active) is played
+   *  by the tap itself: nothing is aimed (Patrick, 2026-11-18: "gold goose
+   *  egg should no longer target anything when played"). */
   function onTapCardInHand(c: CardInstance) {
     if (!isMyTurn || actionLocked) return;
     const data = CARDS_BY_ID[c.cardId];
@@ -667,16 +678,20 @@ export function Board(props: BoardProps<GameState>) {
     const cost = `${price} soul${price === 1 ? '' : 's'}`;
     if (data?.type === 'spell') {
       const aimed = playNeedsTarget(G, me, c.iid);
-      // The second tap on an armed spell that takes no target plays it.
-      if (!aimed && pending?.kind === 'playCard' && pending.iid === c.iid) { setPending(null); playCardOn(c.iid); return; }
-      const why = aimed ? (playTargets(G, me, c.iid).length === 0 ? 'target' : null) : playBlockedAny(G, me, c.iid);
-      if (why) { showNotice(stuckReason(c), true); return; }
+      if (!aimed) {
+        if (playBlockedAny(G, me, c.iid)) { showNotice(stuckReason(c), true); return; }
+        setPending(null);
+        setPreview(null);
+        playCardOn(c.iid);
+        return;
+      }
+      if (playTargets(G, me, c.iid).length === 0) { showNotice(stuckReason(c), true); return; }
       setPreview(null);
       setPending({
         kind: 'playCard', iid: c.iid,
         title: data.name,
         desc: `${cost} — ${plainText(data.text) || 'a spell'}`,
-        filter: aimed ? getAbility(data.abilities[0])?.target ?? 'anyBoard' : 'noTarget',
+        filter: getAbility(data.abilities[0])?.target ?? 'anyBoard',
       });
       return;
     }
@@ -870,6 +885,10 @@ export function Board(props: BoardProps<GameState>) {
 
   const youPs = G.players[me];
   const oppPs = G.players[opp];
+  // The slots as the board draws them: a fallen hero still in its slot while
+  // its knockout plays.
+  const youSlots = boardG.players[me];
+  const oppSlots = boardG.players[opp];
   // The dial's beat word: Battle while an attack is walked, Prepare otherwise.
   const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
 
@@ -1028,7 +1047,7 @@ export function Board(props: BoardProps<GameState>) {
                 souls
               />
               <BenchRow
-                ps={oppPs}
+                ps={oppSlots}
                 owner={opp} myId={me}
                 isOpponent
                 pending={pending}
@@ -1039,7 +1058,7 @@ export function Board(props: BoardProps<GameState>) {
                 registerSlotRef={registerSlotRef}
               />
               <ActiveDuel
-                G={G}
+                G={boardG}
                 me={me}
                 opp={opp}
                 isMyTurn={isMyTurn}
@@ -1056,7 +1075,7 @@ export function Board(props: BoardProps<GameState>) {
                 onTapLane={() => placeAt(0)}
               />
               <BenchRow
-                ps={youPs}
+                ps={youSlots}
                 owner={me} myId={me}
                 isOpponent={false}
                 pending={pending}
@@ -1150,8 +1169,7 @@ export function Board(props: BoardProps<GameState>) {
               desc={pending.desc}
               filter={pending.filter}
               chip={pending.kind === 'placeHero' ? 'Spot' : undefined}
-              hint={pending.kind === 'placeHero' ? 'tap a lit slot, or the card again to put it back'
-                : pending.kind === 'playCard' && pending.filter === 'noTarget' ? 'tap the card again to play it' : undefined}
+              hint={pending.kind === 'placeHero' ? 'tap a lit slot, or the card again to put it back' : undefined}
               onCancel={() => setPending(null)}
               // Sit above the hand's fan, not on its cards.
               dockAbove={handRowRef}
@@ -1293,8 +1311,8 @@ export function Board(props: BoardProps<GameState>) {
         {/* A card onto a full hero: which worn item it replaces. */}
         {replacePick.element}
 
-        {/* Promotion prompt: opens when our Active is a corpse and we have at
-            least one alive bench hero who can step up. Blocks board input
+        {/* Promotion prompt: opens when our Active has fallen (its slot is
+            empty) and we have at least one bench hero who can step up. Blocks board input
             until a choice is made. */}
         <AnimatePresence>
           {(() => {
@@ -1308,13 +1326,14 @@ export function Board(props: BoardProps<GameState>) {
             // The lane left empty by a ride (Rem's Tag Along from the lane): the
             // same choice, said as what it is.
             const ride = ps.active ? undefined : laneRide(G, me);
+            // Else by a fall: the hero last shuffled into our deck.
+            const fell = [...G.fx].reverse().find((e): e is DeckFx => e.kind === 'deck' && e.what === 'toDeck' && e.pid === me);
             return (
               <PromotionOverlay
                 key="promotion"
                 candidates={candidates}
                 leavingName={ride ? CARDS_BY_ID[ride.rider.cardId]?.name ?? 'Your Active'
-                  : ps.active ? CARDS_BY_ID[ps.active.cardId]?.name ?? 'Your Active' : 'Your Active'}
-                backIn={ps.active ? RESPAWN_TURNS : 0}
+                  : fell?.cardId ? CARDS_BY_ID[fell.cardId]?.name ?? 'Your Active' : 'Your Active'}
                 ride={ride ? { bearerName: CARDS_BY_ID[ride.bearer.cardId]?.name ?? 'an ally' } : undefined}
                 onPick={(iid) => (moves as any).promoteToActive(iid)}
               />
