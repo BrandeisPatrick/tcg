@@ -32,7 +32,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { configureReadyMatch, flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, playNew } from '../_helpers';
 import { forecastMismatches } from './forecast';
 import { everyCard } from './oracle';
-import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 beforeAll(configureReadyMatch);
 
@@ -693,6 +693,9 @@ describe('E8 an item that comes off takes its bonus with it', () => {
   it('E8b an upgrade takes its component\'s bonus away and brings its own', () => {
     const G = game();
     const hero = G.players['0'].active!;
+    // At the cap, so the four first wearings' exp (+1 each, a level at 3 since 2026-11-18)
+    // add no level's growth: what is checked is the items' own bonuses.
+    hero.level = MAX_LEVEL; hero.exp = 0;
     const { atkMod, spiritMod, hpMax } = hero;
     playNew(G, '0', 'extended_magazine', hero);  // +1 attack
     playNew(G, '0', 'titanic_magazine', hero);   // +2 attack, over Extended Magazine
@@ -701,7 +704,7 @@ describe('E8 an item that comes off takes its bonus with it', () => {
     playNew(G, '0', 'improved_spirit', hero);    // +2 spirit, over Extra Spirit
     expect(wornItems(hero).map((it) => it.cardId)).toEqual(['titanic_magazine', 'improved_spirit']);
     expect([hero.atkMod, hero.spiritMod, hero.hpMax]).toEqual([atkMod + 2, spiritMod + 2, hpMax]);
-    // (a fifth first wearing would level the hero up: Boundless Spirit on a fresh board)
+    // (Boundless Spirit on a fresh board: one first wearing, short of a level)
     const H = game();
     const bearer = H.players['0'].active!;
     giveItem(H, bearer, 'improved_spirit');      // +2 spirit

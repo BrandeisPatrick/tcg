@@ -169,7 +169,9 @@ Shredder → Spirit Rend on Mirage make their swings cut Spirit Resist, so Kelvi
 and Mirage's Djinn's Mark burst (it cashes three swings for {sp:6}) land harder.
 Mirage's Retreat 0 gives the side two gun swings a turn: Mirage swings and steps out, Haze
 steps in and swings. A narrow bench suits the exp rule of the same day (the bench shares 1):
-Kelvin, the one bench caster, takes it every turn the third hero is in hand. Extra Spirit ×2
+Kelvin, the one bench caster, takes it every turn the third hero is in hand.
+(Since 2026-11-18 a random hero of the board takes the turn's exp, balance-model.md §15:
+a narrow board still levels faster.) Extra Spirit ×2
 (the grenade counts Spirit twice), Extra Health ×2, Knockdown, the draw cards. 16 cards, 28 souls,
 two payoffs (Alchemical Fire, Spirit Rend). It is the one deck that repeats heroes: Haze is
 Spray's and Kelvin Storm's, and Mirage, the one hero no archetype seated, gets a home.

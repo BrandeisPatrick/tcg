@@ -1,10 +1,10 @@
 /**
  * Hero leveling. Heroes start at Lv1 and climb to the cap (the numbers are in
- * constants.ts). Exp comes from the lane: at the end of its owner's turn the
- * Active earns its own, and the bench shares one smaller pot, which goes to
- * the bench hero furthest behind (`benchExpTaker`, Patrick 2026-11-17: a wide
- * board splits the lane's exp, a soft cost for flooding it). Attaching
- * equipment and landing a kill blow earn more still. It persists across respawn. Each level adds the
+ * constants.ts). At the end of its owner's turn a side earns one point, and it
+ * goes to one of its heroes on the board picked at random (`turnExpTaker`,
+ * Patrick 2026-11-18: "+1 randomly for heroes on board"), so a wide board
+ * spreads it thin. Attaching equipment and landing a kill blow earn more. It
+ * stays on the card through a fall. Each level adds the
  * hero's own `growth` (docs/hero-design.md §2). A hero that reaches
  * ULT_UNLOCK_LEVEL has unlocked its ultimate, the button on its card
  * (legality's `skillBlocked` reads the level); the log says so.
@@ -13,6 +13,7 @@ import type { CardInstance, GameState, PlayerState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
+import { nextRandom } from './deck';
 import { isRespawning, ultimateCard } from './query';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL, ULT_UNLOCK_LEVEL } from './constants';
 
@@ -75,15 +76,13 @@ function canEarnExp(card: CardInstance): boolean {
   return card.hp > 0 && !isRespawning(card) && (card.level ?? START_LEVEL) < MAX_LEVEL;
 }
 
-/** The bench hero that takes the bench's share of the turn's exp: the one that
- *  has earned the least in all, the leftmost on a tie; none if no bench hero
- *  can earn. A bench of one gets it every turn; a bench of three, each one
- *  turn in three. */
-export function benchExpTaker(ps: PlayerState): CardInstance | undefined {
-  let taker: CardInstance | undefined;
-  for (const c of ps.bench) {
-    if (!c || !canEarnExp(c)) continue;
-    if (!taker || totalExp(c) < totalExp(taker)) taker = c;
-  }
-  return taker;
+/** The hero that takes the turn's exp: one of `ps`'s heroes on the board
+ *  (Active or bench) that can still earn, picked at random with the match's
+ *  seeded dice; none if no hero can earn. A lone hero takes it every turn
+ *  without a roll; a board of three, each about one turn in three. A hero at
+ *  the cap, a fallen one and a unit are never picked, so the point is not lost. */
+export function turnExpTaker(G: GameState, ps: PlayerState): CardInstance | undefined {
+  const pool = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && canEarnExp(c));
+  if (pool.length <= 1) return pool[0];
+  return pool[Math.floor(nextRandom(G) * pool.length)];
 }

@@ -50,9 +50,9 @@ export function BoardTab() {
 
         <Section title="Hero level rings" aside="stages 1 to 4">
           <Caption>
-            The progress ring on the portrait. It ticks up as the hero earns exp: at the end of a turn (two
-            for the Active, one on the bench), when equipment is attached, on a killing blow. Level 3 unlocks
-            the hero&apos;s ultimate on its sheet.
+            The progress ring on the portrait. It ticks up as the hero earns exp: at the end of a turn (one
+            point, to a hero of that side picked at random), when equipment is attached, on a killing blow.
+            Level 3 unlocks the hero&apos;s ultimate on its sheet.
           </Caption>
           <Grid min={104} gap={8}>
             {RINGS.map((r, i) => (

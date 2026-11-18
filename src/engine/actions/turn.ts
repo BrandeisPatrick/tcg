@@ -19,12 +19,12 @@ import { laneIncome } from '../bank';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { fireTriggers, type Trigger } from '../triggers';
-import { benchExpTaker, grantExp } from '../expSystem';
+import { grantExp, turnExpTaker } from '../expSystem';
 import { damageUnit } from '../damage';
 import { lapseRevives, pushStructures, riseBoss } from '../map';
 import { drawCards, heroToHand } from '../deck';
 import {
-  BOSS_RETALIATION, DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, ROUND_CAP,
+  BOSS_RETALIATION, DRAW_PER_TURN, EXP_PER_TURN, ROUND_CAP,
 } from '../constants';
 
 /** Fire a turn-edge trigger for every living hero of `pid`: the hero's own
@@ -106,15 +106,12 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   pushIntoEmptyLane(G, pid);
   // The Mid-Boss hits back at the hero that attacked it this turn.
   bossStrikesBack(G, pid);
-  // Hero leveling: the lane is where a hero grows. The Active earns its own
-  // for standing the turn; the bench shares one smaller pot, which goes to the
-  // bench hero furthest behind (Patrick, 2026-11-17: a wide board splits it).
-  // (A hero whose fall waits on a trigger prompt — felled in this End step —
-  // stood no turn.)
+  // Hero leveling: the side's turn pays one point of exp to one of its heroes
+  // on the board, picked at random (Patrick, 2026-11-18). (A hero whose fall
+  // waits on a trigger prompt — felled in this End step — is not picked.)
   const ps = G.players[pid];
-  if (ps.active && !isRespawning(ps.active) && heroData(ps.active) && ps.active.hp > 0) grantExp(G, ps.active, EXP_PER_TURN_ACTIVE);
-  const benchTaker = benchExpTaker(ps);
-  if (benchTaker) grantExp(G, benchTaker, EXP_PER_TURN_BENCH);
+  const expTaker = turnExpTaker(G, ps);
+  if (expTaker) grantExp(G, expTaker, EXP_PER_TURN);
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);
