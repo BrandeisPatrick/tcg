@@ -36,7 +36,7 @@ describe('the deck draft screen', () => {
     expect(html).toContain('Made for Haze, Mirage and Kelvin');
     expect(html).toContain(picked.blurb.replace(/'/g, '&#x27;'));
     expect(html).toMatch(/Bullet Resist Shredder<\/span><span[^>]*>×3</); // Crossfire's three, counted
-    expect(html).toContain('aria-label="5 Weapon · 11 Spirit · 0 Vitality"');
+    expect(html).toContain('aria-label="4 Weapon · 10 Spirit · 2 Vitality"');
     // The other decks' items wait for their card to be picked.
     expect(html).not.toContain(offers[1].blurb.replace(/'/g, '&#x27;'));
   });

@@ -47,6 +47,24 @@ is the artifact "Deck Archetype Map".
   second Egg is a turn off its own clock (§13).
 - **An upgrade beside its component**, **a counter** (Knockdown, Debuff Reducer, Counterspell
   or Dispel Magic), **at most 8 spells**, listed by tier.
+- **A base health item, Extra Health ×2 at least** (Patrick, 2026-11-18: "all deck should have
+  some base health item, it is kinda the necessity for deck I think"). By the budget it is
+  the cheapest staying power in the pool: [card-design.md](card-design.md) §3 values Extra
+  Health at 11.2 points for 1 soul (+2 HP is its smallest step, so it is left over its T1
+  budget of 2). The deck of the heroes' builds opens with the same two (`BASE_HEALTH`,
+  cards/decks.ts).
+
+  The five decks that had none each gave up two cards for it, each the least central 1- or
+  2-soul card of its plan, so no deck went over 28 souls:
+  - **Headshot** (27 souls): Restorative Shot and one of two Extended Magazines. The Magazine left
+    is still Titanic Magazine's component.
+  - **Spray** (28): Restorative Shot and one of three Extended Magazines.
+  - **Nuke** (26): Spirit Lifesteal and one of two Mystic Vulnerabilities. Infuser still heals off
+    the nukes, and Lady Geist, who pays HP for Essence Bomb, wants the HP most.
+  - **Storm** (27): one of four Extra Spirits and one of two Mystic Vulnerabilities.
+  - **Crossfire** (28): one of three Extra Spirits and one of two Extended Magazines.
+
+  Lockdown (×4), Graveyard (×4) and Aurora (×3) already carried it.
 
 | Deck | Archetype | Squad (first Active first) | Payoffs |
 |---|---|---|---|
@@ -65,28 +83,28 @@ state of its HP: Headshot Booster ×4 (+2 at full HP), Opening Rounds ×2 (+2 ab
 Drifter's Bloodscent (+2 below half). Headhunter evolves the Booster; Express Shot fires again
 while the target is above half. Kinetic Dash and Vindicta's free Retreat make the second
 swing land hard; Extra Stamina, its component since 2026-11-17, gives that Retreat back (it was
-Kinetic Dash ×2). Extended Magazine ×2 → Titanic Magazine, Restorative Shot, Knockdown, the Egg.
+Kinetic Dash ×2). Extended Magazine → Titanic Magazine, Extra Health ×2, Knockdown, the Egg.
 
 **Spray** (Warden, Haze, Silver). Every swing hits every enemy. Split Shot ×4 (Ricochet 2 this
 turn, 2 souls) carries the swing's on-hit debuffs to all; Stalker ×2 makes each of them Bleed
 and lose Bullet Resist; Tesla Bullets chains to the bench. Warden holds the lane; Haze's Bullet
-Dance is the finish. Extended Magazine ×3 → Titanic Magazine, Extra Stamina → Kinetic Dash
-(2026-11-17: Kinetic Dash is built from it; a fourth Magazine made room), Restorative Shot,
+Dance is the finish. Extended Magazine ×2 → Titanic Magazine, Extra Stamina → Kinetic Dash
+(2026-11-17: Kinetic Dash is built from it; a fourth Magazine made room), Extra Health ×2,
 Knockdown, the Egg.
 
 **Nuke** (Lady Geist, Shiv, Yamato). Every skill is a kill shot: Essence Bomb, Serrated Knives
 (Shiv's Killing Blow knocks out what is below half), Flying Slash at any enemy. Mystic Burst ×3
-→ Tankbuster add to each cast; Mystic Vulnerability ×2 lowers Spirit Resist; Echo Shard ×2
+→ Tankbuster add to each cast; Echo Shard ×2
 casts a skill again for 1 soul; Infuser makes the nukes heal their caster (Lady Geist pays HP
-for hers). Extra Spirit ×2 → Improved Spirit ×2 (a skill counts Spirit twice), Spirit
-Lifesteal, Knockdown, the Egg.
+for hers). Mystic Vulnerability lowers Spirit Resist. Extra Spirit ×2 → Improved Spirit ×2 (a
+skill counts Spirit twice), Extra Health ×2, Knockdown, the Egg.
 
 **Storm** (Kelvin, Lash, Seven). One-target skills the range items widen: Frost Grenade (3✦ on the Active since 2026-11-17, and Kelvin heals as much). Lash (since 2026-11-17)
 swings, slips out and Grapples back in for a second swing with 3✦ more, and on him Greater Expansion
 makes Death Slam lift the whole enemy side back to the hand. Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion ×2
-first, a neighbour's 1). Mystic Vulnerability ×2 and Mystic Slow land on everything an area
-skill hits; Torment Pulse chips two a turn. Extra Spirit ×4 → Improved Spirit ×2, Extra Charge
-for Kelvin's grenade, Knockdown, the Egg.
+first, a neighbour's 1). Mystic Vulnerability and Mystic Slow land on everything an area
+skill hits; Torment Pulse chips two a turn. Extra Spirit ×3 → Improved Spirit ×2, Extra Charge
+for Kelvin's grenade, Extra Health ×2, Knockdown, the Egg.
 
 **Lockdown** (Mo & Krill, Sinclair, Viscous). The rival does not get to play: Knockdown ×2,
 Disarming Hex (from Rusted Barrel), Slowing Hex, Silence Wave (no spells for 2 turns), the
@@ -116,8 +134,8 @@ Shredder → Spirit Rend on Mirage make their swings cut Spirit Resist, so Kelvi
 Cold Front and Mirage's Djinn's Mark burst (it cashes three swings for {sp:6}) land harder.
 Mirage's Retreat 0 gives the side two gun swings a turn: Mirage swings and steps out, Haze
 steps in and swings. A narrow bench suits the exp rule of the same day (the bench shares 1):
-Kelvin, the one bench caster, takes it every turn the third hero is in hand. Extra Spirit ×3
-(the grenade counts Spirit twice), Extended Magazine ×2, Knockdown, the Egg. 16 cards, 28 souls,
+Kelvin, the one bench caster, takes it every turn the third hero is in hand. Extra Spirit ×2
+(the grenade counts Spirit twice), Extended Magazine, Extra Health ×2, Knockdown, the Egg. 16 cards, 28 souls,
 two payoffs (Alchemical Fire, Spirit Rend). It is the one deck that repeats heroes: Haze is
 Spray's and Kelvin Storm's, and Mirage, the one hero no archetype seated, gets a home.
 
