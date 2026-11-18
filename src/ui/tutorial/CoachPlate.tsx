@@ -164,11 +164,22 @@ export function CoachPlate({ G, me, isMyTurn, targeting, placing = false, attack
   // The heading is the tap the step is; while the rival moves or the move is
   // out of reach it says that instead, so it never names a tap that cannot
   // be made.
+  // A step that has landed keeps the words it was asked in: the board they
+  // describe has moved on (its target may be gone), and read again there they
+  // come out wrong ("Tap Warden", "the rival is lit") for the beat before the
+  // next step.
+  const asked = useRef<{ step: number; title: string; body: string } | null>(null);
+  if (!done && !waitText && !blocked && !complete) {
+    asked.current = { step, title: pick(current.title, view), body: pick(current.body, view) };
+  }
+  const kept = !done && complete && asked.current?.step === step ? asked.current : null;
   const titleText = done ? 'You learned'
+    : kept ? kept.title
     : waitText ? "Rival's turn"
     : blocked ? 'Not yet'
     : pick(current.title, view);
   const bodyText = done ? ''
+    : kept ? kept.body
     : waitText ? waitText
     : blocked ? pick(current.blocked ?? current.body, view)
     : pick(current.body, view);

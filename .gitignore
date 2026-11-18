@@ -31,3 +31,7 @@ sim-reports/
 # Frames written by the scripts/qa animation harness
 *-shots/
 __pycache__/
+
+# The trailer and its frames (scripts/film/shoot-all.sh): made, not kept
+film-takes/
+deadlock-tcg-trailer.mp4

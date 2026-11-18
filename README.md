@@ -420,6 +420,15 @@ the app's own `?share=1` page by `node scripts/art/bake_link_preview.mjs`
 (against the dev server). [`docs/sharing.md`](./docs/sharing.md), "The link
 preview", says what is on it and how to change it.
 
+## The trailer
+
+`scripts/film/` films a 56-second trailer off the running game, frame by
+frame on its virtual clock: the draft, the deck draft, a whole match on Auto,
+a tutorial lesson and three quick looks. `sh scripts/film/shoot-all.sh`
+(against the dev server; it needs Playwright and ffmpeg, which are not
+dependencies of the repo) writes `deadlock-tcg-trailer.mp4`.
+[`docs/sharing.md`](./docs/sharing.md), "The video", lists its shots.
+
 ## Architecture
 
 ```
