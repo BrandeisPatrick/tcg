@@ -73,7 +73,8 @@ function nextTurn(G: GameState, pid: PlayerID): PlayerID {
 }
 
 /** The seeds the drafted-match test looks through for one whose match reaches Victor's prompt. */
-const PROMPT_SEEDS = Array.from({ length: 32 }, (_, i) => 9 + i); // 9..40
+// Seed 44 since the base health item went into every deck (2026-11-18).
+const PROMPT_SEEDS = Array.from({ length: 81 }, (_, i) => 40 + i); // 40..120
 
 describe('trigger prompts: asked only when the trigger can be used', () => {
   it('nothing usable — below Level 2, a damage short, its side\'s ultimate of the turn used, still waiting — asks nothing, and the fall goes ahead', () => {
@@ -382,7 +383,7 @@ describe('the charged lines print on their own, under the effect', () => {
     expect(ultimateCard(VICTOR_ULT)!.charged).toEqual({ need: 10, by: 'taken', text: 'Ready once Victor has taken 10 damage.' });
     expect(ultimateCard(SILVER_ULT)!.charged).toEqual({ need: 8, by: 'dealt', text: 'Ready once Silver has dealt 8 damage.' });
     expect(ultimateCard(VICTOR_ULT)!.text).toBe('Falling, Victor may revive at half HP and deal {sp:1} spirit damage to every enemy.');
-    expect(ultimateCard(SILVER_ULT)!.text).toBe('Silver turns into a wolf for 2 turns: +{bp:1/2} Attack and Shield 6.');
+    expect(ultimateCard(SILVER_ULT)!.text).toBe('Silver turns into a wolf for 2 turns: +{bp:1/2} Bullet Power and Shield 6.');
   });
 });
 

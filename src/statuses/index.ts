@@ -96,7 +96,7 @@ export const STATUSES: StatusDef[] = [
   // Wolf form (Silver's Lycan Curse): the form itself. The +3 Attack it comes
   // with is a Bullet Power status beside it, for as long; its Shield is a
   // Shield. Her card shows Deadlock's wolf-form art while it lasts.
-  { id: 'wolf_form',     title: 'Wolf form',     desc: 'Turned into a wolf (Lycan Curse): +3 Attack while it lasts; the card shows the wolf.', hvalue: 1, form: { hero: 'hero_silver', art: 'hero_silver_wolf_card.webp' } },
+  { id: 'wolf_form',     title: 'Wolf form',     desc: 'Turned into a wolf (Lycan Curse): +3 Bullet Power while it lasts; the card shows the wolf.', hvalue: 1, form: { hero: 'hero_silver', art: 'hero_silver_wolf_card.webp' } },
 
   // Counterspell (docs/card-design.md, "Counters"): a magic shield the
   // Counterspell spell puts on a hero. The next enemy card played on the

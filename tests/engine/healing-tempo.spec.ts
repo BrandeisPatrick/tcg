@@ -56,7 +56,7 @@ describe('Rejuvenating Aurora', () => {
 
   it('is Deadlock\'s own name, and the card says the heal grows with Spirit', () => {
     const skill = getAbility('skill_dynamo') as { name?: string; text?: string; charges?: number };
-    expect([skill.name, skill.text, skill.charges]).toEqual(['Rejuvenating Aurora', 'Your heroes heal {sp:5} each and get +1 Attack for 2 turns.', undefined]);
+    expect([skill.name, skill.text, skill.charges]).toEqual(['Rejuvenating Aurora', 'Your heroes heal {sp:5} each and get +1 Bullet Power for 2 turns.', undefined]);
   });
 });
 

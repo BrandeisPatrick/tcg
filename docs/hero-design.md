@@ -116,7 +116,7 @@ One soul bought about one point of effect, the rate items were priced at; since 
   - It is ready once he has taken 10 damage: "When Victor falls, you may use this: he revives where he is with half HP."
   - His Aura of Suffering deals 1 spirit damage to Victor too, so it charges the ultimate.
   - Patrick first wanted it passive and free. He changed his mind: it should cost a lot (20 souls) and get cheaper as Victor takes damage. On 2026-11-15 ultimates stopped costing souls, so the damage alone charges it: 10, half the old price.
-- **Silver:** her ultimate, Lycan Curse, is charged. It is ready once she has dealt 8 damage (until 2026-11-15: 16 souls, 1 less for each damage she dealt): "Silver turns into a wolf for 2 turns: +3 Attack and Shield 6."
+- **Silver:** her ultimate, Lycan Curse, is charged. It is ready once she has dealt 8 damage (until 2026-11-15: 16 souls, 1 less for each damage she dealt): "Silver turns into a wolf for 2 turns: +3 Bullet Power and Shield 6."
   - While she is a wolf, her card shows her wolf-form art. That is Deadlock's own wolf-form hero card, from the deadlock-api (`images/heroes/werewolf_wolf_card.webp`), not new art.
   - The Lycan Curse icon (`werewolf_lycancurse.webp`) is her ultimate icon, not her wolf art.
   - In Deadlock, dealing damage builds her bloodlust toward the transformation, so this matches the real game.
@@ -277,7 +277,7 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
 **Silver** — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 - Skill, waits 3 — **Boot Kick**: Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns.
-- Charged ultimate, medium, 8 damage dealt — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: +3 Attack and Shield 6. *Ready once Silver has dealt 8 damage.*
+- Charged ultimate, medium, 8 damage dealt — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: +3 Bullet Power and Shield 6. *Ready once Silver has dealt 8 damage.*
 - Why: She kick-marks one target and shotguns it; the more she hurts the enemy, the sooner she turns wolf for a shielded melee burst.
 
 
@@ -410,7 +410,7 @@ HP 4 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +2 Spirit
 **Yamato** · in the game today — peaks mid, one target; mix tank 1 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
 - Skill, waits 3 — **Flying Slash**: Deal 2✦ spirit damage to any enemy, bench too.
-- Ultimate, medium, waits 6 — **Shadow Transformation**: For 2 turns: +3 Attack and Unstoppable.
+- Ultimate, medium, waits 6 — **Shadow Transformation**: For 2 turns: +3 Bullet Power and Unstoppable.
 - Why: Yamato grapples onto whoever retreats to the back and is nearly impossible to kill or lock down while transformed.
 - Changed from today: HP 6 to 5 (tank 1). Her skill becomes Flying Slash at 2✦ melee for 2 souls (was 1✦). Shadow Transformation drops the heal 5 and gives 2 turns of +3 Attack and Unstoppable.
 
@@ -465,7 +465,7 @@ HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
 
 **Paige** · in the game today — peaks early, many targets; mix tank 0 · damage 1 · control 1 · support 3  
 HP 5 · Attack 1 · Retreat 1 · per level +2 Spirit
-- Skill, waits 3 — **Plot Armor**: Give one of your heroes Shield 2✦ and +1 Attack for 2 turns.
+- Skill, waits 3 — **Plot Armor**: Give one of your heroes Shield 2✦ and +1 Bullet Power for 2 turns.
 - Ultimate, medium, waits 6 — **Rallying Charge**: Heal your heroes 3✦. Deal 2✦ spirit damage to every enemy.
 - Why: Paige is the safe backline support who shields her carry and boosts its gun, and her knights heal the team and hit every enemy from anywhere.
 - Changed from today: Attack 2 to 1 and HP 4 to 5 (spirit support, early +1 on HP); Plot Armor's real gun boost replaces bullet resist. Rallying Charge trimmed from heal 4 and 4✦ to 3✦ and 2✦, so it fits medium for a damage-1 hero.
@@ -938,7 +938,7 @@ Power is its Attack, counted once; `{bp:1/2}` is 1 + half of it. The nine that w
 |---|---|---|---|
 | Silver: Boot Kick | 1 bullet, waits 3 | {bp:1/2} bullet, waits 4 | 2 at her Attack 2 + Vulnerable 2 turns (2) = 4, a wait-4 skill's band |
 | Warden: Willpower | Shield 2 | Shield {sp:2} | Deadlock's Willpower is a spirit shield; it grows with spirit items |
-| Wraith: Full Auto | +2 Attack | +{sp:2} Attack | Deadlock's Full Auto is spirit; his build is spirit items, so he spikes late with gear |
+| Wraith: Full Auto | +2 Attack | +{sp:2} Bullet Power | Deadlock's Full Auto is spirit; his build is spirit items, so he spikes late with gear |
 | Sinclair: Rabbit Hex | no number | {sp:1} spirit damage and the Rabbit, waits 4 | as above |
 | Abrams: Infernal Resilience | heals 1 | heals {sp:1} | grows with spirit items |
 | Haze: Fixation | +1 | +{bp:1/2} | 1 at Level 1, 3 at Level 2, 4 at Level 3: a late carry's curve |
@@ -946,7 +946,9 @@ Power is its Attack, counted once; `{bp:1/2}` is 1 + half of it. The nine that w
 | Victor: Aura of Suffering | 1 to each enemy | {sp:1/2} to each enemy, 1 to Victor | it hits every enemy, so Spirit counts once; his Spirit growth is back |
 | Lash: Grapple | no number | unchanged | its payoff is an attack (Bullet Power) and Ground Strike's {sp:3} |
 
-Riders stay flat where the main number scales (Paige's and Dynamo's +1 Attack, Shiv's Bleed 1).
+Riders stay flat where the main number scales (Paige's and Dynamo's +1 Bullet Power, Shiv's Bleed 1).
+
+The stat a buff raises is printed **Bullet Power** (Patrick, 2026-11-18: "here should be 2 bullet power, and 2 scales with spirit like we designed"): "+{sp:2} Bullet Power", never "+2 Attack". It is the same number as a hero's Attack, the bullet damage of its swing.
 
 **Ultimates too** (Patrick, 2026-11-17: "yep"). An ultimate counts Spirit once, so {sp:N} is N + Spirit.
 Where the main effect is control with no number, the scaling rides beside it; the ability's `base`
@@ -956,9 +958,9 @@ stays that control's worth to the AI.
 |---|---|---|---|
 | Haze: Bullet Dance | "Haze's Attack" | {bp:0}: her Attack, printed | unchanged, now marked |
 | Rem: Naptime | Sleep 2 turns | {sp:2} spirit damage, then Sleep 2 turns | small: 4 + 2 = 6, the band's top |
-| Yamato: Shadow Transformation | +3 Attack | +{sp:3} Attack | medium; grows with her Spirit |
+| Yamato: Shadow Transformation | +3 Attack | +{sp:3} Bullet Power | medium; grows with her Spirit |
 | Mirage: Traveler | Shield 2 each | Shield {sp:2} each | small |
-| Silver: Lycan Curse | +3 Attack | +{bp:1/2} Attack | 3 at her Level-3 Attack 4, as before; grows with her gun |
+| Silver: Lycan Curse | +3 Attack | +{bp:1/2} Bullet Power | 3 at her Level-3 Attack 4, as before; grows with her gun |
 | Victor: Shocking Reanimation | revive at half HP | revive at half HP and {sp:1} spirit damage to every enemy | Deadlock's revive shocks the area; about 10 + 2.5, the top of medium |
 | Lash: Death Slam | lift to hand, items to deck | the same, and every other enemy takes {sp:1} | about 15, inside large (12–18) |
 | Graves: Borrowed Decree | a Ghoul a turn | {sp:1/2} Ghouls a turn (1 + half his Spirit) | 3 a turn at Level 3: the mill grows with him |

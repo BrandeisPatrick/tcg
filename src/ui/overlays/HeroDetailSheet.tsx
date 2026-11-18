@@ -33,6 +33,7 @@ import { LEVEL_THRESHOLDS, MAX_LEVEL, SKILL_SPIRIT_RATE, ULT_UNLOCK_LEVEL } from
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { ATTACK_ICON_SRC, skillIconSrc, ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
+import { SpiritIcon, SwordIcon } from '../card/Icons';
 import { SpikeMark } from '../board/SpikeMark';
 import { kitTag, skillPace, ultPace } from '../board/heroActions';
 import { CATEGORY_WORD } from '../shop/itemFacts';
@@ -552,6 +553,25 @@ export function HeroDetailSheet({
             </div>
           </div>
 
+          {/* POWER — the two numbers the kit and the gun scale with (Patrick,
+              2026-11-18: "we need to show bullet power and spirit power"), in
+              the inks the rules print them in: brown bullet, plum spirit. */}
+          {!infoOpen && (
+            <div data-hero-power role="group" aria-label={`Bullet Power ${effectiveAtk(card)}, Spirit Power ${effectiveSpirit(card)}`}
+              style={{ display: 'flex', gap: 8 }}>
+              <PowerStat
+                icon={<SwordIcon size={15} color={poster.stat.bullet} />}
+                value={effectiveAtk(card)} label="Bullet Power" color={poster.stat.bullet}
+                mark={hasSpike(card, 'weapon') ? <SpikeMark slot="weapon" size={12} /> : undefined}
+              />
+              <PowerStat
+                icon={<SpiritIcon size={15} color={poster.stat.spirit} />}
+                value={effectiveSpirit(card)} label="Spirit Power" color={poster.stat.spirit}
+                mark={hasSpike(card, 'spirit') ? <SpikeMark slot="spirit" size={12} /> : undefined}
+              />
+            </div>
+          )}
+
           {/* STRIP — worn items and statuses, one row; a tap explains one
               over the sheet. */}
           {tiles.length > 0 && !infoOpen && (
@@ -942,6 +962,21 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
           })}
         </>
       )}
+    </div>
+  );
+}
+
+/** One of the header's two powers: its mark, the number in its ink, its name. */
+function PowerStat({ icon, value, label, color, mark }: { icon: ReactNode; value: number; label: string; color: string; mark?: ReactNode }) {
+  return (
+    <div aria-hidden style={{
+      ...plateStyle, flex: 1, minWidth: 0, boxSizing: 'border-box',
+      display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px',
+    }}>
+      <span style={{ lineHeight: 0, flexShrink: 0 }}>{icon}</span>
+      <span style={{ ...NUMBER(T.title), color }}>{value}</span>
+      {mark}
+      <span style={{ ...CAPTION, ...ONE_LINE, color: poster.inkSoft, fontWeight: 700 }}>{label}</span>
     </div>
   );
 }
