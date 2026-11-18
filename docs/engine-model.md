@@ -90,7 +90,10 @@ each side dealt OPENING_DRAW, and the draft's turn ended so turn 1 opens on a
 dealt board. A scripted match (a Story fight, a lesson) keeps its rosters on
 the board and deals from a deck of items (`dealOpeningHand`, with the Pocket
 hero guarantee; `StorySetup` may name the decks, top first, and the opening
-hand's size).
+hand's size). A lesson may also open a hero at a level, with the growth of
+the levels under it (`openAtLevel`, no log line and no motion), and wearing
+items (`HeroStatOverride.level`, `.worn`): the Level Up and Fallen Hero
+lessons start that way.
 
 **Income and the draw.** Souls accumulate: nothing refills and nothing is lost
 at the end of a turn. At the start of every own turn (the first included) the

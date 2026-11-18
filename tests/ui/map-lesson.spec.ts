@@ -11,8 +11,8 @@ import type { GameState } from '@/engine/types';
 import { LESSONS, LESSON_KIT, TURN_BUTTON, emptySeen, lessonById, type CoachView } from '@/tutorial/lessons';
 import { mapLesson } from '@/tutorial/mapLesson';
 
-// Lesson 5, The Map, is staged to be won in one turn of round 4: Frost
-// Grenade (three of the turn's five souls) on a Lash on one point (the kill's
+// Lesson 8, The Map, is staged to be won in one turn of round 4: Frost
+// Grenade (it costs no souls) on a Lash on one point (the kill's
 // push fells the rival's Guardian of 2); no rival stands and there is nothing
 // to attack, so the turn is ended, and its End pushes Kelvin's bullet power,
 // 1, into the empty lane, felling the rival's Patron of 1. The Mid-Boss is off
@@ -30,10 +30,10 @@ type LessonClient = ReturnType<typeof lesson>;
 const state = (c: LessonClient) => c.getState()! as unknown as { G: GameState; ctx: Ctx };
 const moves = (c: LessonClient) => c.moves as Record<string, (...a: unknown[]) => void>;
 
-describe('Lesson 5: the map', () => {
-  it('is the fifth lesson, registered after the bench', () => {
-    expect(LESSONS.map((l) => l.id)).toEqual(['skill', 'souls', 'level', 'bench', 'map']);
-    expect(lessonById('map')!.number).toBe(5);
+describe('Lesson 8: the map', () => {
+  it('is the last lesson, registered after the fallen hero', () => {
+    expect(LESSONS.map((l) => l.id)).toEqual(['attack', 'skill', 'souls', 'spells', 'bench', 'levelup', 'fallen', 'map']);
+    expect(lessonById('map')!.number).toBe(8);
   });
 
   it('opens in round 4 on your turn, no Mid-Boss in the pit, and the rival on a Guardian of 2 and a Patron of 1', () => {
@@ -47,17 +47,23 @@ describe('Lesson 5: the map', () => {
     expect(G.players['0'].structures.map((s) => s.hp)).toEqual([4, 6, 8]);
   });
 
-  it('teaches no Mid-Boss: its steps are the sheet, the kill, and the turn button for the empty lane', () => {
+  it('teaches no Mid-Boss: its steps are the sheet, the skill and its target (the kill), and the turn button for the empty lane', () => {
     const map = lessonById('map')!;
-    expect(map.steps.map((s) => s.id)).toEqual(['look', 'skill', 'end']);
-    expect(`${map.blurb} ${map.outro}`).not.toMatch(/Mid-Boss|Rejuvenator/);
+    expect(map.steps.map((s) => s.id)).toEqual(['open', 'skill', 'aim', 'end']);
+    expect(`${map.blurb} ${map.learned.join(' ')}`).not.toMatch(/Mid-Boss|Rejuvenator/);
     const c = lesson();
-    const v: CoachView = { G: state(c).G, me: '0', seen: emptySeen, targeting: false, attacking: false, sheetOpen: false, sheetHero: null };
+    const v: CoachView = { G: state(c).G, me: '0', seen: emptySeen, targeting: false, placing: false, attacking: false, sheetOpen: false, sheetHero: null };
     for (const step of map.steps) {
       const body = typeof step.body === 'string' ? step.body : step.body(v);
       expect(body, step.id).not.toMatch(/Mid-Boss/);
     }
-    const end = map.steps[2];
+    // The steps about the track light the rival's rule, and only light it:
+    // the tap is still the hero, the target, the turn button.
+    const rule = 'Sapphire Flame:';
+    expect(map.steps[0].spot(v)).toEqual(['Kelvin —', rule]);
+    expect(map.steps[0].allow!(v)).toEqual(['Kelvin —']);
+    const end = map.steps[3];
+    expect(end.spot(v)).toEqual([TURN_BUTTON, rule]);
     expect(end.allow!(v)).toEqual([TURN_BUTTON]);
     expect(end.task({ ...v, seen: { ...emptySeen, turnsEnded: 1 } })).toBe(true);
   });
@@ -90,7 +96,7 @@ describe('Lesson 5: the map', () => {
 
   it('with its Mid-Boss part on, it is the lesson it was: the attack goes into the Mid-Boss, then the End', () => {
     const boss = mapLesson(LESSON_KIT, true);
-    expect(boss.steps.map((s) => s.id)).toEqual(['look', 'skill', 'attack', 'end']);
+    expect(boss.steps.map((s) => s.id)).toEqual(['open', 'skill', 'aim', 'attack', 'end']);
     const c = lesson(boss.setup());
     expect(state(c).G.boss).toMatchObject({ hp: BOSS_HP });
     moves(c).useSkill(state(c).G.players['0'].active!.iid, state(c).G.players['1'].active!.iid);

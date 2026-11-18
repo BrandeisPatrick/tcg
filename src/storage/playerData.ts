@@ -122,7 +122,11 @@ export function loadPlayerData(): PlayerData {
         ? parsed.preferredHeroes.slice(0, MAX_PREFERRED_HEROES)
         : [null, null, null, null],
       builds,
-      lessonsDone: Array.isArray(parsed.lessonsDone) ? parsed.lessonsDone.filter((x: unknown) => typeof x === 'string') : [],
+      // The spells lesson was stored as 'level' until the tutorial grew to
+      // eight lessons (2026-11-18): a save that had it keeps it.
+      lessonsDone: Array.isArray(parsed.lessonsDone)
+        ? parsed.lessonsDone.filter((x: unknown): x is string => typeof x === 'string').map((x: string) => (x === 'level' ? 'spells' : x))
+        : [],
       tutorialDone: parsed.tutorialDone === true,
       aiStrength: migrateStrength(parsed.aiStrength),
       // A deck saved by version 1 was the old deck game's (heroes and 15 cards):

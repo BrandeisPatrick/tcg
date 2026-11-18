@@ -421,7 +421,8 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   or Rejuvenator follows. Every line of it is kept: the constant on (or a
   setup's `midBoss`, a match config's `midBoss`) brings it back, and its tests
   turn it on for themselves (`midBossOn`). The board's countdown reads
-  `bossDue`, null with no Mid-Boss, and the pit hides. Lesson 5 (The Map)
+  `bossDue`, null with no Mid-Boss, and the pit hides. The Map lesson (Lesson 8
+  since 2026-11-18; it was Lesson 5)
   dropped its Mid-Boss part: after the kill no rival stands and there is
   nothing to attack, so the player ends the turn and the End's empty-lane
   push fells the Patron; its boss steps stay behind `mapLesson`'s `midBoss`

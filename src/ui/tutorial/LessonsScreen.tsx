@@ -1,6 +1,6 @@
 /**
  * The tutorial's lesson list — numbered rows on a cream sheet, each its
- * own short match. Finished lessons wear an ink tick; the first unfinished
+ * own short match, with the one thing it teaches under its name. Finished lessons wear an ink tick; the first unfinished
  * one wears the red "Start" sticker. Any row can be played again.
  *
  * Printed in the poster idiom so it reads as the same object as the title
@@ -26,7 +26,8 @@ interface Props {
 
 export function LessonsScreen({ onBack, onStart }: Props) {
   const { isMobile } = useViewport();
-  const done = new Set(loadPlayerData().lessonsDone);
+  // Only lessons there are now count: a save may name one that has gone.
+  const done = new Set(loadPlayerData().lessonsDone.filter((id) => LESSONS.some((l) => l.id === id)));
   const next = LESSONS.find((l) => !done.has(l.id));
 
   return (
@@ -118,9 +119,9 @@ export function LessonsScreen({ onBack, onStart }: Props) {
         >
           <CoverPrint compact={isMobile} />
           <p style={{ ...text.body, margin: 0, color: poster.inkDim, maxWidth: 560 }}>
-            {LESSONS.length} short lessons, one thing each. Every lesson is its own small
-            fight, set up so the move it teaches is the move that wins it. Take them in
-            order, or jump to the one you need.
+            {LESSONS.length} short lessons, one new thing each, one tap a step. Every lesson
+            is its own small fight, and the move it teaches is the move that wins it.
+            Take them in order, or jump to the one you need.
           </p>
         </div>
 

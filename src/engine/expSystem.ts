@@ -61,6 +61,25 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
   return gained;
 }
 
+/** Open `card` at `level` (a lesson's hero, a hand-built board): each level
+ *  under it adds the hero's growth as a level-up does, with no log line and
+ *  no motion, and its exp bar starts empty. A level at or under the one it
+ *  holds changes nothing. */
+export function openAtLevel(card: CardInstance, level: number): void {
+  const data = CARDS_BY_ID[card.cardId];
+  if (!data || data.type !== 'hero' || data.unit) return;
+  const from = card.level ?? START_LEVEL;
+  const to = Math.min(MAX_LEVEL, Math.floor(level)) as 1 | 2 | 3 | 4;
+  const gained = to - from;
+  if (gained <= 0) return;
+  card.level = to;
+  card.exp = 0;
+  card.atkMod += gained * data.growth.atk;
+  card.hpMax += gained * data.growth.hp;
+  card.hp += gained * data.growth.hp;
+  card.spiritMod += gained * data.growth.spirit;
+}
+
 /** Exp a hero has earned in all: the level steps behind it plus what fills the next. */
 export function totalExp(card: CardInstance): number {
   const level = card.level ?? START_LEVEL;
