@@ -80,7 +80,7 @@ Damage scales with the caster's live Spirit each tick. See
   `damage.ts` wake hook, `statusOps.ts` expiry burst).
 - **Per-instance `costOverride`** (`types.ts`, `cardCost` in `legality.ts`) for
   Sinclair's free copy.
-- Sinclair mints a 0-cost copy of the enemy ult into hand via `newIid` (`ids.ts`).
+- Sinclair casts the enemy Active's ultimate as her own (`copiedUlt`); no copy card is minted.
 - Mirage performs a free Active↔bench swap inline.
 
 ## Lowest-confidence / deviations

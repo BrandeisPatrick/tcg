@@ -13,7 +13,7 @@ import { MIXES } from './collect';
 import { playGame, type GameRecord, type Policy } from './driver';
 import { diffPaths, fuzzGames } from './oracle';
 
-const SEEDS = Array.from({ length: fuzzGames(6) }, (_, i) => 7000 + i * 13);
+const SEEDS = Array.from({ length: fuzzGames(6, 3) }, (_, i) => 7000 + i * 13);
 const DET_MIXES = [0, 2, 3].map((i) => MIXES[i]);
 const POLICIES: Record<'0' | '1', Policy>[] = DET_MIXES.map((m) => m.policies);
 const PREFER = DET_MIXES.map((m) => m.prefer);

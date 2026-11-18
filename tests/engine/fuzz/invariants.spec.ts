@@ -19,7 +19,7 @@ import { MIXES, runInvariantMix } from './collect';
 import { describeHit, splitKnown, summarise, type Known } from './hits';
 import { formatList, fuzzGames } from './oracle';
 
-const GAMES = fuzzGames(80);
+const GAMES = fuzzGames(80, 16);
 
 /** Violations the engine has today, each with its reason. */
 const KNOWN: Known[] = [

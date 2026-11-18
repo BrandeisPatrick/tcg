@@ -57,11 +57,6 @@ export function emptyReward(): FightReward {
   return { items: [], souls: 0 };
 }
 
-/** True when nothing is waiting for the next fight. */
-export function isEmptyReward(reward: FightReward): boolean {
-  return reward.items.length === 0 && reward.souls <= 0;
-}
-
 /** Add a supply stop's pick to what the next fight starts with. */
 export function takeReward(run: StoryRun, choice: RewardChoice): StoryRun {
   const r = run.nextFight;
