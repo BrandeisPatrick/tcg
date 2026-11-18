@@ -22,7 +22,7 @@ import {
 } from '@/ui/board/heroActions';
 import { statusClass } from '@/ui/card/StatusIcon';
 import type { PendingPlay } from '@/ui/helpers';
-import { freshReadyGame, giveCard, giveItem, withBenchOnly } from '../engine/_helpers';
+import { freshReadyGame, giveCard, giveItem, makeHero, withBenchOnly } from '../engine/_helpers';
 
 // The board lights the heroes an armed skill or active item may be aimed at
 // and the heroes a card from the hand may go on, the hand dims what cannot be
@@ -150,20 +150,24 @@ describe('the glow on the tiles is the engine\'s answer', () => {
   });
 
   it('a ready skill glows exactly what the engine takes', () => {
-    // Paige's Plot Armor is aimed at one of her side's heroes; a corpse of hers is none.
+    // Rem's Tag Along is aimed at another hero of her side; a corpse of hers is none, nor is
+    // she. (Paige's Plot Armor, the example until 2026-11-18, shields her side's Active now,
+    // no choice.)
     const G = board();
-    const paige = G.players[ME].bench[2]!;
+    const rem = G.players[ME].bench[2] = makeHero('hero_rem', ME, 'bench', 3);
     const vindictaCorpse = G.players[ME].bench[0]!;
     vindictaCorpse.hp = 0; vindictaCorpse.respawnTurnsLeft = 2;
     for (const target of heroesOf(G)) {
-      const engine = taken(G, { type: 'useSkill', heroIid: paige.iid, targetIid: target.iid });
-      expect(isValidTarget(G, ME, armedSkill(paige), target), nameOf(target)).toBe(engine);
+      const engine = taken(G, { type: 'useSkill', heroIid: rem.iid, targetIid: target.iid });
+      expect(isValidTarget(G, ME, armedSkill(rem), target), nameOf(target)).toBe(engine);
     }
-    expect(isValidTarget(G, ME, armedSkill(paige), G.players[ME].active!)).toBe(true);
-    expect(isValidTarget(G, ME, armedSkill(paige), G.players['1'].active!)).toBe(false);
-    expect(isValidTarget(G, ME, armedSkill(paige), vindictaCorpse)).toBe(false);
-    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: paige.iid, targetIid: vindictaCorpse.iid })?.text)
-      .toBe("Not a valid target for Paige's skill");
+    expect(isValidTarget(G, ME, armedSkill(rem), G.players[ME].active!)).toBe(true);
+    expect(isValidTarget(G, ME, armedSkill(rem), G.players[ME].bench[1]!)).toBe(true);
+    expect(isValidTarget(G, ME, armedSkill(rem), rem)).toBe(false);
+    expect(isValidTarget(G, ME, armedSkill(rem), G.players['1'].active!)).toBe(false);
+    expect(isValidTarget(G, ME, armedSkill(rem), vindictaCorpse)).toBe(false);
+    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: rem.iid, targetIid: vindictaCorpse.iid })?.text)
+      .toBe("Not a valid target for Rem's skill");
   });
 
   it('nothing is a target while nothing is armed, or once the armed spell has been played', () => {

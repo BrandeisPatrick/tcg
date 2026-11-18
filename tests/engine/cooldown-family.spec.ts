@@ -67,15 +67,18 @@ describe('The Cooldown family is equipment that shortens waits', () => {
     const { G, hero } = viscous();
     giveItem(G, hero, TRANSCENDENT);
     expect(skillWait(getAbility('skill_viscous')!, hero)).toBe(2);
-    // Cube an ally: a cubed hero uses nothing until its side's next turn (2026-11-16).
-    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: G.players['0'].bench[0]!.iid })).not.toBe(INVALID);
+    // The Cube cubes his side's Active, Viscous himself here (no choice since 2026-11-18).
+    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid })).not.toBe(INVALID);
+    expect(hero.statuses.some((s) => s.id === 'cube')).toBe(true);
     expect(hero.cooldowns?.skill_viscous).toBe(2);
     const goo = ultimateCard('eff_ult_viscous')!;
     expect(ULT_WAIT[goo.size]).toBe(6);
     expect(ultWait(goo, hero)).toBe(3);
-    // The next turn, the ultimate: one ability a hero a turn.
+    // The next turn, the ultimate: one ability a hero a turn, and a cubed hero
+    // uses nothing until its side's next turn (2026-11-16), when the Cube is gone.
     hero.skillUsedThisTurn = false;
     hero.cooldowns = {};
+    hero.statuses = hero.statuses.filter((s) => s.id !== 'cube');
     expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' })).not.toBe(INVALID);
     expect(hero.cooldowns?.eff_ult_viscous).toBe(3);
   });

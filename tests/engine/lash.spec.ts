@@ -17,6 +17,7 @@ import { resolve } from '@/engine/death';
 import { addStatus } from '@/engine/statusOps';
 import { attackPower, attackSpiritBonus, heroAbilities, heroAttackRule, skillWait } from '@/engine/query';
 import { attackBlocked, skillBlocked } from '@/engine/legality';
+import { boardNeighbours } from '@/engine/expansion';
 import { skillBlockReason } from '@/ui/board/heroActions';
 import { attackOffer } from '@/ui/board/attackAim';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
@@ -165,7 +166,7 @@ describe('Lash: Grapple and Ground Strike', () => {
   });
 });
 
-describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () => {
+describe('Lash: Death Slam lifts the enemy Active back to its player\'s hand (any enemy hero until 2026-11-18)', () => {
   function slam(items: string[] = []) {
     const G = freshReadyGame();
     const lash = G.players['0'].bench.find((h) => h?.cardId === 'hero_lash')!;
@@ -177,16 +178,20 @@ describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () =
   }
 
   it('the card: the lift, and the slam on the rest (every ultimate scales, 2026-11-17)', () => {
-    expect(ULTIMATES.find((u) => u.linkedHero === 'hero_lash')!.text).toBe('Return an enemy hero to hand, items to deck; others take {sp:1} spirit damage.');
+    expect(ULTIMATES.find((u) => u.linkedHero === 'hero_lash')!.text).toBe('Return the enemy Active to hand, items to deck; others take {sp:1} spirit damage.');
   });
 
-  it('the hero goes to the hand at full HP with its level, and what it wore is shuffled into the deck (Patrick: "back to deck")', () => {
-    const { G, them, cast } = slam();
-    const foe = them.bench[0]!;
+  it('the Active goes to the hand at full HP with its level, and what it wore is shuffled into the deck (Patrick: "back to deck"); a bench hero is no target', () => {
+    const { G, lash, them, cast } = slam();
+    const benched = them.bench[0]!;
+    expect(getAbility('eff_ult_lash')!.target).toBe('enemyActive');
+    expect(skillBlocked(G, '0', lash, benched.iid, 'eff_ult_lash')).toBe('target');
+    expect(cast(benched.iid)).toBe(INVALID);
+    expect(benched.zone).toBe('bench');
+    const foe = them.active!;
     const worn = giveItem(G, foe, 'extra_health');
     foe.level = 2;
     foe.hp = 1;
-    const slot = them.bench.indexOf(foe);
     expect(cast(foe.iid)).not.toBe(INVALID);
     expect(foe.zone).toBe('hand');
     expect(them.hand).toContain(foe);
@@ -196,7 +201,7 @@ describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () =
     expect(foe.attached ?? []).toEqual([]);
     expect(foe.hp).toBe(foe.hpMax);
     expect(foe.level).toBe(2);
-    expect(them.bench[slot]).toBeNull();
+    expect(them.active).not.toBe(foe);
     // Nobody fell: no kill, no bounty.
     expect(G.record['0'].kills).toBe(0);
   });
@@ -210,14 +215,17 @@ describe('Lash: Death Slam lifts an enemy hero back to its player\'s hand', () =
     expect(them.active).not.toBe(front);
   });
 
-  it('with Mystic Expansion it lifts the heroes next to it on the board too; with Greater Expansion, every enemy hero', () => {
+  it('with Mystic Expansion it lifts the hero next to the Active on the board too; with Greater Expansion, every enemy hero', () => {
     const mystic = slam(['mystic_expansion']);
-    const target = mystic.them.bench[1]!;
+    const target = mystic.them.active!;
+    const behind = boardNeighbours(mystic.G, '1', target);
+    expect(behind).toHaveLength(1); // the bench hero in the Active's column
     const standing = () => [mystic.them.active, ...mystic.them.bench].filter((c) => !!c && c.zone !== 'hand').length;
     const before = standing();
-    mystic.cast(target.iid);
+    expect(mystic.cast(target.iid)).not.toBe(INVALID);
     expect(mystic.them.hand).toContain(target);
-    expect(before - standing()).toBeGreaterThan(1);
+    expect(mystic.them.hand).toContain(behind[0]);
+    expect(before - standing()).toBe(2);
     expect(standing()).toBeGreaterThan(0);
 
     const greater = slam(['mystic_expansion', 'greater_expansion']);

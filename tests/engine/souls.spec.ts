@@ -444,7 +444,7 @@ describe('souls economy', () => {
     expect(ally.hp - 1).toBe(4 + 2 * 2); // {sp:4}: a skill counts Spirit twice
   });
 
-  it("Willpower scales since 2026-11-17 (every skill does): Shield {sp:2}; Paige's Plot Armor prints {sp:2} and does", async () => {
+  it("Willpower scales since 2026-11-17 (every skill does): Shield {sp:2}; Paige's Plot Armor prints {sp:2} and does, on her side's Active (2026-11-18)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const G = freshG();
     const warden = makeHero('hero_warden', '0', 'active', 0);
@@ -452,12 +452,16 @@ describe('souls economy', () => {
     warden.spiritMod = 4;
     ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target: warden });
     expect(warden.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 2 * 4); // {sp:2}: a skill counts Spirit twice
-    const paige = G.players['0'].bench[2]!;
+    // Plot Armor on a fresh board, so Warden's Shield is not in the sum: it takes no target.
+    const G2 = freshG();
+    const paige = G2.players['0'].bench[2]!;
     expect(paige.cardId).toBe('hero_paige');
     paige.spiritMod = 4;
-    const ally = G.players['0'].bench[0]!;
-    ABILITIES_BY_ID['skill_paige'].run(G, { movingPlayer: '0' }, { source: paige, target: ally });
-    expect(ally.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 2 * 4);
+    const front = G2.players['0'].active!;
+    const benched = G2.players['0'].bench[0]!;
+    ABILITIES_BY_ID['skill_paige'].run(G2, { movingPlayer: '0' }, { source: paige });
+    expect(front.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 2 * 4);
+    expect(benched.statuses.find((s) => s.id === 'shield')).toBeUndefined();
   });
 
   it('no skill has bullet scaling — all damage scaling goes through Spirit', async () => {

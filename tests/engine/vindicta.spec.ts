@@ -55,7 +55,7 @@ describe('her card', () => {
     expect(card.type === 'hero' && card.passives).toBeFalsy();
     expect(card.type === 'hero' ? heroAbilities(card).map((a) => [a.kind, a.ability.name]) : []).toEqual([['skill', 'Assassinate']]);
     const snipe = ABILITIES_BY_ID.skill_vindicta as { cooldown?: number; charges?: number; target: string };
-    expect([snipe.charges, snipe.cooldown, snipe.target]).toEqual([2, 5, 'enemyHero']);
+    expect([snipe.charges, snipe.cooldown, snipe.target]).toEqual([2, 5, 'enemyActive']); // the enemy Active since 2026-11-18
     const ult = ULTIMATES.find((u) => u.id === 'ult_vindicta')!;
     expect([ult.name, ult.size]).toEqual(['Flight', 'small']);
     expect((ult.text ?? '').split(/\s+/).length).toBeLessThanOrEqual(15);
@@ -64,13 +64,17 @@ describe('her card', () => {
 });
 
 describe('Assassinate: a snipe that holds 2 charges and takes 5 turns to come back', () => {
-  it('3 + twice her Spirit to any enemy, a bench hero too (3 since 2026-11-17)', () => {
+  it('3 + twice her Spirit to the enemy Active (3 since 2026-11-17); a bench hero is no target since 2026-11-18', () => {
     const { G, vindicta, foes } = board();
     vindicta.spiritMod = 2;
     const benched = G.players['1'].bench[1]!;
-    act(G, '0', { type: 'useSkill', heroIid: vindicta.iid, targetIid: benched.iid });
-    expect(benched.hp).toBe(60 - (3 + 2 * 2)); // a skill counts Spirit twice
-    expect(foes.filter((f) => f !== benched).every((f) => f.hp === 60)).toBe(true);
+    expect(skillBlocked(G, '0', vindicta, benched.iid)).toBe('target');
+    expect(perform(G, '0', { type: 'useSkill', heroIid: vindicta.iid, targetIid: benched.iid })).toBe(INVALID);
+    expect(benched.hp).toBe(60);
+    const front = G.players['1'].active!;
+    act(G, '0', { type: 'useSkill', heroIid: vindicta.iid, targetIid: front.iid });
+    expect(front.hp).toBe(60 - (3 + 2 * 2)); // a skill counts Spirit twice
+    expect(foes.filter((f) => f !== front).every((f) => f.hp === 60)).toBe(true);
   });
 
   it('two turns running, then none; a charge comes back on her fifth turn after the first shot', () => {

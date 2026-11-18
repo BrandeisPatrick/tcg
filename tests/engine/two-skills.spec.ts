@@ -8,7 +8,7 @@ import { resolve } from '@/engine/death';
 import { DeadlockGame } from '@/engine/game';
 import { INVALID, perform } from '@/engine/engine';
 import { blocked, legalActions, skillBlocked, skillTargets } from '@/engine/legality';
-import { isRespawning, liveBoardCards, otherPlayer, heroAbilities } from '@/engine/query';
+import { isRespawning, liveBoardCards, otherPlayer, heroAbilities, heroAttackRule } from '@/engine/query';
 import { registerAbilities } from '@/engine/registry';
 import { beginTurn } from '@/engine/actions/turn';
 import { clearTurnFlags, tickCooldowns } from '@/engine/statusOps';
@@ -375,26 +375,26 @@ describe('what a hero card prints', () => {
   // purple, card/scaling.ts).
   const PRINTED: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
     hero_abrams: ['passive', "Infernal Resilience", "At the start of your turn, if Abrams is Active, he heals {sp:1}."],
-    hero_haze: ['passive', "Fixation", "Haze's attacks deal +{bp:1/2} bullet damage to an enemy below full HP."],
+    hero_haze: ['passive', "Fixation", "Haze's attacks deal +{bp:0} bullet damage to an enemy below full HP."],
     hero_mo_krill: ['skill', "Sand Blast", "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn."],
-    hero_rem: ['skill', "Tag Along", "Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Bullet Power, then returns to your bench."],
+    hero_rem: ['skill', "Tag Along", "Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +2 Bullet Power, then returns to your bench."],
     hero_shiv: ['skill', "Serrated Knives", "Deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 1 turn."],
-    hero_vindicta: ['skill', "Assassinate", "Snipe any enemy, bench too: deal {sp:3} spirit damage."],
+    hero_vindicta: ['skill', "Assassinate", "Snipe the enemy Active: deal {sp:3} spirit damage."],
     hero_wraith: ['skill', "Full Auto", "Wraith gets +{sp:2} Bullet Power for 2 turns."],
     hero_dynamo: ['skill', "Rejuvenating Aurora", "Your heroes heal {sp:5} each and get +1 Bullet Power for 2 turns."],
     hero_kelvin: ['skill', "Frost Grenade", "Deal {sp:2} spirit damage to the enemy Active and heal Kelvin {sp:2}."],
     hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 1 HP: deal {sp:4} spirit damage to the enemy Active."],
     hero_lash: ['skill', "Grapple", "Leap in from the bench; attack again."],
-    hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Bullet Power for 2 turns."],
+    hero_paige: ['skill', "Plot Armor", "Give your Active Shield {sp:2} and +1 Bullet Power for 2 turns."],
     hero_seven: ['skill', "Static Charge", "Deal {sp:2} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn."],
     hero_sinclair: ['skill', "Rabbit Hex", "Deal {sp:1} spirit damage to the enemy Active and turn it into a Rabbit for 1 turn."],
-    hero_viscous: ['skill', "The Cube", "Cube one of your heroes until your next turn, and heal it {sp:3}."],
-    hero_yamato: ['skill', "Flying Slash", "Deal {sp:2} spirit damage to any enemy, bench too."],
+    hero_viscous: ['skill', "The Cube", "Cube your Active until your next turn, and heal it {sp:3}."],
+    hero_yamato: ['skill', "Flying Slash", "Deal {sp:2} spirit damage to the enemy Active."],
     hero_warden: ['skill', "Willpower", "Shield {sp:2} on Warden, and Swift."],
     hero_mirage: ['passive', "Djinn's Mark", "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:6} spirit damage."],
-    hero_drifter: ['passive', "Bloodscent", "His attacks deal +{bp:1/2} bullet damage to a hero below half HP."],
-    hero_victor: ['passive', "Aura of Suffering", "While Victor is Active, at the start of your turn deal {sp:1/2} spirit damage to every enemy and 1 to Victor."],
-    hero_silver: ['skill', "Boot Kick", "Deal {bp:1/2} bullet damage to the enemy Active. It is Vulnerable 2 turns."],
+    hero_drifter: ['passive', "Bloodscent", "After Drifter attacks, he heals {bp:0}."],
+    hero_victor: ['passive', "Aura of Suffering", "While Victor is Active, at the start of your turn deal {sp:1} spirit damage to the enemy Active and 1 to Victor."],
+    hero_silver: ['skill', "Boot Kick", "Deal {bp:0} bullet damage to the enemy Active. It is Vulnerable 2 turns."],
     hero_graves: ['skill', "Grasping Hands", "Deal {sp:2} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck."],
   };
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {
@@ -416,6 +416,12 @@ describe('what a hero card prints', () => {
         .toEqual([PRINTED[hero.id]]);
       expect(hero.skills.length, hero.id).toBeLessThanOrEqual(2);
     }
+    // The rules printed on the Attack row instead: Lash's Ground Strike (2026-11-17) and
+    // Drifter's Rend (2026-11-18, his Bloodscent's old bonus below half HP).
+    expect(HEROES.filter((h) => heroAttackRule(h)).map((h) => [h.id, heroAttackRule(h)!.name, heroAttackRule(h)!.text]).sort()).toEqual([
+      ['hero_drifter', 'Rend', 'His attacks deal +{bp:0} bullet damage to a hero below half HP.'],
+      ['hero_lash', 'Ground Strike', 'The turn Lash steps in from the bench, his attacks deal {sp:3} more spirit damage.'],
+    ]);
   });
 
   it('a hero card has no abilityName and no text of its own any more', () => {

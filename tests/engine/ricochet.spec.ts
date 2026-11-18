@@ -174,19 +174,19 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     expect(hps(bench)).toEqual([16, 18, 18]);
   });
 
-  it("Haze's Fixation rides the swing alone: +{bp:1/2} on a swing at a hurt hero, never on a bounce", () => {
+  it("Haze's Fixation rides the swing alone: +{bp:0} on a swing at a hurt hero, never on a bounce", () => {
     const { G, atk, abrams, bench } = lane('hero_haze', 'ricochet');
     grantExtraAttacks(atk, 1);
     const fx = G.fx.length;
     makeAttack(G, '0');
     expect(swingsSince(G, fx)).toHaveLength(2);
-    // Swing 1: 3 (Abrams still whole). Swing 2: 3 + Fixation 1 + half of 3 = 2 (he is hurt now). Each bounce is Ricochet's 2,
+    // Swing 1: 3 (Abrams still whole). Swing 2: 3 + Fixation 3, her Bullet Power (he is hurt now). Each bounce is Ricochet's 2,
     // though the bench is hurt by the first bounce: a bounce is no swing, so Fixation is not on it.
-    expect(abrams.hp).toBe(20 - 3 - 5);
+    expect(abrams.hp).toBe(20 - 3 - 6);
     expect(hps(bench)).toEqual([16, 16, 16]);
   });
 
-  it("Vindicta's Flight and Drifter's Bloodscent stay with the swing", () => {
+  it("Vindicta's Flight, Drifter's Rend and his Bloodscent stay with the swing", () => {
     const vindicta = lane('hero_vindicta', 'ricochet');
     vindicta.atk.spiritMod = 2;
     addStatus(vindicta.G, vindicta.atk, 'flying', 1, 3); // in Flight: her swing's spirit rider is the status's
@@ -197,12 +197,17 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     const spirit = hitsSince(vindicta.G, fx).filter((e) => e.type === 'spirit');
     expect(spirit.map((e) => e.iid)).toEqual([vindicta.abrams.iid]);
 
-    // Every enemy below half: the swing gets Bloodscent's +2, each bounce is Ricochet's 2.
+    // Every enemy below half: the swing gets Rend's +3 (his Bullet Power), each bounce is Ricochet's 2;
+    // Bloodscent heals him his Bullet Power once, for the swing, not once a bounce (2026-11-18).
     const drifter = lane('hero_drifter', 'ricochet');
+    drifter.atk.hpMax = 20; drifter.atk.hp = 5;
     for (const c of drifter.enemies) c.hp = 9;
+    const healsFrom = drifter.G.fx.length;
     makeAttack(drifter.G, '0');
-    expect(drifter.abrams.hp).toBe(9 - 5);
+    expect(drifter.abrams.hp).toBe(9 - 6);
     expect(hps(drifter.bench)).toEqual([7, 7, 7]);
+    expect(drifter.atk.hp).toBe(5 + 3);
+    expect(drifter.G.fx.slice(healsFrom).filter((e) => e.kind === 'heal' && e.iid === drifter.atk.iid)).toHaveLength(1);
   });
 });
 

@@ -156,7 +156,7 @@ describe('a hero unlocks its ultimate at Level 3 (2 until 2026-11-16)', () => {
     const lash = ps.bench[1]!;
     grantExp(G, lash, LEVEL_THRESHOLDS[0] + LEVEL_THRESHOLDS[1]);
     expect(ultBlock(G, lash)).toBeNull();
-    // Death Slam is aimed at an enemy hero (2026-11-17: it lifts one back to its player's hand).
+    // Death Slam is aimed at the enemy Active (2026-11-17: it lifts one back to its player's hand; any enemy hero until 2026-11-18).
     expect(perform(G, '0', { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid, skillId: 'eff_ult_lash' })).not.toBe(INVALID);
   });
 });

@@ -159,7 +159,7 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
   it('the card text, exactly; it costs no souls, then waits 3 turns', () => {
     const skill = getAbility('skill_rem')!;
     expect(skill.name).toBe('Tag Along');
-    expect(skill.text).toBe('Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Bullet Power, then returns to your bench.');
+    expect(skill.text).toBe('Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +2 Bullet Power, then returns to your bench.');
     const { G, me, rem } = withRem(2);
     expect(kitCost(rem, 'skill_rem')).toBe(0);
     const souls = me.souls;
@@ -185,7 +185,7 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     expect(lit).toEqual([me.active!, vindicta!]);
   });
 
-  it('heals its bearer 4 + twice her Spirit (no higher than its max HP)', () => {
+  it('heals its bearer 4 + twice her Spirit (no higher than its max HP), and gives it a flat +2 Bullet Power for 2 turns', () => {
     const { G, me, rem } = withRem(1);
     rem.spiritMod = 3;
     const haze = me.active!;
@@ -193,7 +193,7 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     haze.hp = 5;
     tagAlong(G, rem, haze);
     expect(haze.hp).toBe(5 + 4 + 2 * 3);
-    expect(haze.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 1 + 3 })); // +1 Attack a point of her Spirit more // a skill counts Spirit twice
+    expect(haze.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 2, duration: 2 })); // flat since 2026-11-18: her Spirit grows the heal, not the rider
     expect(haze.hpMax).toBe(20);
     // On a hero 2 short of its max it heals those 2.
     const H = withRem(1);

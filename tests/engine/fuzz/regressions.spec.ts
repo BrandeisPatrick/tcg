@@ -509,17 +509,21 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
 
   it('E6f a skill cannot target a corpse (and a corpse takes no damage or status)', () => {
     const G = game();
-    // Yamato's Flying Slash: any enemy hero, bench too (Lash's skill, enemyAny once, has no target now).
-    const yamato = makeHero('hero_yamato', '0', 'active', 0);
-    G.players['0'].active = yamato;
-    const corpse = G.players['1'].bench[0]!;
+    // Rem's Tag Along: any other hero of her side, bench too. (Yamato's Flying Slash, any
+    // enemy hero once, takes the enemy Active since 2026-11-18; no hero skill picks an enemy
+    // bench hero now.) It heals and buffs its target, so a corpse would show both.
+    const rem = makeHero('hero_rem', '0', 'bench', 1);
+    G.players['0'].bench[0] = rem;
+    const corpse = G.players['0'].bench[1]!;
     corpse.hp = 0;
     corpse.respawnTurnsLeft = 3;
-    expect(skillBlocked(G, '0', yamato, G.players['1'].bench[1]!.iid)).toBeNull(); // a living bench hero is a target
-    const r = runMove('useSkill', G, '0', yamato.iid, corpse.iid);
+    expect(skillBlocked(G, '0', rem, G.players['0'].bench[2]!.iid)).toBeNull(); // a living bench ally is a target
+    const r = runMove('useSkill', G, '0', rem.iid, corpse.iid);
     expect(r).toBe(INVALID_MOVE);
     expect(corpse.hp).toBe(0);
     expect(corpse.statuses).toEqual([]);
+    expect(corpse.attached ?? []).not.toContain(rem);
+    expect(rem.zone).toBe('bench');
     expect(G.players['0'].souls).toBe(10);
   });
 

@@ -17,7 +17,7 @@ import type { CardInstance, GameState, HeroCard, PlayerID, UltSize } from '@/eng
 import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { INVALID, perform, type Action } from '@/engine/engine';
-import { attackBlocked, moveBlocked, retreatCost, skillBlocked } from '@/engine/legality';
+import { attackBlocked, moveBlocked, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
 import { heroAbilities, heroRetreat, kitCharges, kitCost, skillWait, ultimateCard } from '@/engine/query';
 import { grantExp } from '@/engine/expSystem';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
@@ -364,7 +364,7 @@ describe('the ultimate is a button on the hero card: from Level 2, for no souls,
   });
 });
 
-describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until his next turn', () => {
+describe('Viscous\'s skill is The Cube: his side\'s Active takes no damage until his next turn', () => {
   /** P0 with Viscous on the bench in Vindicta's place, Haze the Active. */
   function withViscous() {
     const G = freshReadyGame();
@@ -374,23 +374,26 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
     return { G, me, viscous, haze: me.active! };
   }
 
-  it('costs no souls, waits 4 turns, aims at any hero of his side — himself too — and never at an enemy', () => {
+  it('costs no souls, waits 4 turns, and aims at no one: it cubes his side\'s Active (from the bench too), never himself on the bench and never an enemy (2026-11-18)', () => {
     const { G, me, viscous, haze } = withViscous();
     expect(kitCost(viscous)).toBe(0);
     me.souls = 0;
-    expect(skillBlocked(G, '0', viscous, G.players['1'].active!.iid)).toBe('target');
-    expect(skillBlocked(G, '0', viscous, viscous.iid)).toBeNull();
-    act(G, '0', { type: 'useSkill', heroIid: viscous.iid, targetIid: haze.iid });
+    expect(getAbility('skill_viscous')!.target).toBe('noTarget');
+    expect(skillTargets(G, '0', viscous)).toBe('none');
+    expect(skillBlocked(G, '0', viscous)).toBeNull();
+    act(G, '0', { type: 'useSkill', heroIid: viscous.iid });
     expect(me.souls).toBe(0);
     expect(viscous.cooldowns?.skill_viscous).toBe(4);
     // Since 2026-11-16 the hero is encased: the Cube status (Invulnerable's no-damage and more).
     expect(haze.statuses.find((s) => s.id === 'cube')).toMatchObject({ duration: 1 });
+    expect(viscous.statuses.some((s) => s.id === 'cube')).toBe(false);
+    expect(G.players['1'].active!.statuses.some((s) => s.id === 'cube')).toBe(false);
   });
 
   it('encased (2026-11-16): it heals 3 + twice his Spirit, gains no status, and cannot attack, Retreat or use abilities until his next turn', () => {
     const { G, me, viscous, haze } = withViscous();
     haze.hpMax = 20; haze.hp = 10;
-    act(G, '0', { type: 'useSkill', heroIid: viscous.iid, targetIid: haze.iid });
+    act(G, '0', { type: 'useSkill', heroIid: viscous.iid }); // the Cube takes his Active, Haze
     expect(haze.hp).toBe(10 + 3 + 2 * (viscous.spiritMod ?? 0));
     addStatus(G, haze, 'stun', 1, 1);
     expect(haze.statuses.some((s) => s.id === 'stun')).toBe(false);
@@ -402,7 +405,7 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
   it('the cubed hero takes no damage on the rival\'s turn — not its attack, not its spirit — and from its own next turn it does', () => {
     const { G, me, viscous, haze } = withViscous();
     me.souls = 3;
-    act(G, '0', { type: 'useSkill', heroIid: viscous.iid, targetIid: haze.iid });
+    act(G, '0', { type: 'useSkill', heroIid: viscous.iid }); // the Cube takes his Active, Haze
     const pid = nextTurn(G, '0'); // the rival's turn
     expect(pid).toBe('1');
     const rival = G.players['1'];

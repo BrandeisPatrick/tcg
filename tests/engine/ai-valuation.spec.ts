@@ -358,7 +358,7 @@ describe('AI valuation: control items and ultimates get used', () => {
     }
   });
 
-  it('casts Naptime (a Sleep, from the bench) and Eternal Night (damage, and +1 damage taken)', () => {
+  it('casts Naptime (a Sleep, from the bench) and Eternal Night (a Silence and spirit damage on every rival hero but the Active, since 2026-11-18)', () => {
     const rem = unlocked('hero_rem', 'bench');
     usesUlt(rem.G, rem.h, 'eff_ult_rem');
     const drifter = unlocked('hero_drifter');

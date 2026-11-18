@@ -164,25 +164,32 @@ describe('Active Reload is no card any more (removed 2026-11-15, docs/card-desig
   });
 });
 
-describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence Bomb as printed', () => {
-  it('Drifter\'s Bloodscent is one rule since 2026-11-16: +2 to a hero below half HP; no Attack grows from knockouts, and it heals nothing', () => {
+describe('Drifter\'s lifesteal is back as Bloodscent (2026-11-18); Lady Geist\'s Essence Bomb drains nothing', () => {
+  it('Drifter\'s Bloodscent is lifesteal since 2026-11-18: after he attacks he heals his Bullet Power (not on a bounce); the +X below half HP is Rend, his Attack row', () => {
     const G = freshReadyGame();
     const drifter = makeHero('hero_drifter', '0', 'active', 0);
     drifter.hp = 1; drifter.hpMax = 20;
     const bloodscent = getAbility('passive_drifter_bloodscent')!;
-    expect(bloodscent.trigger).toBe('ongoing');
+    expect(bloodscent.trigger).toBe('onAttack');
+    expect(bloodscent.attackBonus).toBeUndefined(); // the bonus went to Rend
+    const bp = effectiveAtk(drifter);
+    expect(bp).toBeGreaterThan(0);
+    bloodscent.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4, bounce: true } });
+    expect(drifter.hp).toBe(1);       // a Ricochet bounce heals nothing
     bloodscent.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4 } });
+    expect(drifter.hp).toBe(1 + bp);  // {bp:0}: his Bullet Power
     expect(drifter.atkMod).toBe(0);
     expect(drifter.tally?.passive_drifter_bloodscent).toBeUndefined();
-    expect(drifter.hp).toBe(1);     // no lifesteal
+    const rend = getAbility('passive_drifter_rend')!;
+    expect(rend).toMatchObject({ trigger: 'ongoing', attackRule: true, name: 'Rend' });
     const def = G.players['1'].active!;
     def.hpMax = 10; def.hp = 4;
-    expect(attackPower(drifter, def).parts.find((p) => p.bonus)).toMatchObject({ amount: 2, label: 'Bloodscent +2' });
+    expect(attackPower(drifter, def).parts.find((p) => p.bonus)).toMatchObject({ amount: bp, label: `Rend +${bp}` });
     def.hp = 5; // half is not below half
     expect(attackPower(drifter, def).parts.some((p) => p.bonus)).toBe(false);
   });
 
-  it('Drifter\'s swing through a real attack phase heals him nothing, and hits a hero below half HP for +2', () => {
+  it('Drifter\'s swing through a real attack phase heals him his Bullet Power, and hits a hero below half HP for +his Bullet Power (Rend)', () => {
     const G = freshReadyGame();
     const drifter = makeHero('hero_drifter', '0', 'active', 0);
     drifter.hp = 1; drifter.hpMax = 20;
@@ -192,8 +199,27 @@ describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence 
     def.hp = 40; def.hpMax = 99; // below half: survives the swing
     const dmg = effectiveAtk(drifter);
     makeAttack(G, '0');
-    expect(def.hp).toBe(40 - (dmg + 2)); // Bloodscent +2
-    expect(drifter.hp).toBe(1);          // no heal; the defender does not strike back
+    expect(def.hp).toBe(40 - (dmg + dmg)); // Rend +{bp:0}
+    expect(drifter.hp).toBe(1 + dmg);      // Bloodscent heals {bp:0}; the defender does not strike back
+  });
+
+  it('Eternal Night (2026-11-18) Silences every enemy hero but the Active 2 turns and deals {sp:2} to each; the Active is untouched', () => {
+    const G = freshReadyGame();
+    const drifter = makeHero('hero_drifter', '0', 'active', 0);
+    G.players['0'].active = drifter;
+    const rivalActive = G.players['1'].active!;
+    const bench = G.players['1'].bench.filter(Boolean) as CardInstance[];
+    expect(bench.length).toBeGreaterThan(0);
+    for (const e of [rivalActive, ...bench]) e.hp = e.hpMax = 20;
+    getAbility('eff_ult_drifter')!.run(G, { movingPlayer: '0' }, { source: drifter });
+    for (const e of bench) {
+      expect(e.hp, e.cardId).toBe(20 - 2);                 // {sp:2}, no Spirit in play
+      expect(isBlocked(e, 'skill'), e.cardId).toBe(true);  // Silenced: no skill, no ultimate
+      expect(e.statuses.find((st) => st.id === 'silenced')?.duration, e.cardId).toBe(2);
+    }
+    expect(rivalActive.hp).toBe(20);
+    expect(isBlocked(rivalActive, 'skill')).toBe(false);
+    for (const c of [G.players['0'].active!, ...G.players['0'].bench.filter(Boolean) as CardInstance[]]) expect(isBlocked(c, 'skill')).toBe(false);
   });
 
   it('Lady Geist\'s Essence Bomb costs her 1 HP (2 until 2026-11-17) and drains nothing: {sp:4} spirit damage to the enemy Active alone (2026-11-16)', () => {
@@ -326,13 +352,13 @@ describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with
     (ally.attached ??= []).push(rem);
   }
 
-  it('Tag Along heals the ally {sp:4}, gives it +{sp:1/2} Attack, and Rem rides on it for 2 turns (no max HP granted, Rem not healed)', () => {
+  it('Tag Along heals the ally {sp:4}, gives it a flat +2 Bullet Power, and Rem rides on it for 2 turns (no max HP granted, Rem not healed)', () => {
     const { G, ally, rem } = setup();
     ally.hp = 1; ally.hpMax = 20;
     rem.hp = 1; rem.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
     expect(ally.hp).toBe(1 + 4);
-    expect(ally.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 1, duration: 2 }));
+    expect(ally.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 2, duration: 2 }));
     expect(rem.hp).toBe(1);
     expect(ally.hpMax).toBe(20); // no max HP granted
     expect(ally.attached).toContain(rem);
@@ -340,13 +366,13 @@ describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with
     expect(rem).toMatchObject({ zone: 'equipment', attachedTo: ally.iid, remMergeTurnsLeft: 2, slot: 1 });
   });
 
-  it("Tag Along's heal scales with Rem's Spirit", () => {
+  it("Tag Along's heal scales with Rem's Spirit; its Bullet Power rider stays a flat +2 (2026-11-18)", () => {
     const { G, ally, rem } = setup();
     rem.spiritMod = 2;
     ally.hp = 1; ally.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
     expect(ally.hp).toBe(1 + 4 + 2 * 2); // a skill counts Spirit twice
-    expect(ally.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 1 + 2 })); // the Attack counts it once
+    expect(ally.statuses).toContainEqual(expect.objectContaining({ id: 'weapon_power', value: 2, duration: 2 })); // the rider is flat: Spirit does not grow it
   });
 
   it('after 3 ticks a merged Rem returns to the bench and the max-HP reverts', () => {
