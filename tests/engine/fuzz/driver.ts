@@ -31,6 +31,9 @@ import { allIids, boardOf, handOf, isHeroCard, itemData, skillIdsOf, upgradesOfO
 
 export type Policy = 'heuristic' | 'randomLegal' | 'chaos';
 const CHAOS_RATE = 0.3;
+/** A legal deck of the chaos player's own (the deck draft takes one in an
+ *  offer's place): the first four items of the catalogue, four copies each. */
+const CUSTOM_DECK: string[] = ITEMS.slice(0, 4).flatMap((i) => [i.id, i.id, i.id, i.id]);
 
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -192,7 +195,9 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
     return {
       name: extra,
       args: extra === 'draftPick' ? [r() < 0.5 ? 'hero_haze' : anyIid()]
-        : extra === 'chooseDeck' ? [Math.floor(r() * 6) - 1] // an offer, or none (−1, past the last)
+        // An offer, or none (−1, past the last); now and then with a deck of
+        // its own in the offer's place: a legal one, or one a card short.
+        : extra === 'chooseDeck' ? [Math.floor(r() * 6) - 1, ...(r() < 0.3 ? [CUSTOM_DECK.slice(r() < 0.5 ? 0 : 1)] : [])]
         : [],
     };
   }

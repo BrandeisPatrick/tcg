@@ -9,7 +9,7 @@
  */
 import type { Ctx, Game } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
-import type { GameState, PlayerID } from './types';
+import type { CardId, GameState, PlayerID } from './types';
 import { INVALID, perform, type Action } from './engine';
 import { checkWinner, promptOwed } from './query';
 import { draftPickBlocked } from './legality';
@@ -129,8 +129,8 @@ export const DeadlockGame: Game<GameState> = {
     /** The deck draft: the offer `index` of the decks made for the drafted
      *  heroes (`G.deckDraft`). Made from either seat. The draft's turn holds
      *  on to the first Active; with none owed it ends now. */
-    chooseDeck: ({ G, ctx, playerID, events }, index: number) => {
-      const r = move({ G, ctx, events }, mover(ctx, playerID), { type: 'chooseDeck', index });
+    chooseDeck: ({ G, ctx, playerID, events }, index: number, items?: CardId[]) => {
+      const r = move({ G, ctx, events }, mover(ctx, playerID), items === undefined ? { type: 'chooseDeck', index } : { type: 'chooseDeck', index, items });
       if (r === INVALID_MOVE) return r;
       if (G.turnNumber < 1 && !G.deckDraft && !G.pendingActive) events?.endTurn?.();
       return undefined;

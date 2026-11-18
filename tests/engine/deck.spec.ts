@@ -330,7 +330,7 @@ describe('a drafted match deals the deck', () => {
     const owed = G.deckDraft!;
     expect(owed.pid).toBe('0');
     expect(G.pendingActive).toBeUndefined();
-    // Three offers, no saved deck: two ready decks, best fit first, then the heroes' builds.
+    // Three offers: two ready decks, best fit first, then "Your deck" (none saved: the heroes' builds).
     expect(owed.offers.map((o) => o.id)).toEqual([...deckOffers(picks['0'], picks['0'].map(defaultBuild)).map((o) => o.id)]);
     expect(owed.offers).toHaveLength(DECK_OFFERS);
     expect(owed.offers[DECK_OFFERS - 1].id).toBe('builds');
@@ -351,12 +351,44 @@ describe('a drafted match deals the deck', () => {
     expect(ids(G.players['0'].deck).filter((id) => !isHero(id)).sort()).toEqual([...offer.items].sort());
   });
 
-  it('a saved deck is offered beside the three, as "Your deck"', () => {
+  it('a saved deck is the third offer, "Your deck", in the builds deck\'s place', () => {
     const saved = [...READY_DECKS[0].items];
     const { G } = drafted(32, { deck: saved, deckId: null });
-    const own = G.deckDraft!.offers.find((o) => o.id === 'own');
-    expect(G.deckDraft!.offers).toHaveLength(DECK_OFFERS + 1);
-    expect(own?.items).toEqual(saved);
+    const offers = G.deckDraft!.offers;
+    expect(offers).toHaveLength(DECK_OFFERS);
+    expect(offers[DECK_OFFERS - 1].id).toBe('own');
+    expect(offers[DECK_OFFERS - 1].items).toEqual(saved);
+    expect(offers.some((o) => o.id === 'builds')).toBe(false);
+  });
+
+  it('a customized deck (2026-11-18): any legal 16 items are played in the offer\'s place; an illegal list is refused', () => {
+    const { G } = drafted(33, { deckId: null });
+    const yours = G.deckDraft!.offers.length - 1;
+    const custom = [...Array(4).fill('grit'), ...Array(4).fill('cold_front'), ...Array(4).fill('extra_health'), ...Array(4).fill('extended_magazine')];
+    // Short of DECK_SIZE, over MAX_COPIES, or holding something that is no item: refused, the draft still owed.
+    expect(perform(G, '0', { type: 'chooseDeck', index: yours, items: custom.slice(1) })).toBe(INVALID);
+    expect(perform(G, '0', { type: 'chooseDeck', index: yours, items: [...Array(5).fill('grit'), ...custom.slice(5)] })).toBe(INVALID);
+    expect(perform(G, '0', { type: 'chooseDeck', index: yours, items: ['hero_haze', ...custom.slice(1)] })).toBe(INVALID);
+    expect(G.deckDraft).toBeDefined();
+    // The legal one: its items, not the offer's, join the heroes.
+    expect(perform(G, '0', { type: 'chooseDeck', index: yours, items: custom })).not.toBe(INVALID);
+    expect(G.deckDraft).toBeUndefined();
+    expect(G.pendingActive).toBe('0');
+    expect(ids(G.players['0'].deck).filter((id) => !isHero(id)).sort()).toEqual([...custom].sort());
+  });
+
+  it('the move carries the customized deck through boardgame.io', () => {
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed: 34, humanSeat: '0' });
+    const client = Client({ game: DeadlockGame, numPlayers: 2 });
+    client.start();
+    for (const id of ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_kelvin', 'hero_lash']) client.moves.draftPick(id);
+    expect((client.getState()!.G as GameState).deckDraft).toBeDefined();
+    const custom = [...Array(4).fill('grit'), ...Array(4).fill('cold_front'), ...Array(4).fill('extra_health'), ...Array(4).fill('extended_magazine')];
+    client.moves.chooseDeck(0, custom);
+    const g = client.getState()!.G as GameState;
+    expect(g.deckDraft).toBeUndefined();
+    expect(ids(g.players['0'].deck).filter((id) => !isHero(id)).sort()).toEqual([...custom].sort());
+    client.stop();
   });
 
   it('with no human seat both Actives are chosen at once, the decks are dealt, and the board holds nothing else', () => {

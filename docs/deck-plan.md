@@ -142,16 +142,25 @@ we drafted … So we draft hero and then draft deck."
     the deck was made for, + 1 for each of its items a drafted hero's build lists, + up to 6 for
     its slot lean against the heroes' growth (Attack → Weapon items, Spirit → Spirit, HP →
     Vitality), so a gun team is offered gun decks when no deck names its heroes;
-  - **Hero builds**, the deck read across the heroes' own builds, which always fits.
-  - **Your deck**, the one saved in the Loadout, comes beside them when it is a legal deck.
+  - **Your deck**, always the third (Patrick, 2026-11-18: "we want full customizable playable
+    deck"; until then the third was "Hero builds", and a saved deck a fourth beside it). It is the
+    deck saved in the Loadout when that is a legal one; with none saved it starts as the deck read
+    across the drafted heroes' own builds, which always fits.
+- **Any offer can be customized, and played.** The picked deck's sheet has "Customize": the
+  Loadout's deck builder opens over the draft on a copy of that deck (a ready deck too), every item
+  of the catalogue to choose from, 16 items, at most 4 of one. "Save deck" keeps the copy as your
+  deck: in the Loadout (it says so first when that replaces one saved there), on the third card,
+  and picked. "Cancel" leaves everything as it was. The engine takes the deck with the pick
+  (`chooseDeck` with `items`) and refuses one that is not legal.
 - **Each offer is a card** of the lobby's kind (Patrick, 2026-11-17: "fix these ugly UI", of the
-  first screen's three panels of plain lists): numbered, the drafted heroes it was made for across
-  its face (a deck made for none prints the lobby's dial in its slot's ink), a band of its items
-  by slot, its name on the cream plate. Tap one (gold frame, full colour), or the arrows.
+  first screen's three panels of plain lists): numbered, a band of its items by slot, its name on
+  the cream plate. A ready deck's face is the drafted heroes it was made for; your deck's (and a
+  ready deck's made for none of them) is its 16 items as their shop tiles. Tap one (gold frame,
+  full colour), or the arrows.
 - **One sheet under the cards is the picked deck's**: why it is offered ("Made for Haze, Mirage and
   Kelvin", "Built on guns, like your heroes"), its items by slot, its line, and its 16 items as
   their shop tiles, counted. The PLAY plate confirms (Enter too). A phone prints the same thing:
-  the cards three across (a fourth scrolls), the items in two columns, the plate in the header.
+  the cards three across, the items in two columns, the plate in the header.
 - **The rival AI** brings the deck of its heroes' builds, as before (its items go on the heroes
   whose builds list them).
 - **A ready deck brings no heroes now.** Its squad is the heroes it was made for: the fit reads it.

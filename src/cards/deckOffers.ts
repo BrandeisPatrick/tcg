@@ -13,16 +13,23 @@ import { deckFromBuilds, isLegalDeck } from './decks';
  * them (`G.deckDraft`, answered by `chooseDeck`).
  *
  * The three offers: the two ready decks that fit the drafted heroes best
- * (`readyDeckFit`), and the deck made from the heroes' own builds, which
- * always fits. A legal deck the player saved in the Loadout is offered as a
- * fourth. Nothing here is random: the same heroes get the same offers.
+ * (`readyDeckFit`), and the player's own, "Your deck" (Patrick, 2026-11-18:
+ * "we want full customizable playable deck"): the legal deck saved in the
+ * Loadout (`own`), or, with none saved, the deck made from the heroes' own
+ * builds (`builds`), which always fits and is the one to start changing. The
+ * deck draft's screen can change any offer item by item and play that
+ * (`chooseDeck` with `items`). Nothing here is random: the same heroes get
+ * the same offers.
  */
-/** How many decks the draft recommends (the player's own saved deck comes beside them). */
+/** How many decks the draft offers: the recommended ready decks and the player's own. */
 export const DECK_OFFERS = 3;
 
 type Lean = 'weapon' | 'spirit' | 'vitality';
 const LEANS: readonly Lean[] = ['weapon', 'spirit', 'vitality'];
 const LEAN_WORD: Record<Lean, string> = { weapon: 'guns', spirit: 'spirit', vitality: 'tanks' };
+
+/** The player's own deck, as the deck draft names it. */
+export const YOUR_DECK = 'Your deck';
 
 /** What a team grows into, by its heroes' level growth: Attack is the gun
  *  (Weapon items), Spirit the skills (Spirit items), HP the body (Vitality
@@ -77,8 +84,8 @@ function leanWord(lean: Record<Lean, number>): string {
 
 /** The decks offered for the drafted `heroIds` (with `builds`, each hero's
  *  build, in the same order): the two best-fitting ready decks, best first,
- *  then the builds deck; then `own`, the player's saved deck, when it is a
- *  legal one. */
+ *  then "Your deck": `own`, the player's saved deck, when it is a legal one;
+ *  else the deck of the heroes' builds. */
 export function deckOffers(heroIds: readonly CardId[], builds: readonly (readonly CardId[])[], own?: readonly CardId[]): DeckOffer[] {
   const ranked = READY_DECKS
     .map((deck, i) => ({ deck, i, fit: readyDeckFit(deck, heroIds, builds) }))
@@ -97,23 +104,20 @@ export function deckOffers(heroIds: readonly CardId[], builds: readonly (readonl
       why: madeFor.length > 0 ? `Made for ${names(madeFor)}` : lean === team ? `Built on ${lean}, like your heroes` : `Built on ${lean}`,
     };
   });
-  offers.push({
+  offers.push(isLegalDeck(own) ? {
+    id: 'own',
+    name: YOUR_DECK,
+    blurb: 'The deck you built. Customize changes any of its 16 items.',
+    items: [...own],
+    madeFor: [],
+    why: 'Saved in your Loadout',
+  } : {
     id: 'builds',
-    name: 'Hero builds',
-    blurb: "Each hero's own items, its build, read across: every hero's first item, then every hero's second.",
+    name: YOUR_DECK,
+    blurb: 'You have no deck saved yet, so this one is each of your heroes’ own items. Customize changes any of the 16 and saves it as yours.',
     items: deckFromBuilds(builds),
     madeFor: [...heroIds],
-    why: 'Made from your heroes’ builds',
+    why: 'Your heroes’ own items',
   });
-  if (isLegalDeck(own)) {
-    offers.push({
-      id: 'own',
-      name: 'Your deck',
-      blurb: 'The deck you saved in the Loadout.',
-      items: [...own],
-      madeFor: [],
-      why: 'Saved in your Loadout',
-    });
-  }
   return offers;
 }

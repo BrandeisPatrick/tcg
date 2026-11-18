@@ -855,7 +855,7 @@ export function Board(props: BoardProps<GameState>) {
         heroes={G.players[me].deck.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero').map((c) => c.cardId)}
         rivalHeroes={G.players[otherPlayer(me)].deck.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero').map((c) => c.cardId)}
         offers={G.deckDraft.offers}
-        onPick={(index) => (moves as any).chooseDeck(index)}
+        onPick={(index, items) => (items ? (moves as any).chooseDeck(index, items) : (moves as any).chooseDeck(index))}
       />
     );
   }

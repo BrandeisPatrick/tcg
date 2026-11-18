@@ -4,31 +4,40 @@
  * same lobby. The hero draft's own ground, pick strips and plate stay where
  * they were (both crews' heroes along the top, the plate now reading PLAY);
  * under them, where the roster was, the decks offered for your heroes
- * (cards/deckOffers.ts: the two ready decks that fit them best, the deck of
- * their own builds, and your saved deck when you have one).
+ * (cards/deckOffers.ts: the two ready decks that fit them best, and your own).
  *
- * Each deck is a card of the lobby's tarot kind: numbered, the heroes it was
- * made for across its face, a band of its items by shop slot (Weapon, Spirit,
- * Vitality) and a cream name plate at the foot. A tap picks one (gold frame,
- * full colour); under the cards one sheet, the picked deck's, says why it is
- * offered, its line, and its 16 items as their shop tiles, counted. The plate
- * confirms; the arrow keys move the pick and Enter confirms.
+ * Each deck is a card of the lobby's tarot kind: numbered, a band of its
+ * items by shop slot (Weapon, Spirit, Vitality) and a cream name plate at the
+ * foot. A ready deck's face is the heroes it was made for; your deck's is its
+ * 16 items. A tap picks one (gold frame, full colour); under the cards one
+ * sheet, the picked deck's, says why it is offered, its line, and its 16
+ * items as their shop tiles, counted. The plate confirms; the arrow keys move
+ * the pick and Enter confirms.
+ *
+ * Your deck is yours to change here too (Patrick, 2026-11-18: "we want full
+ * customizable playable deck"): the sheet's "Customize" opens the Loadout's
+ * deck builder on a copy of the picked deck, any of them. Saved, the copy is
+ * your deck: in the Loadout, on the third card, and picked.
  *
  * A phone prints the same thing smaller: the cards three across, the sheet's
  * items in two columns, the plate in the header as the hero draft has it.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { CardId, DeckOffer } from '@/engine/types';
 import { cardName, itemCard } from '@/cards';
-import { deckLean } from '@/cards/deckOffers';
+import { isLegalDeck } from '@/cards/decks';
+import { YOUR_DECK, deckLean } from '@/cards/deckOffers';
+import { saveDeck } from '@/storage/playerData';
 import { heroArtFocus, heroPortraitArt } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { useCalmMotion } from '../effects/fx/FxMotionContext';
 import { useViewport } from '../hooks/useViewport';
 import { fonts, spring, text } from '../tokens';
 import { poster, shopInk, chamfer, clipBoth } from '../poster';
-import { ItemIcon } from '../card/ItemIcon';
+import { ItemIcon, itemArtUrl } from '../card/ItemIcon';
+import { PosterButton } from '../chrome';
+import { DeckEditor } from '../collection/DeckEditor';
 import { LobbyBackdrop, LockButton, PickStrips } from './DraftOverlay';
 
 interface Props {
@@ -37,8 +46,13 @@ interface Props {
   /** The rival's, for the strip across from yours. */
   rivalHeroes?: CardId[];
   offers: DeckOffer[];
-  onPick: (index: number) => void;
+  /** The offer picked; with `items`, the deck played in its place (your deck, as customized here). */
+  onPick: (index: number, items?: CardId[]) => void;
 }
+
+/** True for the offer that is the player's own deck: the saved one (`own`),
+ *  or, with none saved, the deck of the heroes' builds (`builds`). */
+const isYours = (o: DeckOffer) => o.id === 'own' || o.id === 'builds';
 
 const NUMERALS = ['I', 'II', 'III', 'IV'];
 const SLOTS = ['weapon', 'spirit', 'vitality'] as const;
@@ -52,10 +66,26 @@ export function DeckDraftOverlay({ heroes, rivalHeroes = [], offers, onPick }: P
   const calm = useCalmMotion();
   const n = offers.length;
   const [index, setIndex] = useState(0);
-  const chosen = offers[index];
-  const confirm = useCallback(() => { if (chosen) onPick(index); }, [chosen, index, onPick]);
+  // Your deck as saved from the builder in this draft: it takes the place of
+  // the offer's own items on your card.
+  const [mine, setMine] = useState<CardId[] | null>(null);
+  // The builder, while it is open: the deck it started from.
+  const [workshop, setWorkshop] = useState<{ from: DeckOffer } | null>(null);
+  const yours = offers.findIndex(isYours);
+  const decks = offers.map((o, i): DeckOffer => (i === yours && mine
+    ? { ...o, id: 'own', items: mine, why: 'Saved in your Loadout', blurb: 'The deck you built. Customize changes any of its 16 items.' }
+    : o));
+  const chosen = decks[index];
+  const confirm = useCallback(() => {
+    if (!chosen) return;
+    if (index === yours && mine) onPick(index, mine);
+    else onPick(index);
+  }, [chosen, index, yours, mine, onPick]);
 
+  const editing = workshop !== null;
   useEffect(() => {
+    // The builder has the keys while it is open.
+    if (editing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setIndex((i) => (i - 1 + n) % Math.max(1, n)); }
       else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setIndex((i) => (i + 1) % Math.max(1, n)); }
@@ -63,7 +93,16 @@ export function DeckDraftOverlay({ heroes, rivalHeroes = [], offers, onPick }: P
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [n, confirm]);
+  }, [n, confirm, editing]);
+
+  // The builder's copy, saved: it is your deck from now on (the Loadout's
+  // too), on your card, and the one picked.
+  const keep = (items: CardId[]) => {
+    saveDeck(items);
+    setMine(items);
+    if (yours >= 0) setIndex(yours);
+    setWorkshop(null);
+  };
 
   const plate = (
     <LockButton enabled={!!chosen} state="ready" word="Play" name={`Play ${chosen?.name ?? ''}`} onClick={confirm} compact={isMobile} />
@@ -132,9 +171,9 @@ export function DeckDraftOverlay({ heroes, rivalHeroes = [], offers, onPick }: P
             : { alignSelf: 'stretch', margin: '-6px -12px', padding: 12, overflowX: 'auto', scrollSnapType: 'x proximity', scrollbarWidth: 'none' }),
         }}
       >
-        {offers.map((o, i) => (
+        {decks.map((o, i) => (
           <DeckCard
-            key={o.id}
+            key={i}
             offer={o}
             numeral={NUMERALS[i] ?? String(i + 1)}
             best={i === 0}
@@ -147,7 +186,29 @@ export function DeckDraftOverlay({ heroes, rivalHeroes = [], offers, onPick }: P
         ))}
       </div>
 
-      {chosen && <DeckSheet key={chosen.id} offer={chosen} compact={isMobile} calm={calm} />}
+      {chosen && (
+        <DeckSheet
+          key={`${index}-${chosen.id}`}
+          offer={chosen}
+          compact={isMobile}
+          calm={calm}
+          onCustomize={() => setWorkshop({ from: chosen })}
+        />
+      )}
+
+      <AnimatePresence>
+        {workshop && (
+          <DeckWorkshop
+            heroes={heroes}
+            from={workshop.from}
+            // Saving a ready deck's copy takes the place of a deck already saved.
+            replaces={!isYours(workshop.from) && decks.some((o) => o.id === 'own')}
+            compact={isMobile}
+            onCancel={() => setWorkshop(null)}
+            onSave={keep}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -199,7 +260,7 @@ function DeckCard({ offer, numeral, best, chosen, w, compact, enter, onTap }: {
         transition: 'border-color 180ms ease',
         ...clipBoth(chamfer(6)),
       }}>
-        <DeckFace offer={offer} lit={chosen} />
+        <DeckFace offer={offer} lit={chosen} compact={compact} />
         <span style={{
           position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', gap: 6, padding: compact ? '5px 6px 12px' : '6px 8px 14px',
@@ -235,32 +296,40 @@ function DeckCard({ offer, numeral, best, chosen, w, compact, enter, onTap }: {
 /** The slant of the cut between two heroes on a card's face, in px. */
 const CUT = 16;
 
-/** A deck card's face: the drafted heroes the deck was made for, side by side
- *  on slanted cuts (one hero takes the whole face); a deck made for none of
- *  them prints the lobby's dial in the ink of the slot it leans on. A card
- *  not picked is printed a step darker. */
-function DeckFace({ offer, lit }: { offer: DeckOffer; lit: boolean }) {
-  const made = offer.madeFor;
+/** A deck card's face. A ready deck prints the drafted heroes it was made
+ *  for, side by side on slanted cuts (one hero takes the whole face). Your
+ *  deck, and a ready deck made for none of them, prints what it holds: its 16
+ *  items as their shop tiles, cheapest tier first. A card not picked is
+ *  printed a step darker. */
+function DeckFace({ offer, lit, compact }: { offer: DeckOffer; lit: boolean; compact: boolean }) {
+  const made = isYours(offer) ? [] : offer.madeFor;
   const n = made.length;
   const tone = { filter: lit ? 'none' : 'saturate(0.6) brightness(0.58)', transition: 'filter 180ms ease' };
   if (n === 0) {
     const lean = deckLean(offer.items);
     const ink = shopInk(SLOTS.reduce((a, b) => (lean[b] > lean[a] ? b : a)));
+    const tiles = countItems(offer.items).flatMap(([id, k]) => Array.from({ length: k }, () => id));
     return (
       <span aria-hidden style={{
-        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: '16%',
-        background: `radial-gradient(ellipse 90% 60% at 50% 40%, ${ink.wash}, transparent 72%), linear-gradient(180deg, ${poster.panel}, #0f1214)`,
+        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        // Clear of the numeral above and of the band and name plate below.
+        padding: compact ? '17px 0 30px' : '26px 0 38px',
+        background: `radial-gradient(ellipse 100% 70% at 50% 40%, ${ink.wash}, transparent 75%), linear-gradient(180deg, ${poster.panel}, #0f1214)`,
         ...tone,
       }}>
-        <svg viewBox="0 0 40 40" width="46%" height="46%" fill="none" style={{ stroke: ink.ink, opacity: 0.75 }} strokeWidth="1.3">
-          <circle cx="20" cy="20" r="15" />
-          <circle cx="20" cy="20" r="6" />
-          {Array.from({ length: 8 }).map((_, i) => {
-            const a = (i * Math.PI) / 4;
-            return <line key={i} x1={20 + Math.cos(a) * 6} y1={20 + Math.sin(a) * 6} x2={20 + Math.cos(a) * 15} y2={20 + Math.sin(a) * 15} />;
+        <span style={{ width: compact ? '76%' : '82%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: compact ? 3 : 5 }}>
+          {tiles.map((id, i) => {
+            const slot = itemCard(id)?.slot;
+            return (
+              <span key={i} style={{
+                display: 'block', aspectRatio: '1 / 1', overflow: 'hidden', borderRadius: '18%',
+                background: slot ? shopInk(slot).ink : poster.frameLit,
+              }}>
+                <img src={itemArtUrl(id)} alt="" draggable={false} loading="lazy" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', userSelect: 'none' }} />
+              </span>
+            );
           })}
-          <circle cx="20" cy="20" r="2" style={{ fill: ink.ink }} stroke="none" />
-        </svg>
+        </span>
       </span>
     );
   }
@@ -311,7 +380,7 @@ function DeckFace({ offer, lit }: { offer: DeckOffer; lit: boolean }) {
 /** The picked deck's sheet, in the dossier's place: its name, why it is
  *  offered, its items by slot, its line, and its items as their shop tiles,
  *  counted, cheapest tier first. */
-function DeckSheet({ offer, compact, calm }: { offer: DeckOffer; compact: boolean; calm: boolean }) {
+function DeckSheet({ offer, compact, calm, onCustomize }: { offer: DeckOffer; compact: boolean; calm: boolean; onCustomize: () => void }) {
   const counted = countItems(offer.items);
   const lean = deckLean(offer.items);
   return (
@@ -353,6 +422,12 @@ function DeckSheet({ offer, compact, calm }: { offer: DeckOffer; compact: boolea
             );
           })}
         </span>
+        {/* Any deck is yours to change: the builder opens on a copy of it. */}
+        <span style={{ order: 3, marginLeft: compact ? 'auto' : 0 }}>
+          <PosterButton variant="ghost" size="sm" onClick={onCustomize} ariaLabel={`Customize ${offer.name}`} style={{ padding: compact ? '7px 12px' : '8px 14px', letterSpacing: '0.16em', fontSize: compact ? 11.5 : 12.5 }}>
+            Customize
+          </PosterButton>
+        </span>
       </div>
 
       <p style={{ ...text.body, margin: 0, maxWidth: '78ch', fontSize: compact ? 12.5 : 13.5, lineHeight: 1.4, color: poster.creamDim }}>
@@ -375,6 +450,61 @@ function DeckSheet({ offer, compact, calm }: { offer: DeckOffer; compact: boolea
         ))}
       </ul>
     </motion.section>
+  );
+}
+
+/** The deck builder, over the draft: the Loadout's own (DeckEditor) on a copy
+ *  of the deck `from`. Nothing changes until "Save deck": then the copy is
+ *  the player's deck. A deck short of its 16 items cannot be saved. */
+function DeckWorkshop({ heroes, from, replaces, compact, onCancel, onSave }: {
+  heroes: CardId[];
+  from: DeckOffer;
+  /** True when saving takes the place of a deck the player already saved. */
+  replaces: boolean;
+  compact: boolean;
+  onCancel: () => void;
+  onSave: (items: CardId[]) => void;
+}) {
+  const [items, setItems] = useState<CardId[]>(() => [...from.items]);
+  const legal = isLegalDeck(items);
+  // Escape leaves it (the builder's own Escape, closing a tooltip or a card, comes first).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onCancel(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+  const started = isYours(from) ? null : `Started from ${from.name}.`;
+  return (
+    <motion.div
+      role="dialog"
+      aria-label="Customize your deck"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 5, display: 'flex', flexDirection: 'column', background: poster.ground, color: poster.cream }}
+    >
+      <header style={{
+        flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: compact ? '6px 8px' : '6px 14px',
+        padding: compact ? '12px 12px 10px' : '16px clamp(18px, 3vw, 44px) 14px', borderBottom: `1px solid ${poster.edge}`,
+      }}>
+        <h2 style={{
+          margin: 0, flex: 1, minWidth: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: compact ? 18 : 24,
+          letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.cream, lineHeight: 1,
+        }}>{YOUR_DECK}</h2>
+        <PosterButton variant="ghost" size="sm" onClick={onCancel} ariaLabel="Leave the deck as it was" style={compact ? { padding: '9px 12px', letterSpacing: '0.14em' } : undefined}>Cancel</PosterButton>
+        <PosterButton variant={legal ? 'paper' : 'ghost'} size="sm" disabled={!legal} onClick={() => onSave(items)} ariaLabel="Save it as your deck" style={compact ? { padding: '9px 12px', letterSpacing: '0.14em' } : undefined}>Save deck</PosterButton>
+        {/* What saving does, on a line of its own under the name and the buttons. */}
+        <p style={{ ...text.body, flexBasis: '100%', margin: 0, fontSize: compact ? 12 : 13, lineHeight: 1.3, color: poster.creamDim }}>
+          {started ? `${started} ` : ''}{replaces ? 'Saving replaces the deck in your Loadout.' : 'Saving keeps it as your deck.'}
+        </p>
+      </header>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: compact ? '12px 12px 20px' : '18px clamp(18px, 3vw, 44px) 28px' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <DeckEditor squad={heroes} value={items} onEdit={setItems} />
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

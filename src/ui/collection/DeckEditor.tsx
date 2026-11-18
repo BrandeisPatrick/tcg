@@ -18,6 +18,10 @@
  * of DECK_SIZE (or none) is not played: a match deals one from the drafted
  * heroes' builds instead. "From builds" fills the deck the way a match would
  * from the squad's builds; "Clear" empties it.
+ *
+ * The deck draft's "Customize" (overlays/DeckDraftOverlay.tsx, 2026-11-18)
+ * opens the same builder on a deck it holds itself (`value`, `onEdit`):
+ * nothing is read from the save or written to it until the draft says so.
  */
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
@@ -45,6 +49,15 @@ const ORDER: Record<CardId, number> = Object.fromEntries(ITEMS.map((i, k) => [i.
 /** The deck builder's sheet name, by which the tutorial and the QA scripts find it. */
 export const DECK_EDITOR = 'Deck builder';
 
+/** The nearest ancestor of `el` that scrolls its content up and down. */
+function scrollBox(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const flow = getComputedStyle(p).overflowY;
+    if (flow === 'auto' || flow === 'scroll') return p;
+  }
+  return null;
+}
+
 /** What an upgrade's tile says of it: "Evolves Extra Spirit for the
  *  difference" (the component it takes the place of on the hero wearing it,
  *  `evolvesFrom`), or null for an item that evolves none. A deck holds
@@ -69,15 +82,22 @@ function addRefusal(id: CardId, copies: number, size: number): string | null {
   return null;
 }
 
-export function DeckEditor({ squad, onChange }: {
+export function DeckEditor({ squad, onChange, value, onEdit }: {
   /** The squad's heroes in pick order: "From builds" reads their builds. */
   squad: CardId[];
   /** Told after every change to the saved deck (the Loadout's ready decks
    *  row reads it to say which, if any, is in use). */
   onChange?: () => void;
+  /** With `onEdit`, the deck is the caller's to hold (the deck draft's
+   *  "Customize"): `value` is shown, every change goes to `onEdit`, and the
+   *  save is neither read nor written. */
+  value?: readonly CardId[];
+  onEdit?: (next: CardId[]) => void;
 }) {
   const { isMobile, width } = useViewport();
-  const [deck, setDeck] = useState<CardId[]>(() => getDeck());
+  const held = onEdit !== undefined;
+  const [saved, setSaved] = useState<CardId[]>(() => (held ? [] : getDeck()));
+  const deck: readonly CardId[] = held ? (value ?? []) : saved;
   const [tab, setTab] = useState<ItemSlot>('weapon');
   const [tip, setTip] = useState<TipRequest | null>(null);
   const [card, setCard] = useState<CardId | null>(null);
@@ -97,8 +117,11 @@ export function DeckEditor({ squad, onChange }: {
   useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
   const commit = (next: CardId[]) => {
-    saveDeck(next);
-    setDeck(getDeck());
+    if (onEdit) onEdit(next);
+    else {
+      saveDeck(next);
+      setSaved(getDeck());
+    }
     setTip((t) => (t?.passive ? null : t));
     onChange?.();
   };
@@ -150,9 +173,10 @@ export function DeckEditor({ squad, onChange }: {
   useEffect(() => {
     if (!tip) return;
     const close = () => setTip(null);
-    window.addEventListener('scroll', close, { passive: true });
-    return () => window.removeEventListener('scroll', close);
-  }, [tip]);
+    // Held by the deck draft, the builder scrolls inside its sheet, not the window.
+    window.addEventListener('scroll', close, { passive: true, capture: held });
+    return () => window.removeEventListener('scroll', close, { capture: held });
+  }, [tip, held]);
   useEffect(() => {
     if (!card && !tip) return;
     const onKey = (e: KeyboardEvent) => {
@@ -176,9 +200,18 @@ export function DeckEditor({ squad, onChange }: {
   useLayoutEffect(() => {
     if (!tabScroll.current) return;
     tabScroll.current = false;
-    const top = panel.current?.getBoundingClientRect().top ?? 0;
+    const el = panel.current;
+    if (!el) return;
+    if (held) {
+      // The deck draft's sheet scrolls it: back to the builder's head there.
+      const box = scrollBox(el);
+      const over = box ? el.getBoundingClientRect().top - box.getBoundingClientRect().top : 0;
+      if (box && over < 0) box.scrollTop += over;
+      return;
+    }
+    const top = el.getBoundingClientRect().top;
     if (top < 0) window.scrollTo(0, window.scrollY + top);
-  }, [tab]);
+  }, [tab, held]);
 
   // The catalogue's handlers are stable, reading the latest state through a ref.
   const latest = useRef({ add, openTip, peek });
@@ -189,11 +222,15 @@ export function DeckEditor({ squad, onChange }: {
 
   const narrow = width < 360;
   const tile = isMobile ? 40 : 44;
-  const status = deck.length === 0
-    ? `No deck saved: each match deals one from your drafted heroes' builds.`
-    : full
-      ? `${DECK_SIZE} items: your deck. Your three drafted heroes are shuffled in.`
-      : `${deck.length} of ${DECK_SIZE}: until it is full, a match deals a deck from your heroes' builds.`;
+  const status = held
+    ? (full
+      ? `${DECK_SIZE} items: ready to play. Your three drafted heroes are shuffled in.`
+      : `${deck.length} of ${DECK_SIZE}: add ${DECK_SIZE - deck.length} more to play it.`)
+    : deck.length === 0
+      ? `No deck saved: the deck draft offers one made from your drafted heroes' builds, yours to customize.`
+      : full
+        ? `${DECK_SIZE} items: your deck, offered in every deck draft. Your three drafted heroes are shuffled in.`
+        : `${deck.length} of ${DECK_SIZE}: until it is full, the deck draft offers one made from your heroes' builds.`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 14 }}>
@@ -212,7 +249,7 @@ export function DeckEditor({ squad, onChange }: {
       >
         {/* The deck and the tabs, held at the top while the catalogue scrolls. */}
         <div style={{
-          position: 'sticky', top: 'env(safe-area-inset-top, 0px)', zIndex: 3,
+          position: 'sticky', top: held ? 0 : 'env(safe-area-inset-top, 0px)', zIndex: 3,
           background: poster.frame, borderRadius: '11px 11px 0 0',
           boxShadow: '0 10px 14px -12px rgba(0, 0, 0, 0.9)',
         }}>
