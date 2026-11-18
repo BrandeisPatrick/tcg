@@ -4,7 +4,7 @@ import { poster } from '../poster';
 
 /**
  * Hero level-progress ring (top-right of hero card). Segment count tracks
- * the per-level threshold (5 / 7 / 9 pieces); each piece = 1 exp earned
+ * the per-level threshold (3 / 5 / 7 pieces); each piece = 1 exp earned
  * toward the next level. Ring lights clockwise from 12 o'clock and fills
  * fully at Lv4 max. Printed flat: gold segments on a faint cream track over
  * a charcoal disc, with the level numeral stencilled in cream.
@@ -24,8 +24,8 @@ export function LevelRing({
   const clampedLevel = Math.max(START_LEVEL, Math.min(MAX_LEVEL, level)) as 1 | 2 | 3 | 4;
   const atMax = clampedLevel >= MAX_LEVEL;
   const totalSegments = atMax
-    ? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]            // 9 pieces — fully lit at Lv4
-    : LEVEL_THRESHOLDS[(clampedLevel - 1) as 0 | 1 | 2];       // 5 / 7 / 9
+    ? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]            // 7 pieces — fully lit at Lv4
+    : LEVEL_THRESHOLDS[(clampedLevel - 1) as 0 | 1 | 2];       // 3 / 5 / 7
   const filled = atMax ? totalSegments : Math.max(0, Math.min(totalSegments, exp));
 
   // Gold ink, not the ownership token — the ring sits on both players' heroes.

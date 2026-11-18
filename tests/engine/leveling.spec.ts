@@ -27,26 +27,26 @@ describe('hero leveling: grantExp', () => {
     expect(h.exp).toBe(0);
   });
 
-  it('advances Lv1 → Lv2 at 5 exp (overflow rolls forward)', () => {
+  it('advances Lv1 → Lv2 at 3 exp (overflow rolls forward)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
-    expect(grantExp(G, h, 6)).toBe(1);
+    expect(grantExp(G, h, 4)).toBe(1);
     expect(h.level).toBe(2);
-    expect(h.exp).toBe(1); // 6 - 5 = 1 spilling into Lv2
+    expect(h.exp).toBe(1); // 4 - 3 = 1 spilling into Lv2
   });
 
-  it('Lv2 → Lv3 at +7 exp, Lv3 → Lv4 at +9 exp (per-level thresholds)', () => {
+  it('Lv2 → Lv3 at +5 exp, Lv3 → Lv4 at +7 exp (per-level thresholds)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
-    grantExp(G, h, 5); // → Lv2, 0 exp
+    grantExp(G, h, 3); // → Lv2, 0 exp
     expect(h.level).toBe(2);
-    grantExp(G, h, 6);
+    grantExp(G, h, 4);
     expect(h.level).toBe(2);
-    expect(h.exp).toBe(6);
+    expect(h.exp).toBe(4);
     grantExp(G, h, 1);
     expect(h.level).toBe(3);
     expect(h.exp).toBe(0);
-    grantExp(G, h, 8);
+    grantExp(G, h, 6);
     expect(h.level).toBe(3);
     grantExp(G, h, 1);
     expect(h.level).toBe(4);
@@ -66,7 +66,7 @@ describe('hero leveling: grantExp', () => {
   it('cannot multi-step in a single grant past max', () => {
     const G = freshG();
     const h = G.players['0'].active!;
-    grantExp(G, h, 21); // exactly enough for Lv4 (5 + 7 + 9)
+    grantExp(G, h, 15); // exactly enough for Lv4 (3 + 5 + 7)
     expect(h.level).toBe(4);
     expect(h.exp).toBe(0);
   });
@@ -109,14 +109,14 @@ describe('hero leveling triggers', () => {
     expect((h.exp ?? 0) - before).toBe(2);
   });
 
-  it('killing blow grants +2 exp to the killer hero via cast context', () => {
+  it('killing blow grants +1 exp to the killer hero via cast context', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     enemy.hp = 1;
     withCast(hero, 'attack', () => damageUnit(G, enemy, 5, 'attack'));
-    // killer started at Lv1 with 0 exp; kill grants +2.
-    expect(hero.exp).toBe(2);
+    // killer started at Lv1 with 0 exp; kill grants +1.
+    expect(hero.exp).toBe(1);
     expect(hero.level).toBe(1);
   });
 
@@ -126,13 +126,13 @@ describe('hero leveling triggers', () => {
     const enemy = G.players['1'].active!;
     enemy.hp = 1;
     withCast(hero, 'skill', () => damageUnit(G, enemy, 50, 'spirit'));
-    expect(hero.exp).toBe(2);
+    expect(hero.exp).toBe(1);
   });
 
   it('death PRESERVES level + exp (the hero goes into its deck at its rank)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    grantExp(G, target, 7); // Lv2 (cost 5), 2 exp
+    grantExp(G, target, 5); // Lv2 (cost 3), 2 exp
     expect(target.level).toBe(2);
     expect(target.exp).toBe(2);
     target.hp = 1;
@@ -146,8 +146,8 @@ describe('hero leveling triggers', () => {
 });
 
 describe('LEVEL_THRESHOLDS exposed correctly', () => {
-  it('matches the spec: 5 → 7 → 9 exp per level', () => {
-    expect(LEVEL_THRESHOLDS).toEqual([5, 7, 9]);
+  it('matches the spec: 3 → 5 → 7 exp per level (Patrick, 2026-11-18; it was 5 → 7 → 9)', () => {
+    expect(LEVEL_THRESHOLDS).toEqual([3, 5, 7]);
   });
 });
 
@@ -180,7 +180,7 @@ describe("level-up stat bonuses: each level adds the hero's own growth", () => {
     const spi0 = h.spiritMod;
     const hpMax0 = h.hpMax;
     const hp0 = h.hp;
-    grantExp(G, h, 5); // Lv1 → Lv2
+    grantExp(G, h, 3); // Lv1 → Lv2
     expect(h.level).toBe(2);
     expect(h.atkMod - atk0).toBe(3);
     expect(h.spiritMod - spi0).toBe(0);
@@ -194,7 +194,7 @@ describe("level-up stat bonuses: each level adds the hero's own growth", () => {
     const atk0 = h.atkMod;
     const spi0 = h.spiritMod;
     const hpMax0 = h.hpMax;
-    grantExp(G, h, 21); // all the way to Lv4 (5 + 7 + 9)
+    grantExp(G, h, 15); // all the way to Lv4 (3 + 5 + 7)
     expect(h.level).toBe(4);
     expect(h.atkMod - atk0).toBe(9);
     expect(h.spiritMod - spi0).toBe(0);
@@ -206,11 +206,11 @@ describe("level-up stat bonuses: each level adds the hero's own growth", () => {
     const h = G.players['1'].bench.find((b) => b?.cardId === 'hero_seven')!;
     expect(growthOf(h).spirit).toBe(3);
     const spi0 = h.spiritMod;
-    grantExp(G, h, 5);
+    grantExp(G, h, 3);
     expect(h.spiritMod - spi0).toBe(3); // L2
-    grantExp(G, h, 7);
+    grantExp(G, h, 5);
     expect(h.spiritMod - spi0).toBe(6); // L3
-    grantExp(G, h, 9);
+    grantExp(G, h, 7);
     expect(h.spiritMod - spi0).toBe(9); // L4
   });
 
@@ -218,7 +218,7 @@ describe("level-up stat bonuses: each level adds the hero's own growth", () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const atk0 = h.atkMod;
-    grantExp(G, h, 12); // Lv1 → Lv3 (5 + 7 = 12 exp consumed)
+    grantExp(G, h, 8); // Lv1 → Lv3 (3 + 5 = 8 exp consumed)
     expect(h.level).toBe(3);
     expect(h.atkMod - atk0).toBe(2 * 3);
   });
@@ -228,7 +228,7 @@ describe("level-up stat bonuses: each level adds the hero's own growth", () => {
     const target = G.players['1'].active!; // Abrams: +1 Attack, +2 HP a level
     expect(growthOf(target)).toEqual({ atk: 1, hp: 2, spirit: 0 });
     const baseHpMax = target.hpMax;
-    grantExp(G, target, 21); // → Lv4, +3 atk / +6 hpMax / +0 spirit
+    grantExp(G, target, 15); // → Lv4, +3 atk / +6 hpMax / +0 spirit
     expect(target.hpMax).toBe(baseHpMax + 6);
     expect(target.atkMod).toBe(3);
     expect(target.spiritMod).toBe(0);

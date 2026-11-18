@@ -213,27 +213,24 @@ export const REVIVE_ROUNDS = 2;
 // return, BOSS_RESPAWN_ROUNDS.)
 
 // ---------- Leveling ----------
-// Heroes start at Lv1, climb to Lv4 (cap). Step costs are 5 → 7 → 9 exp
-// (cumulative cap 21). Exp is earned in the lane: at the end of the owner's
-// turn the Active earns EXP_PER_TURN_ACTIVE, and the bench shares
-// EXP_PER_TURN_BENCH, which goes to the bench hero furthest behind (Patrick,
-// 2026-11-17: more heroes on the board split it, a soft cost for flooding);
-// attaching equipment and landing a kill blow earn more. It persists across
-// respawn.
+// Heroes start at Lv1, climb to Lv4 (cap). Step costs are 3 → 5 → 7 exp
+// (cumulative cap 15; Patrick, 2026-11-18, it was 5 → 7 → 9). At the end of
+// its owner's turn a side earns EXP_PER_TURN, and it goes to one of its heroes
+// on the board chosen at random (Patrick, 2026-11-18: "+1 randomly for heroes
+// on board"; it was 2 to the Active and 1 shared by the bench). Attaching
+// equipment and landing a kill blow earn more. It persists across a fall
+// (docs/balance-model.md §15).
 
-/** Exp the Active earns at the end of its owner's turn — the lane is where a
- *  hero grows, and where it is at risk. */
-export const EXP_PER_TURN_ACTIVE = 2;
-/** Exp the bench shares at the end of its owner's turn: all of it goes to one
- *  bench hero, the one that has earned the least (expSystem `benchExpTaker`). */
-export const EXP_PER_TURN_BENCH = 1;
+/** Exp a side earns at the end of its turn: all of it to one of its heroes on
+ *  the board, Active or bench, picked at random (expSystem `turnExpTaker`). */
+export const EXP_PER_TURN = 1;
 /** Exp the bearer earns when equipment is attached to it. */
 export const EXP_ON_EQUIP = 1;
-/** Exp a hero earns for the hit that knocks an enemy out — the highest-value
- *  source, so aggression outpaces standing the turn. */
-export const EXP_ON_KILL = 2;
+/** Exp a hero earns for the hit that knocks an enemy hero out (Patrick,
+ *  2026-11-18; it was 2). */
+export const EXP_ON_KILL = 1;
 
-export const LEVEL_THRESHOLDS = [5, 7, 9] as const;
+export const LEVEL_THRESHOLDS = [3, 5, 7] as const;
 export const START_LEVEL = 1 as const;
 export const MAX_LEVEL = 4 as const;
 

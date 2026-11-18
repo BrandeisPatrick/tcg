@@ -295,11 +295,12 @@ export interface CardInstance {
   respawnTurnsLeft?: number;
   /**
    * Hero leveling. Heroes start at level 1 and climb to a cap of 4.
-   * Earn exp from three triggers: end of owner's turn (+1 per alive hero),
-   * equipping an item (+1 to the bearer), and landing a killing blow (+2 to
-   * the killer). Reaching the next per-level threshold (3 → 6 → 9 exp)
-   * advances `level` and rolls the surplus into the next bar. Resets to
-   * level 1 / 0 exp on death (alongside other corpse cleanup).
+   * Earn exp from three triggers: the end of the owner's turn (+1 to one of
+   * its heroes on the board, picked at random), equipping an item (+1 to the
+   * bearer, once per item) and landing a killing blow (+1 to the killer); the
+   * numbers are in constants.ts. Reaching the next per-level threshold
+   * (3 → 5 → 7 exp) advances `level` and rolls the surplus into the next bar.
+   * Both stay on the card through a fall (`heroToDeck`).
    */
   exp?: number;
   level?: 1 | 2 | 3 | 4;

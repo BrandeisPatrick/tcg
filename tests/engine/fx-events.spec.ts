@@ -6,7 +6,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
 import { getAbility } from '@/abilities';
-import { DJINN_CAP } from '@/engine/constants';
+import { DJINN_CAP, LEVEL_THRESHOLDS } from '@/engine/constants';
 import type { CardInstance, GameState, HitFx, ShieldFx, StatusFx, HealFx, CastFx, SwingFx } from '@/engine/types';
 
 /**
@@ -339,17 +339,15 @@ describe('board FX stream — casts and the turn flush', () => {
   });
 
   it('what the end of the turn does reaches the board with the next turn\'s start, in one batch', () => {
-    // P0 channels (a pulse at the end of its turn) and has a hero one exp short of a level;
+    // P0 channels (a pulse at the end of its turn) and its heroes are one exp short of a level;
     // P1's Abrams will regenerate when its turn starts. A stale event is left in the stream.
     const G0 = freshReadyGame();
     G0.turnNumber = 3;
     G0.draftTurnsOffset = 1 - 3;
     const p0 = G0.players['0'];
     addStatus(G0, p0.active!, 'casting_light', 2, 3);
-    const lash = p0.bench[1]!;
-    lash.level = 1; lash.exp = 4;
-    // The bench's exp goes to the hero furthest behind (2026-11-17): the others are ahead.
-    for (const b of p0.bench) if (b && b !== lash) b.level = 2;
+    // The turn's exp goes to a random hero of the board (2026-11-18): each is a point short of a level.
+    for (const c of [p0.active, ...p0.bench]) if (c) { c.level = 1; c.exp = LEVEL_THRESHOLDS[0] - 1; }
     G0.fx = [{ kind: 'revive', iid: 'stale', seq: 1 }];
     G0.counters.fx = 1;
 

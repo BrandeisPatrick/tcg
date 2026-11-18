@@ -81,10 +81,11 @@ in any seat.
   souls (§7), and pushes the victim's **level + 1** into the victim's track
   (doubled from round 9); the fallen hero goes back to the hand after **2** own
   turns.
-- **Earn it in the lane:** the Active earns 2 exp at the end of its turn, a
-  bench hero 1; +1 on equip, +2 on a kill blow (5 / 7 / 9 to level). A hero's
-  ultimate unlocks at Level 3 (Level 2 until 2026-11-16, §11) — the
-  front-liner earns it first, a bench caster late — so ults arrive one at a time.
+- **Exp:** at the end of its turn a side earns 1, to one of its heroes on the
+  board picked at random; +1 on a first equip, +1 on a kill blow (3 / 5 / 7 to
+  level; §15, 2026-11-18. Until then the Active earned 2 and the bench shared 1,
+  +2 a kill, 5 / 7 / 9). A hero's ultimate unlocks at Level 3 (Level 2 until
+  2026-11-16, §11).
 - Base HP: squishy **4**, bruiser **6**, anchor tank **7**. Base BP: caster/support
   **1**, attacker/bruiser **2**, tank **1**.
 - Base skill damage **1–2**; heals/shields flat (Spirit scales **damage** only).
@@ -411,6 +412,8 @@ is a check on him too: every spirit skill aimed at him hits harder.
 Patrick: "I think ultimate should be Level 3 unlock." It was Level 2
 (`ULT_UNLOCK_LEVEL`). Level 3 takes 12 exp (5 + 7); nothing else changed.
 
+(The exp rules below were replaced on 2026-11-18: §15 has the new pace.)
+
 **When a hero gets there.** The Active earns 2 exp a turn, a bench hero 1
 (since 2026-11-17 the bench shares that 1, §14), and a hero 1 the first time it
 wears an item and 2 for a kill blow.
@@ -549,6 +552,8 @@ draw cards a deck (2026-11-18) run decks out too soon.
 
 ## 14. The bench shares its exp (2026-11-17)
 
+(Replaced on 2026-11-18 by §15: the turn's exp now goes to a random hero.)
+
 Patrick: exp should go to fewer heroes the more there are on the board, "like a
 soft punishment to have too many heroes on board". He proposed a random hero
 each turn; the dilution is kept and the dice are not. Random exp is luck on
@@ -585,6 +590,59 @@ share its souls.
 **Left for testing** (only when Patrick asks by name): whether full-bench
 squads now see too few ultimates; whether the bench's share should be 2 (one
 more knob: `EXP_PER_TURN_BENCH`).
+
+## 15. Exp to a random hero; a shorter bar (2026-11-18)
+
+Patrick: "+1 randomly for heroes on board", "distribute randomly for hero";
+the kill blow "+1"; "the bar should be 3 5 7". This is the random hero he
+proposed for §14, which that pass kept out.
+
+**The rule.**
+- At the end of its owner's turn a side earns `EXP_PER_TURN` = 1, and it goes
+  to one of its heroes on the board, Active or bench, picked with the match's
+  seeded dice (`turnExpTaker`). A hero at the cap, a fallen one and a unit are
+  never picked, so the point is never lost (§14's worry about the cap); a lone
+  hero takes it without a roll.
+- A first equip still pays its wearer 1 (`EXP_ON_EQUIP`). A kill blow pays 1
+  (`EXP_ON_KILL`, was 2).
+- The bar is 3 → 5 → 7 (`LEVEL_THRESHOLDS`, was 5 → 7 → 9): Level 2 at 3 exp,
+  Level 3 (the ultimate) at 8, the cap at 15 (was 5, 12 and 21).
+
+**The pace.** The board earned 3 a turn with a bench (the Active 2, the bench
+1); it earns 1 now, a third, while the bar is two thirds as long. A hero's own
+share of the turn's exp is 1 ÷ the heroes on its board.
+
+| Own turn a hero reaches Level 3 (expected) | Turn exp only | With two items and one kill (+3) |
+|---|---|---|
+| Before: the Active, any board | 6 | 4 (+4 then) |
+| Now: board of 1 | 8 | 5 |
+| Now: board of 2 | about 16 | about 10 |
+| Now: board of 3 | about 24 | about 15 |
+
+The dice spread these: on a board of two, one hero can be a few turns ahead of
+the expected turn and the other as far behind.
+
+**What it changes.**
+- **Ultimates come later**, around own turn 10 on a board of two that wears
+  its items, past the side's deck-out turn (15, §13) on a full board that
+  wears few. The opening waits (small 4, medium 6, large 8) no longer gate an
+  ultimate: Level 3 comes after all of them.
+- **Items are the road to a level.** A first equip pays as much as a whole
+  turn's exp, so a hero that wears three items has earned three of the eight
+  it needs for its ultimate. Kills pay half what they did: aggression earns
+  the push and the bounty, less exp.
+- **The lane no longer pays more than the bench.** A bench caster levels as
+  fast as the Active. What the Active has over it is its kills.
+- **Going wide costs more than in §14.** Each hero added to the board slows
+  every other hero's level, the Active's too (§14 left the Active alone).
+- **Late heroes** (4 growth points a level, docs/hero-design.md §2) get their
+  levels later, so they are weaker than before; early heroes lose least.
+- **Luck.** When a level comes is now partly dice, as §14 feared. The seeded
+  dice keep a replay the same.
+
+**Left for testing** (only when Patrick asks by name): whether enough
+ultimates come before the deck runs out; whether the dice decide too many
+games. The knobs: `EXP_PER_TURN`, `LEVEL_THRESHOLDS`, `ULT_UNLOCK_LEVEL`.
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).

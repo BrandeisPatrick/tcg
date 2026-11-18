@@ -25,8 +25,8 @@ against about forty games and corrects it in places; read its §3 before buildin
   over. Draw one card a turn, hold seven.
 - The Active duels; the bench casts. Each hero: one skill a turn for a soul, or
   the Active attacks. Retreat costs 2. Three items a hero.
-- Levels from standing in the lane (2 exp Active; the bench shares 1, to the hero furthest behind), +1 on equip, +2 on
-  a kill; each level +1 HP / BP / Spirit; the ultimate comes at level 3 (level 2 until 2026-11-16).
+- Levels: each turn 1 exp to a random hero on the board, +1 on equip, +1 on a kill, 3 / 5 / 7 to level
+  (balance-model.md §15, 2026-11-18); each level +1 HP / BP / Spirit; the ultimate comes at level 3 (level 2 until 2026-11-16).
 - A hero that dies **loses its items** to the discard and respawns in 3 turns.
   The patron (10) loses the dead hero's level. Patron at 0, or every hero down,
   is the loss.
