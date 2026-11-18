@@ -40,9 +40,6 @@ export const CHEAT_DEATH_WAIT = 3;
  *  hero of the side wears it (2026-11-16; two do not add up). */
 export const TROPHY_COLLECTOR_INCOME = 1;
 
-/** Souls Cultist Sacrifice adds to its player's next income (2026-11-16). */
-export const CULTIST_SACRIFICE_SOULS = 8;
-
 /** Extra souls on the second mover's first income (the pie rule's dial; the
  *  pricing pass may raise it). */
 export const SECOND_MOVER_FIRST_INCOME_BONUS = 0;

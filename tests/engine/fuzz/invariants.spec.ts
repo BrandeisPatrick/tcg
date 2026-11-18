@@ -44,11 +44,11 @@ describe('invariants hold in every state of seeded games', () => {
         expect(coverage.remMerges, 'Rem never merged').toBeGreaterThan(0);
         expect(coverage.ultsPlayed, 'no ultimate was ever played').toBeGreaterThan(0);
         expect(coverage.spellsPlayed, 'no spell was ever played').toBeGreaterThan(0);
-        // The draw card is Golden Goose Egg since 2026-11-16, and these decks come from the heroes'
-        // builds, which carry none (the Cooldown family, which drew until then, is equipment now):
-        // its draw is held to the rules by harness.spec's own cases. No card owes a discard any
-        // more, so none is ever made.
-        expect(coverage.discards, 'a discard was made, though no card owes one').toBe(0);
+        // These decks come from the heroes' builds, which open with the draw cards since
+        // 2026-11-18 (BASE_DRAWS): Cultist Sacrifice owes 2 discards and Majestic Leap 1, so the
+        // draws and the discards they owe are both reached.
+        expect(coverage.drawCards, 'no draw card was ever played').toBeGreaterThan(0);
+        expect(coverage.discards, 'no discard was ever made').toBeGreaterThan(0);
       }
       // Every seat opens on a first Active, places the heroes it draws, plays equipment onto
       // them — an upgrade evolving the item it is built from — and casts spells; fallen heroes

@@ -477,11 +477,14 @@ export function upgradesOfOracle(itemId: unknown): string[] {
   return typeof itemId === 'string' ? ITEMS.filter((i) => evolvesFromOracle(i.id) === itemId).map((i) => i.id) : [];
 }
 
-/** The draw cards, from their texts ("Draw N cards[, then discard M cards
- *  from your hand]"): what each casts — N drawn, then M discarded from
- *  anywhere in the hand. Golden Goose Egg since 2026-11-16 (the Cooldown
- *  family drew until then). Pinned against the card texts by harness.spec. */
+/** The draw cards, from their texts ("Draw N cards[, then discard M]"): what
+ *  each casts — N drawn, then M discarded from anywhere in the hand. Golden
+ *  Goose Egg since 2026-11-16 (the Cooldown family drew until then), Cultist
+ *  Sacrifice since 2026-11-18. The hero draws (Warp Stone, Majestic Leap) take
+ *  heroes, not the top card: HERO_DRAWS. Pinned against the card texts by
+ *  harness.spec. */
 export const DRAW_CARDS: Readonly<Record<CardId, { draw: number; discard: number }>> = {
+  cultist_sacrifice: { draw: 4, discard: 2 },
   golden_goose_egg: { draw: 2, discard: 0 },
 };
 
@@ -676,7 +679,8 @@ export function spellTargetsOracle(G: GameState, pid: PlayerID, cardId: unknown)
  *
  *  A spell (docs/card-design.md §1, 2026-11-15): no hero of the side stands to
  *  cast it; a hero draw (Warp Stone, Majestic Leap, 2026-11-18) with no hero
- *  card (a unit is none) left in the deck; `heroIid` is no target its card allows (a spell that takes none
+ *  card (a unit is none) left in the deck; Cultist Sacrifice (draw 4, discard
+ *  2) with an empty deck; `heroIid` is no target its card allows (a spell that takes none
  *  ignores it); a `replaceIid` (a spell replaces nothing); `souls` fall short
  *  of its price.
  *
@@ -703,6 +707,7 @@ export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown,
     if ((G.players[pid].spellLock ?? 0) > 0) return 'spell-lock';
     if (!spellCasterOracle(G, pid)) return 'no-caster';
     if (HERO_DRAWS.has(card.cardId) && !G.players[pid].deck.some((c) => isHeroCard(c) && !isUnitCard(c))) return 'no-hero-in-deck';
+    if (card.cardId === 'cultist_sacrifice' && G.players[pid].deck.length === 0) return 'empty-deck';
     const targets = spellTargetsOracle(G, pid, card.cardId);
     if (targets !== 'none' && !targets.some((t) => t.iid === heroIid)) return heroIid === undefined ? 'missing-target' : 'bad-target';
     if (replaceIid !== undefined) return 'replace-spell';

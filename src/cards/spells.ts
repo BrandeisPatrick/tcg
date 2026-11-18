@@ -41,7 +41,8 @@ export const SPELLS: SpellCard[] = [
   // Barrel, Knockdown, Disarming Hex, Majestic Leap, Cursed Relic, Mystical
   // Piano, Echo Shard, Ethereal Shift, Divine Barrier, Infuser and Unstoppable
   // (Transcendent Cooldown too, until it went back to equipment the same day);
-  // Warp Stone since it became a hero draw (2026-11-18).
+  // Warp Stone since it became a hero draw, and Cultist Sacrifice since it
+  // became a draw 4, discard 2 (2026-11-18).
   // The tier stays the item's (docs/card-design.md,
   // "Changed 2026-11-16: spells priced for one play"). Since prices halved the
   // same day (SOUL_POINTS 2) that price is the play's value ÷ 2, to the whole
@@ -64,10 +65,11 @@ export const SPELLS: SpellCard[] = [
   { id: 'restorative_locket', name: 'Restorative Locket', type: 'spell', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_restorative_locket'], text: 'Heal an ally 2, plus 2 per enemy hero whose skill is waiting. Its Retreat this turn is free.' },
 
   // ----- Tier 3 -----
-  // Cultist Sacrifice (canon Weapon T3 active: consume an enemy NPC for bonus
-  // souls). Patrick, 2026-11-16: "you play it, and you get a burst of souls
-  // next turn."
-  { id: 'cultist_sacrifice', name: 'Cultist Sacrifice', type: 'spell', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_cultist_sacrifice'], text: 'At the start of your next turn, gain 8 souls.' },
+  // Cultist Sacrifice (canon Weapon T3 active: consume a creep for souls). It
+  // sacrifices cards for cards since 2026-11-18 (Patrick: "Draw 4 cards discard
+  // 2"), priced for one play: 4 × 1.4 − 2 × 0.3 = 5.0 points, 2 souls
+  // (docs/card-design.md). It was 8 souls on the next turn's income (2026-11-16).
+  { id: 'cultist_sacrifice', name: 'Cultist Sacrifice', type: 'spell', rarity: 3, slot: 'weapon', tier: 3, price: 2, abilities: ['eff_cultist_sacrifice'], text: 'Draw 4 cards, then discard 2.' },
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
   { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns.' },
   { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn. A Stun ends a channel.' },

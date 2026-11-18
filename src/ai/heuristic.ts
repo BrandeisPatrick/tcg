@@ -462,8 +462,7 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   s -= bossBlow(g, pid) - bossBlow(g, en);
   // Souls carry over from turn to turn: a little for each one kept. The hand is
   // cards to come (a draw card's discard still owed takes its worst away).
-  // Souls a Cultist Sacrifice has coming next turn count as held.
-  s += (me.souls + (me.incomeBonus ?? 0) - foe.souls - (foe.incomeBonus ?? 0)) * SOUL;
+  s += (me.souls - foe.souls) * SOUL;
   s += handValue(g, pid) - handValue(g, en);
   const tally = (ps: PlayerState, rivals: PlayerState, sign: number) => {
     const enemies = liveBoardCards(rivals).length;

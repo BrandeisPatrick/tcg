@@ -8,7 +8,7 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBlocked, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
+import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -123,7 +123,8 @@ export interface AbilityDef {
    *  counted SKILL_SPIRIT_RATE times (`spi`). */
   scalesSpirit?: boolean;
   /** A spell only: false while casting it now would do nothing (a hero draw
-   *  with no hero left in the deck: Warp Stone, Majestic Leap). `playBlocked`
+   *  with no hero left in the deck: Warp Stone, Majestic Leap; a draw from an
+   *  empty deck that would only discard: Cultist Sacrifice). `playBlocked`
    *  refuses the cast ('nothing'), so it is never wasted. */
   castable?: (G: GameState, pid: PlayerID) => boolean;
   /** A draw card's draw: the cards it draws and the cards it then makes its
@@ -573,15 +574,20 @@ const eff_trophy_collector: AbilityDef = {
   run: () => {},
 };
 
-// Cultist Sacrifice: CULTIST_SACRIFICE_SOULS on top of the next own income.
+// Cultist Sacrifice (canon Weapon T3 active: consume a creep for souls). TCG
+// (Patrick, 2026-11-18): it sacrifices cards for cards — draw 4, then discard 2
+// of the player's choice (`oweDiscard`; a hero discarded goes back into the
+// deck). Cast only while the deck holds a card, or it would only discard. It
+// was 8 souls on the next income until then (2026-11-16).
 const eff_cultist_sacrifice: AbilityDef = {
   id: 'eff_cultist_sacrifice', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Cultist Sacrifice — 8 souls at the start of your next turn.',
+  prompt: 'Cultist Sacrifice — draw 4 cards, then discard 2.',
   base: 4,
+  draw: { cards: 4, discard: 2 },
+  castable: (G, pid) => G.players[pid].deck.length > 0,
   run: (G, ctx) => {
-    const ps = G.players[ctx.movingPlayer];
-    ps.incomeBonus = (ps.incomeBonus ?? 0) + CULTIST_SACRIFICE_SOULS;
-    pushLog(G, `Cultist Sacrifice: P${ctx.movingPlayer} gains ${CULTIST_SACRIFICE_SOULS} souls at the start of its next turn.`);
+    drawCards(G, ctx.movingPlayer, 4);
+    oweDiscard(G, ctx.movingPlayer, 2, 'cultist_sacrifice');
   },
 };
 

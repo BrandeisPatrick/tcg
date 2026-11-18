@@ -48,12 +48,13 @@ describe('ready decks', () => {
     const payoffs = d.items.filter((id) => itemPrice(id) > PRICE[2]);
     expect(payoffs.length, payoffs.join(', ')).toBeLessThanOrEqual(2);
     for (const id of payoffs) expect(itemPrice(id), id).toBeLessThanOrEqual(PRICE[4]);
-    // A counter in every deck; the draw card, Golden Goose Egg, once (running out of cards loses
-    // since 2026-11-16); and a deck leans on equipment, which stays, over spells.
+    // A counter in every deck; the draw cards once each — Golden Goose Egg, and since 2026-11-18
+    // Cultist Sacrifice, Warp Stone and Majestic Leap (Patrick: "these are good cards added for all
+    // decks"; running out of cards loses since 2026-11-16); and a deck leans on equipment, which
+    // stays, over spells.
     expect(d.items.some((id) => ['counterspell', 'debuff_reducer', 'debuff_remover', 'knockdown'].includes(id))).toBe(true);
-    const draws = d.items.filter((id) => /^Draw \d+ cards?/.test(itemCard(id)!.text ?? ''));
-    expect(new Set(draws)).toEqual(new Set(['golden_goose_egg']));
-    expect(draws).toHaveLength(1);
+    const draws = d.items.filter((id) => /^Draw (\d+|a) (cards?|heroe?s?)\b/.test(itemCard(id)!.text ?? ''));
+    expect([...draws].sort()).toEqual(['cultist_sacrifice', 'golden_goose_egg', 'majestic_leap', 'warp_stone']);
     const spells = d.items.filter((id) => itemCard(id)!.type === 'spell').length;
     expect(spells).toBeGreaterThan(0);
     expect(spells).toBeLessThanOrEqual(DECK_SIZE / 2);
