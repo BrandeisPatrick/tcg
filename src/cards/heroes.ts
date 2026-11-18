@@ -173,7 +173,7 @@ export const HEROES: HeroCard[] = [
     id: 'hero_drifter', name: 'Drifter', type: 'hero', rarity: 3,
     atk: 2, hp: 6, growth: { atk: 2, hp: 1, spirit: 0 }, retreat: 1,
     profile: { role: 'Assassin', mix: { tank: 2, damage: 3, control: 1, support: 0 }, reach: 'one', curve: 'mid', gun: true },
-    skills: [], passives: ['passive_drifter_bloodscent'], ult: 'eff_ult_drifter',
+    skills: [], passives: ['passive_drifter_bloodscent', 'passive_drifter_rend'], ult: 'eff_ult_drifter',
     signature: ['restorative_shot', 'frenzy'],
   },
   {
