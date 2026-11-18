@@ -358,7 +358,8 @@ item has, brings it back within a step.
   the radius as the board's own neighbours ("Added 2026-11-16: effects from
   the archetype review").
 - **Cultist Sacrifice** (test 1): it consumes an NPC for souls. A card since
-  2026-11-16 (same section): souls next turn.
+  2026-11-16 (same section): souls next turn. Since 2026-11-18 it draws 4 and
+  discards 2 ("Changed 2026-11-18: Cultist Sacrifice draws 4, discards 2").
 - **Witchmail** (test 1): it cuts cooldowns, and what is left is a stat stick.
   A card since 2026-11-16: the Cooldown family made a wait a thing a card may
   move (next section).
@@ -929,6 +930,36 @@ costs.
 - **Left for testing:** whether a hero for 1 soul makes a deck with few items
   too consistent.
 
+### Changed 2026-11-18: Cultist Sacrifice draws 4, discards 2
+
+Patrick: "Cultist Sacrifice: draw 4 cards, discard 2. These are good cards
+added for all decks." It stays a Weapon T3 spell. In Deadlock it consumes a
+trooper for souls; here the hand is what it sacrifices: two cards for four.
+
+| Card | Tab · tier | Text | One play (points) | Price |
+|---|---|---|---|---|
+| Cultist Sacrifice | Weapon T3 | Draw 4 cards, then discard 2. | 4 × 1.4 − 2 × 0.3 = **5.0** | **2** (2.5) |
+
+- **Its one play is 5.0**, under half its tier's 16, so it prints its own
+  price (§2). Half of 5.0 is 2.5; it rounds down to 2 because drawing 4 takes 4
+  turns off its own deck-out clock (balance-model.md §13), twice what Golden
+  Goose Egg takes.
+- **Rules.** The discard is the player's choice and comes after the draw
+  (`oweDiscard`); it is never more than the hand holds. A full hand draws
+  fewer, as any draw does. It is not cast from an empty deck (`castable`,
+  play block 'nothing': "your deck is empty").
+- **The old card** (since 2026-11-16) paid 8 souls at the start of the next
+  turn. That rule is gone: `incomeBonus`, `CULTIST_SACRIFICE_SOULS`, and the
+  AI's read of it.
+- **In every deck.** Patrick asked for the three draw spells, Cultist
+  Sacrifice, Warp Stone and Majestic Leap, in every deck. Each ready deck holds
+  one of each beside its Golden Goose Egg, and the deck of the builds opens with
+  them (`BASE_DRAWS`, cards/decks.ts). See [deck-plan.md](deck-plan.md), "The
+  draw cards".
+- **Left for testing:** whether four draw spells a deck run it out too soon:
+  a side that casts all four draws 9 cards more and loses at its own turn 6, not
+  15.
+
 ### Changed 2026-11-18: Metal Skin costs 6
 
 Patrick: "metal skin is too cheap now." Metal Skin is Vitality T3, an active, so it
@@ -982,7 +1013,7 @@ the effects they lack; Patrick picked these. None was simulated.
 | Mystic Expansion | Spirit T1 (new) | 1 | When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage. Lash's Death Slam lifts them too (2026-11-17). | about 2.7 one-enemy damaging casts in its 8 turns worn × 0.8 that a neighbour stands × 1 = **2.2**, its tier's 2 |
 | Greater Expansion | Spirit T3 (new, built from it) | 4 | When the bearer's skill deals damage to one enemy, every other enemy takes the same damage. Lash's Death Slam lifts every enemy hero (2026-11-17). | 1.3 casts in 4 turns × 2.2 other enemies standing × about 4 (a Level 2 skill, Spirit counted twice) = **11.4**, the top of its band (6–12) |
 | Trophy Collector | Vitality T2 (new) | 2 | Your lane pays 1 more soul a turn while it is worn. Two do not add up. | 6 souls in its 6 turns worn less its 2 = 4 net; souls stop being the limit by mid-match (balance-model.md §12), so about half buys something: 4 × 2 × 0.5 = **4.0** |
-| Cultist Sacrifice | Weapon T3 spell (new) | 4 | At the start of your next turn, gain 8 souls. | 8 less its 4 = 4 net; one turn later most of a burst is spent (0.8): 4 × 2 × 0.8 = **6.4**, in its band |
+| Cultist Sacrifice | Weapon T3 spell (new) | 4 | At the start of your next turn, gain 8 souls. (Draw 4, discard 2, for 2, since 2026-11-18.) | 8 less its 4 = 4 net; one turn later most of a burst is spent (0.8): 4 × 2 × 0.8 = **6.4**, in its band |
 | Silence Wave | Spirit T3 spell | 4 | Deal {sp:2} spirit damage to the enemy Active. The rival plays no spells on its next 2 turns. | 2; a side plays about 0.6 spells a turn at about 3 points: 2 × 0.6 × 3 = 3.6 → **5.6**, half its 8 or more, so its tier's price |
 | Vortex Web | Spirit T4 spell | 3 | Pull an enemy bench hero into their Active slot, deal {sp:2} spirit damage to it and Root it for 1 turn. | the pull 2.0 ([hero-design.md](./hero-design.md) §4); the kill it sets up, 3 × 0.5 = 1.5; 2; the Root 0.4 → **5.9**, under half its 16, so it prints 3 (value ÷ 2, above Slowing Hex's 2, the spell it is built from) |
 

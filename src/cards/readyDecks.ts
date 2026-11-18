@@ -16,7 +16,10 @@ import type { CardId } from '@/engine/types';
  *  - At least one upgrade beside the item it is built from (played onto the hero wearing
  *    that item, the upgrade costs only the difference).
  *  - A counter: Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
- *  - One Golden Goose Egg (draw 2), no more: running out of cards loses (2026-11-16).
+ *  - The draw cards, one of each: Golden Goose Egg (draw 2), and since 2026-11-18 Cultist
+ *    Sacrifice (draw 4, discard 2), Warp Stone (a hero) and Majestic Leap (2 heroes,
+ *    discard 1) (Patrick: "these are good cards added for all decks"). No more than one
+ *    of each: running out of cards loses (2026-11-16).
  *  - A base health item, Extra Health ×2 at least (Patrick, 2026-11-18: "all deck should
  *    have some base health item, it is kinda the necessity for deck").
  *  - Mostly equipment: spells are played once, so at most half the deck.
@@ -44,10 +47,11 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_drifter', 'hero_vindicta', 'hero_wraith'],
     items: [
       // Kinetic Dash is built from Extra Stamina since 2026-11-17: one of each. Extra Health ×2
-      // (2026-11-18) for Restorative Shot and a Magazine.
-      ...n(4, 'headshot_booster'), ...n(2, 'extra_health'), 'extended_magazine', 'golden_goose_egg', 'extra_stamina',
-      ...n(2, 'opening_rounds'), 'titanic_magazine', 'kinetic_dash',
-      'knockdown', 'headhunter', 'express_shot',
+      // (2026-11-18) for Restorative Shot and a Magazine; the draw cards (2026-11-18) for the
+      // other Magazine, Titanic Magazine and an Opening Rounds.
+      ...n(4, 'headshot_booster'), ...n(2, 'extra_health'), 'golden_goose_egg', 'extra_stamina',
+      'opening_rounds', 'kinetic_dash',
+      'knockdown', 'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'headhunter', 'express_shot',
     ],
   },
   {
@@ -57,10 +61,11 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_warden', 'hero_haze', 'hero_silver'],
     items: [
       // Kinetic Dash beside Extra Stamina, its component since 2026-11-17 (a Magazine out for it).
-      // Extra Health ×2 (2026-11-18) for Restorative Shot and another Magazine.
-      ...n(2, 'extended_magazine'), ...n(2, 'extra_health'), 'extra_stamina', 'golden_goose_egg',
-      ...n(4, 'split_shot'), 'titanic_magazine', ...n(2, 'stalker'), 'kinetic_dash',
-      'knockdown', 'tesla_bullets',
+      // Extra Health ×2 (2026-11-18) for Restorative Shot and another Magazine; the draw cards
+      // (2026-11-18) for a Split Shot, Titanic Magazine and a Magazine.
+      'extended_magazine', ...n(2, 'extra_health'), 'extra_stamina', 'golden_goose_egg',
+      ...n(3, 'split_shot'), ...n(2, 'stalker'), 'kinetic_dash',
+      'knockdown', 'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'tesla_bullets',
     ],
   },
   {
@@ -69,10 +74,11 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'Every skill is a kill shot: Tankbuster and Mystic Burst ride it, Echo Shard casts it twice, Infuser heals off it.',
     heroes: ['hero_lady_geist', 'hero_shiv', 'hero_yamato'],
     items: [
-      // Extra Health ×2 (2026-11-18) for Spirit Lifesteal and a Mystic Vulnerability.
-      ...n(2, 'extra_spirit'), ...n(3, 'mystic_burst'), ...n(2, 'extra_health'), 'golden_goose_egg',
-      ...n(2, 'improved_spirit'), 'mystic_vulnerability',
-      'knockdown', 'improved_burst',
+      // Extra Health ×2 (2026-11-18) for Spirit Lifesteal and a Mystic Vulnerability; the draw
+      // cards (2026-11-18) for an Extra Spirit, a Mystic Burst and the other Mystic Vulnerability.
+      'extra_spirit', ...n(2, 'mystic_burst'), ...n(2, 'extra_health'), 'golden_goose_egg',
+      ...n(2, 'improved_spirit'),
+      'knockdown', 'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'improved_burst',
       ...n(2, 'echo_shard'), 'infuser',
     ],
   },
@@ -82,10 +88,11 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: "Area skills on every enemy, and Greater Expansion turns Seven's one-target charge into a storm.",
     heroes: ['hero_kelvin', 'hero_lash', 'hero_seven'],
     items: [
-      // Extra Health ×2 (2026-11-18) for an Extra Spirit and a Mystic Vulnerability.
-      ...n(3, 'extra_spirit'), ...n(2, 'mystic_expansion'), ...n(2, 'extra_health'), 'extra_charge', 'golden_goose_egg',
-      ...n(2, 'improved_spirit'), 'mystic_vulnerability', 'mystic_slow',
-      'knockdown', 'greater_expansion', 'torment_pulse',
+      // Extra Health ×2 (2026-11-18) for an Extra Spirit and a Mystic Vulnerability; the draw
+      // cards (2026-11-18) for an Extra Spirit, a Mystic Expansion and Mystic Slow.
+      ...n(2, 'extra_spirit'), 'mystic_expansion', ...n(2, 'extra_health'), 'extra_charge', 'golden_goose_egg',
+      ...n(2, 'improved_spirit'), 'mystic_vulnerability',
+      'knockdown', 'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'greater_expansion', 'torment_pulse',
     ],
   },
   {
@@ -94,9 +101,10 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'Stun, disarm, silence and lock their spells, each a turn longer, until their deck runs dry.',
     heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_viscous'],
     items: [
-      'rusted_barrel', ...n(4, 'extra_health'), ...n(2, 'extra_regen'), 'golden_goose_egg',
-      ...n(2, 'duration_extender'), 'slowing_hex',
-      ...n(2, 'knockdown'), 'disarming_hex', 'superior_duration', 'silence_glyph',
+      // The draw cards (2026-11-18) for Slowing Hex, a Knockdown and an Extra Health.
+      'rusted_barrel', ...n(3, 'extra_health'), ...n(2, 'extra_regen'), 'golden_goose_egg',
+      ...n(2, 'duration_extender'),
+      'knockdown', 'disarming_hex', 'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'superior_duration', 'silence_glyph',
     ],
   },
   {
@@ -105,9 +113,10 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'Grind them out: Abrams holds the lane, Rem puts their carry to sleep, and every Ghoul that falls mills a card.',
     heroes: ['hero_abrams', 'hero_graves', 'hero_rem'],
     items: [
-      ...n(4, 'extra_health'), ...n(2, 'extra_regen'), 'healing_rite', 'golden_goose_egg',
-      'debuff_reducer', 'weapon_shielding', 'spirit_shielding', ...n(2, 'mystic_slow'), 'healbane',
-      'fortitude', 'healing_nova',
+      // The draw cards (2026-11-18) for a Mystic Slow, Healbane and an Extra Regen.
+      ...n(4, 'extra_health'), 'extra_regen', 'healing_rite', 'golden_goose_egg',
+      'debuff_reducer', 'weapon_shielding', 'spirit_shielding', 'mystic_slow',
+      'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'fortitude', 'healing_nova',
     ],
   },
   {
@@ -116,8 +125,10 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: "Heal and shield every turn: Victor's aura wounds them all, and a hero Dynamo heals swings harder and retreats free.",
     heroes: ['hero_victor', 'hero_dynamo', 'hero_paige'],
     items: [
-      ...n(3, 'extra_health'), 'extra_regen', ...n(2, 'healing_rite'), 'sprint_boots', 'restorative_shot', 'extended_magazine', 'golden_goose_egg',
-      ...n(2, 'healing_booster'), 'enduring_speed', 'restorative_locket', 'debuff_reducer',
+      // The draw cards (2026-11-18) for Enduring Speed, Restorative Locket and Extended Magazine.
+      ...n(3, 'extra_health'), 'extra_regen', ...n(2, 'healing_rite'), 'sprint_boots', 'restorative_shot', 'golden_goose_egg',
+      ...n(2, 'healing_booster'), 'debuff_reducer',
+      'cultist_sacrifice', 'warp_stone', 'majestic_leap',
       'healing_tempo',
     ],
   },
@@ -127,10 +138,11 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: "Spirit opens them for the gun and the gun for spirit: Kelvin's grenade cuts Bullet Resist, Haze's swings cut Spirit Resist, Mirage's mark cashes it.",
     heroes: ['hero_haze', 'hero_mirage', 'hero_kelvin'],
     items: [
-      // Extra Health ×2 (2026-11-18) for an Extra Spirit and a Magazine.
-      ...n(2, 'extra_spirit'), ...n(2, 'spirit_strike'), 'extended_magazine', ...n(2, 'extra_health'), 'golden_goose_egg',
-      ...n(3, 'bullet_resist_shredder'), 'spirit_shredder', 'cold_front',
-      'knockdown', 'alchemical_fire', 'spirit_rend',
+      // Extra Health ×2 (2026-11-18) for an Extra Spirit and a Magazine; the draw cards
+      // (2026-11-18) for a Bullet Resist Shredder, the other Magazine and Cold Front.
+      ...n(2, 'extra_spirit'), ...n(2, 'spirit_strike'), ...n(2, 'extra_health'), 'golden_goose_egg',
+      ...n(2, 'bullet_resist_shredder'), 'spirit_shredder',
+      'knockdown', 'cultist_sacrifice', 'warp_stone', 'majestic_leap', 'alchemical_fire', 'spirit_rend',
     ],
   },
 ];

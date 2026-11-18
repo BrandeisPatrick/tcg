@@ -42,9 +42,11 @@ is the artifact "Deck Archetype Map".
   lists at about what a side has by turn 7, so everything drawn is played. In practice a deck
   is eight 1-soul cards, six 2-soul cards and two payoffs of 4, or one payoff of 8.
 - **Up to 4 copies** (MAX_COPIES): the engine card of an archetype comes 4 times (Headshot
-  Booster, Split Shot, Extra Spirit, Extra Health).
-- **One Golden Goose Egg** in every deck: running out of cards loses since 2026-11-16, so a
-  second Egg is a turn off its own clock (§13).
+  Booster, Extra Health).
+- **The draw cards, one of each, in every deck**: Golden Goose Egg, and since 2026-11-18
+  Cultist Sacrifice, Warp Stone and Majestic Leap (below, "The draw cards"). Running out of
+  cards loses since 2026-11-16, so a second copy of any is more turns off its own clock
+  ([balance-model.md](balance-model.md) §13).
 - **An upgrade beside its component**, **a counter** (Knockdown, Debuff Reducer, Counterspell
   or Dispel Magic), **at most 8 spells**, listed by tier.
 - **A base health item, Extra Health ×2 at least** (Patrick, 2026-11-18: "all deck should have
@@ -66,6 +68,39 @@ is the artifact "Deck Archetype Map".
 
   Lockdown (×4), Graveyard (×4) and Aurora (×3) already carried it.
 
+### The draw cards (2026-11-18)
+
+Patrick: "Cultist Sacrifice: draw 4 cards, discard 2. These are good cards added for all
+decks." Every ready deck now holds one Cultist Sacrifice (2 souls), one Warp Stone (1) and one
+Majestic Leap (2) beside its Golden Goose Egg, and the deck of the builds opens with the three
+after its Extra Health ×2 (`BASE_DRAWS`, cards/decks.ts). Their reasoning is in
+[card-design.md](card-design.md), "Changed 2026-11-18".
+
+Each deck gave up three cards for them, 5 souls of room at most, so none went over 28. Each
+gave its least central cards: a second or third copy first, then a card the plan names but
+does not need. Every payoff stayed, and every upgrade still has its component.
+
+| Deck | Gave up | Souls | Spells |
+|---|---|---|---|
+| Headshot | Extended Magazine → Titanic Magazine, one of two Opening Rounds | 27 | 5 |
+| Spray | Extended Magazine → Titanic Magazine (one Magazine stays), one of four Split Shots | 28 | 8 |
+| Nuke | one of two Extra Spirits, one of three Mystic Bursts, Mystic Vulnerability | 27 | 8 |
+| Storm | one of three Extra Spirits, one of two Mystic Expansions, Mystic Slow | 28 | 5 |
+| Lockdown | Slowing Hex, one of two Knockdowns, one of four Extra Healths | 28 | 8 |
+| Graveyard | Healbane, one of two Mystic Slows, one of two Extra Regens | 28 | 6 |
+| Aurora | Enduring Speed, Restorative Locket, Extended Magazine | 28 | 6 |
+| Crossfire | one of three Bullet Resist Shredders, Extended Magazine, Cold Front | 28 | 6 |
+
+- **Why these.** The gun decks lose the Magazine line: Titanic Magazine is a 4-soul payoff
+  that adds 1 Bullet Power, where the three draws find the Boosters and Split Shots the plan
+  runs on. The spirit decks lose a copy of each stat stick, since Improved Spirit still
+  comes twice. Lockdown keeps Disarming Hex, Silence Wave and one Knockdown; Slowing Hex's
+  Silence is the squad's own. Graveyard keeps Debuff Reducer as its counter.
+- **The cost.** Lockdown and Graveyard win on the clock, and every card they draw is a turn
+  off their own. A side that casts all four draws 9 more cards and loses at its own turn 6,
+  not 15 (balance-model.md §13). They may hold the draws back; the AI never draws itself
+  empty.
+
 | Deck | Archetype | Squad (first Active first) | Payoffs |
 |---|---|---|---|
 | Headshot | Bullet, one target | Drifter, Vindicta, Wraith | Headhunter, Express Shot |
@@ -79,68 +114,69 @@ is the artifact "Deck Archetype Map".
 ### Each deck
 
 **Headshot** (Drifter, Vindicta, Wraith). One gun at a time on one target, a bonus for every
-state of its HP: Headshot Booster ×4 (+2 at full HP), Opening Rounds ×2 (+2 above half),
+state of its HP: Headshot Booster ×4 (+2 at full HP), Opening Rounds (+2 above half),
 Drifter's Bloodscent (+2 below half). Headhunter evolves the Booster; Express Shot fires again
 while the target is above half. Kinetic Dash and Vindicta's free Retreat make the second
 swing land hard; Extra Stamina, its component since 2026-11-17, gives that Retreat back (it was
-Kinetic Dash ×2). Extended Magazine → Titanic Magazine, Extra Health ×2, Knockdown, the Egg.
+Kinetic Dash ×2). Extra Health ×2, Knockdown, the draw cards.
 
-**Spray** (Warden, Haze, Silver). Every swing hits every enemy. Split Shot ×4 (Ricochet 2 this
+**Spray** (Warden, Haze, Silver). Every swing hits every enemy. Split Shot ×3 (Ricochet 2 this
 turn, 2 souls) carries the swing's on-hit debuffs to all; Stalker ×2 makes each of them Bleed
 and lose Bullet Resist; Tesla Bullets chains to the bench. Warden holds the lane; Haze's Bullet
-Dance is the finish. Extended Magazine ×2 → Titanic Magazine, Extra Stamina → Kinetic Dash
+Dance is the finish. Extended Magazine, Extra Stamina → Kinetic Dash
 (2026-11-17: Kinetic Dash is built from it; a fourth Magazine made room), Extra Health ×2,
-Knockdown, the Egg.
+Knockdown, the draw cards.
 
 **Nuke** (Lady Geist, Shiv, Yamato). Every skill is a kill shot: Essence Bomb, Serrated Knives
-(Shiv's Killing Blow knocks out what is below half), Flying Slash at any enemy. Mystic Burst ×3
+(Shiv's Killing Blow knocks out what is below half), Flying Slash at any enemy. Mystic Burst ×2
 → Tankbuster add to each cast; Echo Shard ×2
 casts a skill again for 1 soul; Infuser makes the nukes heal their caster (Lady Geist pays HP
-for hers). Mystic Vulnerability lowers Spirit Resist. Extra Spirit ×2 → Improved Spirit ×2 (a
-skill counts Spirit twice), Extra Health ×2, Knockdown, the Egg.
+for hers). Extra Spirit → Improved Spirit ×2 (a skill counts Spirit twice), Extra Health ×2,
+Knockdown, the draw cards.
 
 **Storm** (Kelvin, Lash, Seven). One-target skills the range items widen: Frost Grenade (3✦ on the Active since 2026-11-17, and Kelvin heals as much). Lash (since 2026-11-17)
 swings, slips out and Grapples back in for a second swing with 3✦ more, and on him Greater Expansion
-makes Death Slam lift the whole enemy side back to the hand. Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion ×2
-first, a neighbour's 1). Mystic Vulnerability and Mystic Slow land on everything an area
-skill hits; Torment Pulse chips two a turn. Extra Spirit ×3 → Improved Spirit ×2, Extra Charge
-for Kelvin's grenade, Extra Health ×2, Knockdown, the Egg.
+makes Death Slam lift the whole enemy side back to the hand. Greater Expansion turns Seven's one-target Static Charge into a storm (Mystic Expansion
+first, a neighbour's 1). Mystic Vulnerability lands on everything an area skill hits; Torment
+Pulse chips two a turn. Extra Spirit ×2 → Improved Spirit ×2, Extra Charge for Kelvin's
+grenade, Extra Health ×2, Knockdown, the draw cards.
 
-**Lockdown** (Mo & Krill, Sinclair, Viscous). The rival does not get to play: Knockdown ×2,
-Disarming Hex (from Rusted Barrel), Slowing Hex, Silence Wave (no spells for 2 turns), the
+**Lockdown** (Mo & Krill, Sinclair, Viscous). The rival does not get to play: Knockdown,
+Disarming Hex (from Rusted Barrel), Silence Wave (no spells for 2 turns), the
 squad's Disarm, Rabbit and Cube, and Duration Extender ×2 → Superior Duration, which make each
-a turn longer. It wins on the clock: Extra Health ×4 and Extra Regen ×2 keep it standing until
-the rival's deck runs out (or round 20). The Egg.
+a turn longer. It wins on the clock: Extra Health ×3 and Extra Regen ×2 keep it standing until
+the rival's deck runs out (or round 20). The draw cards, held back while the clock is the plan.
 
 **Graveyard** (Abrams, Graves, Rem). Grind them out: Graves shuffles Ghouls into his own deck
 (his deck lasts longer) and every Ghoul that falls mills the rival's; Rem's Naptime sleeps their
-carry; Abrams holds the lane and heals. Extra Health ×4 → Fortitude, Extra Regen ×2, Weapon and
-Spirit Shielding, Healing Rite → Healing Nova, Mystic Slow ×2 (Graves's Root spreads), Healbane
-against their heals, Debuff Reducer, the Egg.
+carry; Abrams holds the lane and heals. Extra Health ×4 → Fortitude, Extra Regen, Weapon and
+Spirit Shielding, Healing Rite → Healing Nova, Mystic Slow (Graves's Root spreads), Debuff
+Reducer, the draw cards.
 
 **Aurora** (Victor, Dynamo, Paige). Heal and shield every turn. Victor's Aura wounds every enemy
 from the lane; Dynamo's Rejuvenating Aurora and Paige's Plot Armor keep the side up; Healing
 Tempo (from Healing Booster ×2) turns each heal into +2 Bullet Power and a free Retreat.
-Healing Rite ×2, Restorative Locket, Sprint Boots → Enduring Speed, Extra Health ×3, Extra
-Regen, Restorative Shot, Extended Magazine, Debuff Reducer, the Egg.
+Healing Rite ×2, Sprint Boots, Extra Health ×3, Extra Regen, Restorative Shot, Debuff Reducer,
+the draw cards.
 
 **Crossfire** (Haze, Mirage, Kelvin; 2026-11-17). Patrick: "if we have main is a gunner, the
 supporting hero should have equipment reduce bullet resistance when dealing spirit damage." Each
 damage type opens the target for the other. Kelvin's Frost Grenade from the bench, worn with
-Bullet Resist Shredder ×3 (its canon verb since 2026-11-17: spirit damage cuts Bullet Resist),
+Bullet Resist Shredder ×2 (its canon verb since 2026-11-17: spirit damage cuts Bullet Resist),
 leaves the enemy Active at −1, so every swing of Haze's and Mirage's that turn lands for 1 more;
 Alchemical Fire cuts every enemy's by 2. The other way, Spirit Strike ×2 on Haze and Spirit
 Shredder → Spirit Rend on Mirage make their swings cut Spirit Resist, so Kelvin's grenade,
-Cold Front and Mirage's Djinn's Mark burst (it cashes three swings for {sp:6}) land harder.
+and Mirage's Djinn's Mark burst (it cashes three swings for {sp:6}) land harder.
 Mirage's Retreat 0 gives the side two gun swings a turn: Mirage swings and steps out, Haze
 steps in and swings. A narrow bench suits the exp rule of the same day (the bench shares 1):
 Kelvin, the one bench caster, takes it every turn the third hero is in hand. Extra Spirit ×2
-(the grenade counts Spirit twice), Extended Magazine, Extra Health ×2, Knockdown, the Egg. 16 cards, 28 souls,
+(the grenade counts Spirit twice), Extra Health ×2, Knockdown, the draw cards. 16 cards, 28 souls,
 two payoffs (Alchemical Fire, Spirit Rend). It is the one deck that repeats heroes: Haze is
 Spray's and Kelvin Storm's, and Mirage, the one hero no archetype seated, gets a home.
 
 **Left for testing** (only when Patrick asks by name): whether Spray's four Split Shots make
-every match a race; whether Lockdown can reach the rival's deck-out before its own; whether
+every match a race; whether Lockdown can reach the rival's deck-out before its own, now that it
+carries four draw cards; whether
 Graveyard's own Ghouls outlast the rival's clock; whether Storm's Greater Expansion on Seven is
 the strongest single card in the set.
 
@@ -225,15 +261,23 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 - The shop phase is gone: no buying, no selling, no market.
 - When your deck is empty you stop drawing. Nothing else happens.
 
-## The draw card
+## The draw cards
 
-Golden Goose Egg is the draw card (Patrick, 2026-11-16: "Goose Egg now should be draw 2"): a
-tier-1 spell, 2 souls, "Draw 2 cards." It is worth 2.8 against its 2 (a card drawn is worth 1.4,
-[card-design.md](card-design.md), "Changed 2026-11-16: the Cooldown family is equipment").
+| Card | Price | Text | One play |
+|---|---|---|---|
+| Golden Goose Egg | 1 | Draw 2 cards. | 2.8 |
+| Cultist Sacrifice | 2 | Draw 4 cards, then discard 2. | 5.0 |
+| Warp Stone | 1 | Draw a hero from your deck. | 2.5 |
+| Majestic Leap | 2 | Draw 2 heroes from your deck, then discard a card. | 3.45 |
+
+Golden Goose Egg became the draw card on 2026-11-16 (Patrick: "Goose Egg now should be draw 2");
+a card drawn is worth 1.4 ([card-design.md](card-design.md), "Changed 2026-11-16: the Cooldown
+family is equipment"). Warp Stone and Majestic Leap draw heroes since 2026-11-18, and Cultist
+Sacrifice draws 4 since the same day; every deck holds one of each (above, "The draw cards").
+Cultist Sacrifice and Majestic Leap owe discards, the player's choice, after the draw.
 
 Until 2026-11-16 Deadlock's three cooldown items were the draw cards (draw x, discard y; Patrick,
 2026-11-15). They are equipment again, as in Deadlock, and shorten the bearer's waits instead.
-Nothing makes a side discard now; the engine keeps the discard step for a card that may want it.
 
 ## Upgrades
 

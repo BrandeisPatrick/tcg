@@ -65,8 +65,7 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   // top of it every own turn, the first included (bank.ts).
   const paid = laneIncome(G, pid, ownTurn(G, pid));
   ps.souls += paid.total;
-  ps.incomeBonus = 0; // Cultist Sacrifice's souls are paid once
-  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}${paid.trophy ? `, +${paid.trophy} Trophy Collector` : ''}${paid.bonus ? `, +${paid.bonus} Cultist Sacrifice` : ''}).`);
+  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}${paid.trophy ? `, +${paid.trophy} Trophy Collector` : ''}).`);
   // Deck-out (2026-11-16): a side whose deck is empty when its draw comes
   // loses, as in the Pokémon TCG. The match ends here (`checkWinner`).
   if (G.deckOut && ps.deck.length === 0) {

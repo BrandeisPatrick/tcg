@@ -5,7 +5,8 @@
  *   of it").
  * - Trophy Collector: worn, the lane pays 1 more soul a turn ("it doesn't have
  *   to rely on kills").
- * - Cultist Sacrifice: "you play it, and you get a burst of souls next turn."
+ * - Cultist Sacrifice: "you play it, and you get a burst of souls next turn." Since 2026-11-18
+ *   it is a draw instead (Patrick: "Draw 4 cards discard 2").
  * (Silence Wave and Vortex Web are in control-spells.spec and new-cards.spec.)
  */
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
@@ -21,7 +22,7 @@ import { laneIncome } from '@/engine/bank';
 import { ownTurn } from '@/engine/rounds';
 import { activeColumn, boardNeighbours } from '@/engine/expansion';
 import { LANE_INCOME } from '@/engine/constants';
-import { freshReadyGame, giveCard, giveItem, makeHero } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeHero, stackDeck } from './_helpers';
 
 /** P0's Active made Lady Geist (Essence Bomb: 4 spirit to the enemy Active, Spirit 0), every enemy tough. */
 /** A throwaway hero whose one skill hits every enemy for 1: the roster has none since 2026-11-17. */
@@ -141,20 +142,41 @@ describe('Trophy Collector', () => {
   });
 });
 
+// Until 2026-11-18 it paid 8 souls with the next income, once; now it draws 4 and discards 2.
 describe('Cultist Sacrifice', () => {
-  it('played now, 8 souls come with the next income, once', () => {
+  it('draws 4 cards for 2 souls, then its player owes a discard of 2 of their choice; the income is the lane\'s alone', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = 4;
+    me.deck = [];
+    const drawn = stackDeck(G, '0', ['extra_health', 'golden_goose_egg', 'hero_kelvin', 'extra_spirit', 'knockdown']);
+    me.souls = 2;
     const card = giveCard(G, '0', 'cultist_sacrifice');
+    const hand0 = me.hand.length - 1;
     expect(perform(G, '0', { type: 'playCard', cardIid: card.iid })).not.toBe(INVALID);
     expect(me.souls).toBe(0);
-    expect(me.incomeBonus).toBe(8);
+    expect(me.hand.length).toBe(hand0 + 4);
+    for (const c of drawn.slice(0, 4)) expect(c.zone, c.cardId).toBe('hand');
+    expect(me.deck.map((c) => c.iid)).toEqual([drawn[4].iid]);
+    expect(G.pendingDiscard).toMatchObject({ pid: '0', count: 2, cardId: 'cultist_sacrifice' });
+    expect(perform(G, '0', { type: 'discard', cardIids: [drawn[0].iid, drawn[1].iid] })).not.toBe(INVALID);
+    expect(G.pendingDiscard).toBeUndefined();
+    expect(me.discard.map((c) => c.iid)).toEqual(expect.arrayContaining([drawn[0].iid, drawn[1].iid]));
+    // Nothing comes with the next income but the lane's.
     beginTurn(G, '0', G.turnNumber + 2);
-    expect(me.souls).toBe(LANE_INCOME + 8);
-    expect(me.incomeBonus).toBe(0);
-    beginTurn(G, '0', G.turnNumber + 2);
-    expect(me.souls).toBe(2 * LANE_INCOME + 8);
-    expect(itemCard('cultist_sacrifice')).toMatchObject({ type: 'spell', slot: 'weapon', tier: 3 });
+    expect(me.souls).toBe(laneIncome(G, '0', ownTurn(G, '0')).total);
+    expect(laneIncome(G, '0', ownTurn(G, '0')).total).toBe(LANE_INCOME);
+    expect(itemCard('cultist_sacrifice')).toMatchObject({ type: 'spell', slot: 'weapon', tier: 3, price: 2, text: 'Draw 4 cards, then discard 2.' });
+  });
+
+  it('is not cast from an empty deck: it would only discard', () => {
+    const G = freshReadyGame();
+    G.players['0'].deck = [];
+    G.players['0'].souls = 5;
+    const card = giveCard(G, '0', 'cultist_sacrifice');
+    expect(perform(G, '0', { type: 'playCard', cardIid: card.iid })).toBe(INVALID);
+    stackDeck(G, '0', ['extra_health']);
+    expect(perform(G, '0', { type: 'playCard', cardIid: card.iid })).not.toBe(INVALID);
+    // One card came; the discard owed is never more than the hand holds.
+    expect(G.pendingDiscard?.count).toBe(Math.min(2, G.players['0'].hand.length));
   });
 });

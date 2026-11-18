@@ -1211,12 +1211,10 @@ export function collectTransitionViolations(
     if (after.G.turnNumber !== B.turnNumber + 1) add('turn-number-step', 'turn', `turnNumber ${B.turnNumber} -> ${after.G.turnNumber} after endTurn`);
     const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
     // Trophy Collector (2026-11-16): 1 more while a hero of the side on the board wears one (two do
-    // not add up); Cultist Sacrifice: the souls it promised, paid once.
+    // not add up). (Cultist Sacrifice's promised souls were paid here until it became a draw, 2026-11-18.)
     const ps0 = B.players[cur];
     const trophy = [ps0.active, ...ps0.bench].some((h) => !!h && (h.attached ?? []).some((it) => it.cardId === 'trophy_collector')) ? 1 : 0;
-    const promised = ps0.incomeBonus ?? 0;
-    const want = bountySums(cur).map((b) => B.players[cur].souls + LANE_INCOME + seat + trophy + promised + b);
-    if ((after.G.players[cur].incomeBonus ?? 0) !== 0) add('souls-income', `${cur}-promise`, `P${cur}'s Cultist Sacrifice souls were not cleared when its income paid them`);
+    const want = bountySums(cur).map((b) => B.players[cur].souls + LANE_INCOME + seat + trophy + b);
     const got = after.G.players[cur].souls;
     if (!want.includes(got)) {
       add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; kept ${B.players[cur].souls}, the income and its kills' bounty say ${want.join(' or ')}`);

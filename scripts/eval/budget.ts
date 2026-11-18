@@ -262,6 +262,9 @@ export const ULT_GAIN = { dmg: 5, heal: 0.5, ccActive: 0.35, ccBench: 0.1 } as c
 /** A free swap of the Active, beyond the soul a Retreat costs: a move the
  *  turn's one Retreat does not spend, which saves a hurt Active from the kill. */
 export const SWAP_EXTRA = 0.5;
+/** A card drawn from the top of the deck: a turn sooner to whatever it is
+ *  (docs/card-design.md, "Changed 2026-11-16: the Cooldown family is equipment"). */
+export const CARD_DRAWN = 1.4;
 /** A hero drawn from the deck (Warp Stone, Majestic Leap; 2026-11-18): of a
  *  random card's 1.4, 0.5 is a hero found a turn or two sooner, and 4 cards in
  *  20 are heroes, so a hero for sure is 0.5 / 0.2 (docs/card-design.md). */
@@ -345,6 +348,8 @@ export const BUDGET: Readonly<Record<CardId, BudgetEntry>> = {
     "Ricochet 2 on your Active this turn: each swing that lands bounces 2 to every other living enemy hero (LIVE_BENCH)."),
 
   // ----- Actives, tier 3 -----
+  cultist_sacrifice: active({ other: 4 * CARD_DRAWN - 2 * DISCARD_COST },
+    'Draw 4 cards (CARD_DRAWN each), then discard 2 (DISCARD_COST each): the hand sacrificed for the cards.'),
   decay: active({ dmg: 3 * (1 + P_STAY) },
     "Bleed 3 for 2 turns on the enemy Active: 3 pure at its next turn start, and at the one after if it still stands."),
   disarming_hex: active({ ccActive: 0.5 * (1 + P_STAY) },

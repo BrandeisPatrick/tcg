@@ -505,15 +505,23 @@ it.
 **When a deck runs out.** A side has 16 items and its 3 heroes: one hero
 opens in the lane, 4 cards are dealt, so 14 are left, and it draws 1 on each
 own turn. Its deck is empty after own turn 14 and it loses at own turn 15's
-draw. Each Golden Goose Egg played takes 2 turns off that; a draw skipped into
-a full hand (10 cards) puts one back.
+draw. Each card a draw card draws takes a turn off that; a draw skipped into
+a full hand (10 cards) puts one back, and so does a hero that falls (it
+shuffles back into the deck) or one discarded.
 
-| Golden Goose Eggs played | Loses at its own turn |
-|---|---|
-| 0 | 15 |
-| 1 | 13 |
-| 2 | 11 |
-| 4 | 7 |
+Since 2026-11-18 every deck carries one of each of four draw cards:
+
+| Draw cards played | Cards drawn | Loses at its own turn |
+|---|---|---|
+| none | 0 | 15 |
+| Warp Stone | 1 | 14 |
+| Golden Goose Egg | 2 | 13 |
+| Cultist Sacrifice | 4 | 11 |
+| Egg and Cultist Sacrifice | 6 | 9 |
+| all four (Majestic Leap draws 2 heroes) | 9 | 6 |
+
+Fewer when the hero draws find fewer than they ask for: a squad has 3 heroes,
+and one opens in the lane.
 
 So **deck-out, not round 20, ends a long match**: it comes in round 15 at the
 latest, and the cap only matters if a deck grows (Graves's Ghouls shuffle into
@@ -527,16 +535,17 @@ their own deck). Under the old cap of 12 a match ended before any deck ran out.
   `SECOND_MOVER_FIRST_INCOME_BONUS`, is 0.)
 - **Mill wins now.** Graveyard's Ghouls discard the top of the rival's deck as
   they fall; each one is a turn off the rival's clock.
-- **Golden Goose Egg has a cost.** Four of them draw 8 cards and lose the
-  match at own turn 7 unless it is won by then. A turbo deck has to win early.
+- **A draw card has a cost.** All four of a deck's draw 9 cards and lose the
+  match at own turn 6 unless it is won by then. A turbo deck has to win early;
+  a deck that wins on the clock holds them back.
 - **The bounty climbs to 10** (1 more every two rounds, rounds 19–20), so a
   kill late is worth a tier-4 item and more.
 - **The AI** never draws itself empty and prizes emptying the rival's deck
   (`DECK_OUT` in its evaluation, just short of a win).
 
 **Left for testing** (only when Patrick asks by name): how often a match
-reaches deck-out; whether the first mover needs a dial for it; whether 4
-Golden Goose Egg is ever right.
+reaches deck-out; whether the first mover needs a dial for it; whether four
+draw cards a deck (2026-11-18) run decks out too soon.
 
 ## 14. The bench shares its exp (2026-11-17)
 

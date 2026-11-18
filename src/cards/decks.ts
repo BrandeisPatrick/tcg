@@ -104,10 +104,19 @@ export function buildsAcross(builds: readonly (readonly CardId[])[]): CardId[] {
 export const BASE_HEALTH: CardId = 'extra_health';
 export const BASE_HEALTH_COPIES = 2;
 
+/** Every deck carries the draw cards (Patrick, 2026-11-18: "these are good cards
+ *  added for all decks"): Cultist Sacrifice (draw 4, discard 2), Warp Stone (a
+ *  hero) and Majestic Leap (2 heroes, discard 1), one of each. The deck of the
+ *  builds opens with them after BASE_HEALTH. */
+export const BASE_DRAWS: readonly CardId[] = ['cultist_sacrifice', 'warp_stone', 'majestic_leap'];
+
+/** The cards every deck of the builds opens with: BASE_HEALTH ×BASE_HEALTH_COPIES, then BASE_DRAWS. */
+export const BASE_CARDS: readonly CardId[] = [...Array.from({ length: BASE_HEALTH_COPIES }, () => BASE_HEALTH), ...BASE_DRAWS];
+
 /**
  * The deck a side gets from its heroes' builds (in pick order) when it brings
- * none of its own: BASE_HEALTH ×BASE_HEALTH_COPIES first, then the builds'
- * items read across (`buildsAcross`) — every
+ * none of its own: BASE_CARDS first (Extra Health ×2 and the draw cards), then
+ * the builds' items read across (`buildsAcross`) — every
  * hero's first item, then every hero's second, and so on — each taken while
  * it has fewer than MAX_COPIES in the deck, until DECK_SIZE. A copy the cap
  * turns away leaves its place to the next item of the builds. Short builds go
@@ -117,8 +126,9 @@ export const BASE_HEALTH_COPIES = 2;
 export function deckFromBuilds(builds: readonly (readonly CardId[])[]): CardId[] {
   const across = buildsAcross(builds);
   if (across.length === 0) return []; // no builds, no deck
-  const out: CardId[] = Array.from({ length: BASE_HEALTH_COPIES }, () => BASE_HEALTH);
-  const count: Record<CardId, number> = { [BASE_HEALTH]: BASE_HEALTH_COPIES };
+  const out: CardId[] = [...BASE_CARDS];
+  const count: Record<CardId, number> = {};
+  for (const id of out) count[id] = (count[id] ?? 0) + 1;
   while (out.length < DECK_SIZE) {
     const before = out.length;
     for (const id of across) {
