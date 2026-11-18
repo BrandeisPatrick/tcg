@@ -1,6 +1,6 @@
 import type { PlayerState } from '@/engine/types';
 import { structureHp } from '@/engine/query';
-import { text } from '../tokens';
+import { TYPE, text } from '../tokens';
 import { poster } from '../poster';
 import { Souls } from '../hud';
 import { StructuresStrip } from './StructuresStrip';
@@ -45,8 +45,8 @@ export function PatronLine({ label, ps, hostile = false, attackOpen, projectedDa
       <span title={label} style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         ...text.label,
-        fontSize: 10.5,
-        letterSpacing: '0.18em',
+        fontSize: TYPE.small,
+        letterSpacing: '0.1em',
         color: hostile ? poster.rivalInk : poster.inkSoft,
         whiteSpace: 'nowrap',
         flexShrink: 0,

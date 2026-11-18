@@ -490,8 +490,9 @@ describe('the layer puts each batch up once', () => {
       return { openings, asked, keys };
     };
     let found: ReturnType<typeof play> | undefined;
-    for (let seed = 9; seed <= 40 && !found; seed++) { const m = play(seed); if (m.asked > 0) found = m; }
-    expect(found, 'no seed of 9..40 reaches Victor\'s prompt').toBeDefined();
+    // (Seed 44 since the base health item went into every deck, 2026-11-18.)
+    for (let seed = 40; seed <= 120 && !found; seed++) { const m = play(seed); if (m.asked > 0) found = m; }
+    expect(found, 'no seed of 40..120 reaches Victor\'s prompt').toBeDefined();
     const { openings, asked, keys } = found!;
     expect(asked).toBeGreaterThan(0);
     expect(openings).toBe(1);

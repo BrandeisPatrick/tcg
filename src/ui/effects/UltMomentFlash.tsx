@@ -2,7 +2,7 @@ import { useContext, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { FxImpulseContext } from './fx/FxImpulse';
 import { useFxCalm } from './fx/FxMotionContext';
@@ -189,14 +189,14 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
             borderRadius: 3,
             background: accent,
             color: isOwn ? poster.ink : poster.paper,
-            fontFamily: fonts.display, fontSize: 10,
+            fontFamily: fonts.display, fontSize: TYPE.small,
             letterSpacing: '0.24em', textTransform: 'uppercase', lineHeight: 1,
             marginBottom: 8,
           }}>
             Ultimate · {isOwn ? 'You' : 'Rival'}
           </span>
           <span style={{
-            fontFamily: fonts.display, fontSize: 26,
+            fontFamily: fonts.display, fontSize: TYPE.display,
             letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.05,
             color: poster.ink,
           }}>

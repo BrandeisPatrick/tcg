@@ -17,6 +17,8 @@ import type { CardId } from '@/engine/types';
  *    that item, the upgrade costs only the difference).
  *  - A counter: Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
  *  - One Golden Goose Egg (draw 2), no more: running out of cards loses (2026-11-16).
+ *  - A base health item, Extra Health ×2 at least (Patrick, 2026-11-18: "all deck should
+ *    have some base health item, it is kinda the necessity for deck").
  *  - Mostly equipment: spells are played once, so at most half the deck.
  */
 export interface ReadyDeck {
@@ -41,8 +43,9 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'One gun at a time, one target: every swing finds a bonus, full HP, above half or below it.',
     heroes: ['hero_drifter', 'hero_vindicta', 'hero_wraith'],
     items: [
-      // Kinetic Dash is built from Extra Stamina since 2026-11-17: one of each.
-      ...n(4, 'headshot_booster'), ...n(2, 'extended_magazine'), 'restorative_shot', 'golden_goose_egg', 'extra_stamina',
+      // Kinetic Dash is built from Extra Stamina since 2026-11-17: one of each. Extra Health ×2
+      // (2026-11-18) for Restorative Shot and a Magazine.
+      ...n(4, 'headshot_booster'), ...n(2, 'extra_health'), 'extended_magazine', 'golden_goose_egg', 'extra_stamina',
       ...n(2, 'opening_rounds'), 'titanic_magazine', 'kinetic_dash',
       'knockdown', 'headhunter', 'express_shot',
     ],
@@ -54,7 +57,8 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_warden', 'hero_haze', 'hero_silver'],
     items: [
       // Kinetic Dash beside Extra Stamina, its component since 2026-11-17 (a Magazine out for it).
-      ...n(3, 'extended_magazine'), 'extra_stamina', 'restorative_shot', 'golden_goose_egg',
+      // Extra Health ×2 (2026-11-18) for Restorative Shot and another Magazine.
+      ...n(2, 'extended_magazine'), ...n(2, 'extra_health'), 'extra_stamina', 'golden_goose_egg',
       ...n(4, 'split_shot'), 'titanic_magazine', ...n(2, 'stalker'), 'kinetic_dash',
       'knockdown', 'tesla_bullets',
     ],
@@ -65,8 +69,9 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'Every skill is a kill shot: Tankbuster and Mystic Burst ride it, Echo Shard casts it twice, Infuser heals off it.',
     heroes: ['hero_lady_geist', 'hero_shiv', 'hero_yamato'],
     items: [
-      ...n(2, 'extra_spirit'), ...n(3, 'mystic_burst'), 'golden_goose_egg',
-      ...n(2, 'improved_spirit'), ...n(2, 'mystic_vulnerability'), 'spirit_lifesteal',
+      // Extra Health ×2 (2026-11-18) for Spirit Lifesteal and a Mystic Vulnerability.
+      ...n(2, 'extra_spirit'), ...n(3, 'mystic_burst'), ...n(2, 'extra_health'), 'golden_goose_egg',
+      ...n(2, 'improved_spirit'), 'mystic_vulnerability',
       'knockdown', 'improved_burst',
       ...n(2, 'echo_shard'), 'infuser',
     ],
@@ -77,8 +82,9 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: "Area skills on every enemy, and Greater Expansion turns Seven's one-target charge into a storm.",
     heroes: ['hero_kelvin', 'hero_lash', 'hero_seven'],
     items: [
-      ...n(4, 'extra_spirit'), ...n(2, 'mystic_expansion'), 'extra_charge', 'golden_goose_egg',
-      ...n(2, 'improved_spirit'), ...n(2, 'mystic_vulnerability'), 'mystic_slow',
+      // Extra Health ×2 (2026-11-18) for an Extra Spirit and a Mystic Vulnerability.
+      ...n(3, 'extra_spirit'), ...n(2, 'mystic_expansion'), ...n(2, 'extra_health'), 'extra_charge', 'golden_goose_egg',
+      ...n(2, 'improved_spirit'), 'mystic_vulnerability', 'mystic_slow',
       'knockdown', 'greater_expansion', 'torment_pulse',
     ],
   },
@@ -121,7 +127,8 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: "Spirit opens them for the gun and the gun for spirit: Kelvin's grenade cuts Bullet Resist, Haze's swings cut Spirit Resist, Mirage's mark cashes it.",
     heroes: ['hero_haze', 'hero_mirage', 'hero_kelvin'],
     items: [
-      ...n(3, 'extra_spirit'), ...n(2, 'spirit_strike'), ...n(2, 'extended_magazine'), 'golden_goose_egg',
+      // Extra Health ×2 (2026-11-18) for an Extra Spirit and a Magazine.
+      ...n(2, 'extra_spirit'), ...n(2, 'spirit_strike'), 'extended_magazine', ...n(2, 'extra_health'), 'golden_goose_egg',
       ...n(3, 'bullet_resist_shredder'), 'spirit_shredder', 'cold_front',
       'knockdown', 'alchemical_fire', 'spirit_rend',
     ],

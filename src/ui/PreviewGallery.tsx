@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
-import { fonts } from './tokens';
+import { TYPE, fonts } from './tokens';
 import { poster, sheetStyle, PAPER_MOTTLE } from './poster';
 import { PosterBackdrop } from './PosterBackdrop';
 import { PosterButton } from './chrome';
@@ -92,7 +92,7 @@ export function PreviewGallery() {
       size="sm"
       onClick={() => { window.location.href = BASE; }}
       ariaLabel="Back to the title screen"
-      style={{ padding: '7px 12px', fontSize: 11, letterSpacing: '0.14em', flexShrink: 0 }}
+      style={{ padding: '7px 12px', fontSize: TYPE.small, letterSpacing: '0.14em', flexShrink: 0 }}
     >
       ← Back
     </PosterButton>
@@ -142,7 +142,7 @@ export function PreviewGallery() {
           <>
             <header className="gal-top">
               {back}
-              <h1 className="gal-title" style={{ fontSize: 22 }}>Gallery</h1>
+              <h1 className="gal-title" style={{ fontSize: TYPE.display }}>Gallery</h1>
             </header>
             <div className="gal-head" style={{ borderTop: `1px solid ${poster.inkRule}` }}>{tabs}</div>
           </>

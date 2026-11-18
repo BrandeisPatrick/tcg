@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fonts, spring, systemFont } from '../tokens';
+import { TYPE, fonts, spring, systemFont } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, sheetStyle, clipBoth, scrimStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
@@ -159,7 +159,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
               }}>
                 <span style={{
                   fontFamily: fonts.display,
-                  fontSize: 24,
+                  fontSize: TYPE.display,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                   color: poster.ink,
@@ -291,7 +291,7 @@ function CloseTag({ onClose }: { onClose: () => void }) {
         background: poster.ink,
         color: poster.paper,
         fontFamily: fonts.display,
-        fontSize: 12,
+        fontSize: TYPE.small,
         letterSpacing: '0.16em',
         textTransform: 'uppercase',
         lineHeight: 1,
@@ -309,7 +309,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div style={{ padding: '16px 0 2px' }}>
       <div style={{
         fontFamily: fonts.display,
-        fontSize: 11,
+        fontSize: TYPE.small,
         letterSpacing: '0.28em',
         textTransform: 'uppercase',
         color: poster.inkDim,

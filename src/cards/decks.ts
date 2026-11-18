@@ -98,9 +98,16 @@ export function buildsAcross(builds: readonly (readonly CardId[])[]): CardId[] {
   return across;
 }
 
+/** Every deck carries a base health item (Patrick, 2026-11-18: "all deck should
+ *  have some base health item, it is kinda the necessity for deck"): the deck
+ *  of the builds opens with BASE_HEALTH_COPIES of it. */
+export const BASE_HEALTH: CardId = 'extra_health';
+export const BASE_HEALTH_COPIES = 2;
+
 /**
  * The deck a side gets from its heroes' builds (in pick order) when it brings
- * none of its own: the builds' items read across (`buildsAcross`) — every
+ * none of its own: BASE_HEALTH ×BASE_HEALTH_COPIES first, then the builds'
+ * items read across (`buildsAcross`) — every
  * hero's first item, then every hero's second, and so on — each taken while
  * it has fewer than MAX_COPIES in the deck, until DECK_SIZE. A copy the cap
  * turns away leaves its place to the next item of the builds. Short builds go
@@ -109,8 +116,9 @@ export function buildsAcross(builds: readonly (readonly CardId[])[]): CardId[] {
  */
 export function deckFromBuilds(builds: readonly (readonly CardId[])[]): CardId[] {
   const across = buildsAcross(builds);
-  const out: CardId[] = [];
-  const count: Record<CardId, number> = {};
+  if (across.length === 0) return []; // no builds, no deck
+  const out: CardId[] = Array.from({ length: BASE_HEALTH_COPIES }, () => BASE_HEALTH);
+  const count: Record<CardId, number> = { [BASE_HEALTH]: BASE_HEALTH_COPIES };
   while (out.length < DECK_SIZE) {
     const before = out.length;
     for (const id of across) {

@@ -31,11 +31,15 @@ describe('items', () => {
     for (const item of ITEMS) expect(itemPrice(item.id), item.id).toBe(item.price ?? PRICE[item.tier]);
     // A price of its own is Patrick's call (Rusted Barrel, 2026-11-15; a spell whose one play is
     // worth under half its tier's price costs less instead of doing more, 2026-11-16), always a
-    // spell's, and always under the tier's. Prices halved on 2026-11-16 (Rusted Barrel's 1 is its
-    // tier's now, so it prints none).
-    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['disarming_hex', 2], ['knockdown', 2], ['majestic_leap', 1], ['echo_shard', 1], ['unstoppable', 2], ['curse', 3], ['divine_barrier', 3], ['ethereal_shift', 2], ['vortex_web', 3], ['infuser', 4], ['magic_carpet', 3], ['mystical_piano', 5]]); // Transcendent Cooldown printed 11 until it went back to equipment, 2026-11-16
+    // spell's, and always under the tier's — but for Metal Skin, which prints 6 over its tier's 4
+    // (Patrick, 2026-11-18: "metal skin is too cheap now"). Prices halved on 2026-11-16 (Rusted
+    // Barrel's 1 is its tier's now, so it prints none).
+    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['disarming_hex', 2], ['knockdown', 2], ['metal_skin', 6], ['majestic_leap', 1], ['echo_shard', 1], ['unstoppable', 2], ['curse', 3], ['divine_barrier', 3], ['ethereal_shift', 2], ['vortex_web', 3], ['infuser', 4], ['magic_carpet', 3], ['mystical_piano', 5]]); // Transcendent Cooldown printed 11 until it went back to equipment, 2026-11-16
     for (const item of ITEMS) if (item.price !== undefined) expect(item.type, item.id).toBe('spell');
-    for (const item of ITEMS) if (item.price !== undefined) expect(item.price, item.id).toBeLessThan(PRICE[item.tier]);
+    const OVER = ['metal_skin']; // Patrick's own exception, docs/card-design.md §2
+    for (const item of ITEMS) if (item.price !== undefined && !OVER.includes(item.id)) expect(item.price, item.id).toBeLessThan(PRICE[item.tier]);
+    expect(itemPrice('metal_skin')).toBe(6);
+    expect(itemCard('metal_skin')!.tier).toBe(3); // its canon tier stays
     expect(PRICE).toEqual({ 1: 1, 2: 2, 3: 4, 4: 8, 5: 12 }); // half of 2 / 4 / 8 / 16 / 24 since 2026-11-16
     expect(itemPrice('hero_haze')).toBe(0);
     expect(itemPrice('ult_haze')).toBe(0);

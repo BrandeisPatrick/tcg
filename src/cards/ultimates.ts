@@ -26,7 +26,7 @@ export const ULTIMATES: UltimateCard[] = [
   // Flight's second ability is what the Flying status carries (statuses/): the card prints its {sp:1}.
   { id: 'ult_vindicta',   name: 'Flight',                 type: 'ultimate', rarity: 4, size: 'small',  linkedHero: 'hero_vindicta',   abilities: ['eff_ult_vindicta', 'status_flying'], text: 'Fly 3 turns: 1 in 3 hits miss her; her attacks add {sp:1} spirit damage.' },
   { id: 'ult_viscous',    name: 'Goo Ball',               type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_viscous',    abilities: ['eff_ult_viscous'],    text: 'Deal {sp:2} spirit damage to every enemy. Stun the enemy Active 1 turn.' },
-  { id: 'ult_yamato',     name: 'Shadow Transformation',  type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_yamato',     abilities: ['eff_ult_yamato'],     text: 'For 2 turns: +{sp:3} Attack and Unstoppable.' },
+  { id: 'ult_yamato',     name: 'Shadow Transformation',  type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_yamato',     abilities: ['eff_ult_yamato'],     text: 'For 2 turns: +{sp:3} Bullet Power and Unstoppable.' },
   { id: 'ult_wraith',     name: 'Telekinesis',            type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_wraith',     abilities: ['eff_ult_wraith'],     text: 'Deal {sp:5} spirit damage to the enemy Active. Stun it 1 turn.' },
   { id: 'ult_warden',     name: 'Last Stand',             type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_warden',     abilities: ['eff_ult_warden'],     text: 'Deal {sp:6} spirit damage to the enemy Active. Warden heals that much.' },
   { id: 'ult_mirage',     name: 'Traveler',               type: 'ultimate', rarity: 4, size: 'small',  linkedHero: 'hero_mirage',     abilities: ['eff_ult_mirage'],     text: 'Swap Mirage with a bench ally. Both get Shield {sp:2}.' },
@@ -41,7 +41,7 @@ export const ULTIMATES: UltimateCard[] = [
   },
   {
     id: 'ult_silver', name: 'Lycan Curse', type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_silver', abilities: ['eff_ult_silver'],
-    text: 'Silver turns into a wolf for 2 turns: +{bp:1/2} Attack and Shield 6.',
+    text: 'Silver turns into a wolf for 2 turns: +{bp:1/2} Bullet Power and Shield 6.',
     charged: { need: 8, by: 'dealt', text: 'Ready once Silver has dealt 8 damage.' },
   },
 ];

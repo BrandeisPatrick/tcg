@@ -57,7 +57,9 @@ A Deadlock player should recognise every card on sight.
   play is worth under half its tier's price costs about what that play is
   worth instead of gaining effects (2026-11-16: "a spell should have the
   benefit of costing less"; the eleven are in "Changed 2026-11-16: spells
-  priced for one play"). The tier stays the item's. Tiers 1–4 are cost ÷ 800
+  priced for one play"). One card prints a price over its tier's, Patrick's own
+  exception: Metal Skin costs 6, not 4 (2026-11-18, "metal skin is too cheap
+  now"; the reasoning is in "Changed 2026-11-18: Metal Skin costs 6"). The tier stays the item's. Tiers 1–4 are cost ÷ 800
   (2 × cost ÷ 800 until prices halved); tier 5 is 12, 1.5 × tier 4 as 9,999 is
   1.56 × 6,400, so an upgrade over a tier-4 component costs a whole 4 and a
   half-price sale refunds a whole 6. An early, cheap card comes from a cheap item.
@@ -886,6 +888,30 @@ soul, a spell line still dearer than the spell it is built from:
 The ready decks' recipe halves with it: 16 items at most 28 souls, at most two
 over 2 (tier 3 and up at its tier's price), none over 8
 ([deck-plan.md](./deck-plan.md)).
+
+### Changed 2026-11-18: Metal Skin costs 6
+
+Patrick: "metal skin is too cheap now." Metal Skin is Vitality T3, an active, so it
+stays a spell of tier 3 ("Grant ally Bullet Resist 6 for 3 turns.", Deadlock's
+bullet immunity), and its effect is unchanged. It is the one card that prints a
+price **over** its tier's: 6 souls, where T3 is 4.
+
+Why it was cheap. The one-play table above read it at 7.0 points, the T3 budget,
+by pricing each bullet point it stops at 0.5, as a heal or a Shield. That rate
+is for HP that soaks a hit and is gone. Metal Skin is not spent: every bullet
+hit on the hero for 3 turns lands for 0, so it denies the rival's gun outright,
+and denial is read at the damage rate, 1.0 a point:
+
+- It is bought when 4–6 souls are spare, rounds 3–6. The rival Active's Bullet
+  Power is about 3 then.
+- About 1.5 bullet hits a turn reach the hero (an extra attack, a Ricochet
+  bounce), 0.85 of turns: 3 × 1.5 × 0.85 = 3.8 stopped a turn.
+- Over 3 turns that is about 11.5 bullet damage stopped. At 1.0 a point, its
+  one play is worth about 11.5 points, over the T3 budget of 8.
+- A card costs about half its value (a soul buys 2 points), so it prints **6**.
+
+Colossus, the T4 that resists both types at 5 for 3 turns, still costs 8: two
+types for 2 more souls, and its Root. Nothing else moves.
 
 ### Changed 2026-11-16: the Duration items stretch crowd control
 

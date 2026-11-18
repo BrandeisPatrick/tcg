@@ -8,7 +8,7 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { Explain } from '../explain/Explain';
 import type { ExplainContent } from '../explain/content';
 import { FX_INK } from '../effects/fx/fxCatalog';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster } from '../poster';
 import { MapIcon } from './MapIcon';
 import type { ArmedPlay } from '../helpers';
@@ -157,8 +157,8 @@ function BossPlate({ G, me, boss, pending, onTapHero, targetable, registerSlotRe
             <span style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 3 : 4, minWidth: 0, flex: 1 }}>
               {/* Its name and HP — side by side on a desktop, stacked in a phone's narrow pit. */}
               <span style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: isMobile ? 2 : 4 }}>
-                <span style={{ ...text.label, fontSize: isMobile ? 7.5 : 9, letterSpacing: '0.18em', color: poster.creamDim, whiteSpace: 'nowrap' }}>Mid-Boss</span>
-                <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 11 : 14, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: poster.cream, whiteSpace: 'nowrap' }}>
+                <span style={{ ...text.label, fontSize: isMobile ? TYPE.small : TYPE.small, letterSpacing: '0.18em', color: poster.creamDim, whiteSpace: 'nowrap' }}>Mid-Boss</span>
+                <span style={{ fontFamily: fonts.display, fontSize: isMobile ? TYPE.small : TYPE.body, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: poster.cream, whiteSpace: 'nowrap' }}>
                   {boss.hp}<span style={{ color: poster.creamFaint }}>/{boss.hpMax}</span>
                 </span>
               </span>
@@ -194,7 +194,7 @@ function Tally({ ink, leads, isMobile, title, children }: { ink: string; leads: 
   return (
     <span title={title} style={{
       ...text.label,
-      fontSize: isMobile ? 7 : 8.5,
+      fontSize: isMobile ? TYPE.small : TYPE.small,
       letterSpacing: '0.1em',
       padding: isMobile ? '2px 5px' : '2px 7px',
       borderRadius: 999,
@@ -228,9 +228,9 @@ function EmptyPit({ round, taken, isMobile }: { round: number; taken: boolean; i
     >
       <MapIcon kind="mid_boss" size={isMobile ? 22 : 30} zoom={1.2} grey ink={poster.inkFaint} />
       <span style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 2 : 3, minWidth: 0, whiteSpace: 'nowrap' }}>
-        <span style={{ ...text.label, fontSize: isMobile ? 7.5 : 9, letterSpacing: '0.18em', color: poster.inkDim }}>Mid-Boss</span>
-        <span style={{ ...text.label, fontSize: isMobile ? 7 : 8.5, letterSpacing: '0.12em', color: poster.inkDim }}>{verb} in</span>
-        <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 10 : 12.5, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1, color: poster.ink, fontVariantNumeric: 'tabular-nums' }}>Round {round}</span>
+        <span style={{ ...text.label, fontSize: isMobile ? TYPE.small : TYPE.small, letterSpacing: '0.18em', color: poster.inkDim }}>Mid-Boss</span>
+        <span style={{ ...text.label, fontSize: isMobile ? TYPE.small : TYPE.small, letterSpacing: '0.12em', color: poster.inkDim }}>{verb} in</span>
+        <span style={{ fontFamily: fonts.display, fontSize: isMobile ? TYPE.small : TYPE.body, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1, color: poster.ink, fontVariantNumeric: 'tabular-nums' }}>Round {round}</span>
       </span>
     </div>
   );

@@ -6,24 +6,25 @@
  * public/art/CREDITS.md); the colours are poster.ts's.
  */
 import type { CSSProperties } from 'react';
-import { fonts } from './tokens';
+import { TYPE, fonts } from './tokens';
 import { PAPER_MOTTLE, hudGlyph, poster, soulCoin } from './poster';
 
 /** The match screen's ONE type scale, px. Nothing a player reads is set
  *  under `floor`; pick the nearest step instead of a one-off size. */
 export const scale = {
+  // Six roles on the four sizes of TYPE (tokens.ts, 2026-11-18).
   /** Corner marks on a token: a count, a turn number. */
-  floor: 10,
+  floor: TYPE.small,
   /** Labels, tags, chips. */
-  label: 11,
+  label: TYPE.small,
   /** Running text, names, buttons. */
-  body: 13,
+  body: TYPE.body,
   /** The numbers a player plays by: HP, Bullet Power, souls, a cost. */
-  number: 15,
+  number: TYPE.title,
   /** A sheet's or a banner's title. */
-  title: 18,
+  title: TYPE.title,
   /** The headline of a full-screen moment. */
-  display: 24,
+  display: TYPE.display,
 } as const;
 
 type SoulsTone = 'mint' | 'short' | 'paper' | 'paperShort';

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { PRICE } from '@/engine/constants';
 import { TierDiamonds } from '../card/ItemIcon';
-import { text } from '../tokens';
+import { TYPE, text } from '../tokens';
 import { poster, shopInk } from '../poster';
 import { Souls } from '../hud';
 import { CATEGORY_WORD, TIERS, soulsWord } from './itemFacts';
@@ -46,8 +46,8 @@ export function TierHeader({ slot, tier, short = false }: { slot: ItemSlot; tier
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
       <TierDiamonds tier={tier} size={7} ink={ink} />
-      <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.16em', color: poster.creamDim }}>T{tier}</span>
-      <span aria-hidden style={{ color: poster.creamFaint, fontSize: 10 }}>·</span>
+      <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.creamDim }}>T{tier}</span>
+      <span aria-hidden style={{ color: poster.creamFaint, fontSize: TYPE.small }}>·</span>
       <Souls n={PRICE[tier]} size={13} tone={short ? 'short' : 'mint'} />
       <span aria-hidden style={{ flex: 1, height: 1, background: poster.edge }} />
     </div>

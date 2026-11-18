@@ -33,6 +33,7 @@ import { LEVEL_THRESHOLDS, MAX_LEVEL, SKILL_SPIRIT_RATE, ULT_UNLOCK_LEVEL } from
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { ATTACK_ICON_SRC, skillIconSrc, ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
+import { SpiritIcon, SwordIcon } from '../card/Icons';
 import { SpikeMark } from '../board/SpikeMark';
 import { kitTag, skillPace, ultPace } from '../board/heroActions';
 import { CATEGORY_WORD } from '../shop/itemFacts';
@@ -176,37 +177,8 @@ function liveRule(rule: string, scale: Scale): string {
     return t.dmg && /^\d+$/.test(shown) ? `{${t.dmg === 'spirit' ? 's' : 'b'}:${shown}}` : shown;
   }).join('');
 }
-/** How long a row's words are on screen: a typed mark prints as its number. */
-const shownLength = (line: string) => line.replace(/\{[sb]:(\d+)\}/g, '$1').length;
-
-/** A rule's first sentence as the row's words, its scaling numbers read live. */
-function firstSentence(rule: string, scale: Scale): string {
-  const plain = liveRule(rule, scale);
-  const m = plain.match(/^.*?[.!?](?=\s|$)/);
-  return sentence((m ? m[0] : plain).trim());
-}
-
-/** A row's one line: the rule's first sentence in its fewest words. No
- *  bracketed reminder, no scene-setting before a colon when the effect
- *  follows it, no "to the enemy Active" (an attack's usual target); and one
- *  longer than the `max` letters the row holds ends at a clause, never
- *  mid-word. The whole rule is on the "i" card. */
-function shortLine(rule: string, scale: Scale, max: number): string {
-  let s = firstSentence(rule, scale).replace(/\s*\([^)]*\)/g, '');
-  const lead = s.match(/^[^:]+:\s+((?:deal|shield|heal|stun)\b.*)$/i);
-  if (lead) s = lead[1];
-  s = s.replace(' to the enemy Active', '');
-  if (shownLength(s) > max) {
-    const head = s.slice(0, max + 1 + (s.length - shownLength(s)));
-    const clause = Math.max(head.lastIndexOf(': '), head.lastIndexOf(', '), head.lastIndexOf(' and '));
-    const at = clause > 16 ? clause : head.lastIndexOf(' ');
-    s = `${s.slice(0, at).replace(/[,;:]$/, '')}\u2026`;
-  }
-  return sentence(s);
-}
-
-/** A passive's rule as its row prints it: whole (a passive has no other
- *  line to give), its scaling numbers read live. */
+/** A kit rule as its row prints it: whole and wrapped (since 2026-11-18 a
+ *  skill's and an ultimate's too), its scaling numbers read live. */
 function fullLine(rule: string, scale: Scale): string {
   return sentence(liveRule(rule, scale).trim());
 }
@@ -273,9 +245,6 @@ export function HeroDetailSheet({
   const ultFace = ultimateCard(data.ult);
 
   const cardW = isMobile ? Math.min(vw - 32, 360) : 360;
-  // The letters an action row's line holds: its width less the tile and the
-  // number, at the caption's size.
-  const lineMax = Math.floor((cardW - 124) / 5.2);
   const portraitW = Math.round(HEAD * 280 / 380);
   const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
   const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
@@ -300,7 +269,10 @@ export function HeroDetailSheet({
           name={ability.name}
           // The skill's own Deadlock icon; its ring keeps the kind's colour.
           art={<img src={skillIconSrc(data.id, ability.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={shortLine(ability.text, kitScale, lineMax)}
+          // Whole, wrapped: at the 14px body size a skill's rule no longer
+          // fits one line, and a rule cut mid-sentence says nothing (2026-11-18).
+          wrap
+          line={fullLine(ability.text, kitScale)}
           right={pace(ability.id, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
@@ -351,7 +323,8 @@ export function HeroDetailSheet({
           // A charged ultimate is named so: it waits on damage, not on turns.
           ultLabel={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
           art={<img src={ultIconSrc(ultFace.linkedHero)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={shortLine(ultFace.text ?? '', scale, lineMax)}
+          wrap
+          line={fullLine(ultFace.text ?? '', scale)}
           right={pace(abilityId, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(abilityId); onClose(); } : undefined}
@@ -551,6 +524,25 @@ export function HeroDetailSheet({
               </div>
             </div>
           </div>
+
+          {/* POWER — the two numbers the kit and the gun scale with (Patrick,
+              2026-11-18: "we need to show bullet power and spirit power"), in
+              the inks the rules print them in: brown bullet, plum spirit. */}
+          {!infoOpen && (
+            <div data-hero-power role="group" aria-label={`Bullet Power ${effectiveAtk(card)}, Spirit Power ${effectiveSpirit(card)}`}
+              style={{ display: 'flex', gap: 8 }}>
+              <PowerStat
+                icon={<SwordIcon size={15} color={poster.stat.bullet} />}
+                value={effectiveAtk(card)} label="Bullet Power" color={poster.stat.bullet}
+                mark={hasSpike(card, 'weapon') ? <SpikeMark slot="weapon" size={12} /> : undefined}
+              />
+              <PowerStat
+                icon={<SpiritIcon size={15} color={poster.stat.spirit} />}
+                value={effectiveSpirit(card)} label="Spirit Power" color={poster.stat.spirit}
+                mark={hasSpike(card, 'spirit') ? <SpikeMark slot="spirit" size={12} /> : undefined}
+              />
+            </div>
+          )}
 
           {/* STRIP — worn items and statuses, one row; a tap explains one
               over the sheet. */}
@@ -778,9 +770,9 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
   // under it (never squeezed beside the name), then its rule in full.
   const entry = (key: string, name: string, tag: string, rule: string, note?: string, at: Scale = scale) => (
     <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ ...NAME, fontSize: T.body + 1 }}>{name}</span>
+      <span style={{ ...NAME, fontSize: T.body }}>{name}</span>
       <span style={{ ...CAPTION, color: poster.inkDim }}>{tag}</span>
-      <div style={{ ...text.body, fontSize: T.body + 1, lineHeight: 1.45, color: poster.ink, marginTop: 2 }}>
+      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.45, color: poster.ink, marginTop: 2 }}>
         <RuleText text={sentence(rule)} keywordColor={poster.ink} scale={at} />
       </div>
       {note && (
@@ -942,6 +934,21 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
           })}
         </>
       )}
+    </div>
+  );
+}
+
+/** One of the header's two powers: its mark, the number in its ink, its name. */
+function PowerStat({ icon, value, label, color, mark }: { icon: ReactNode; value: number; label: string; color: string; mark?: ReactNode }) {
+  return (
+    <div aria-hidden style={{
+      ...plateStyle, flex: 1, minWidth: 0, boxSizing: 'border-box',
+      display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px',
+    }}>
+      <span style={{ lineHeight: 0, flexShrink: 0 }}>{icon}</span>
+      <span style={{ ...NUMBER(T.title), color }}>{value}</span>
+      {mark}
+      <span style={{ ...CAPTION, ...ONE_LINE, color: poster.inkSoft, fontWeight: 700 }}>{label}</span>
     </div>
   );
 }

@@ -38,7 +38,7 @@ describe('ready decks', () => {
     for (const id of upgrades) expect(d.items, id).toContain(evolvesFrom(id));
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 4 copies (MAX_COPIES), 28 souls at most at printed prices with at most two over 2, a counter, a draw card, mostly equipment', (_name, d) => {
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 4 copies (MAX_COPIES), 28 souls at most at printed prices with at most two over 2, a counter, a draw card, Extra Health ×2, mostly equipment', (_name, d) => {
     const counts = copyCounts(d.items);
     expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(MAX_COPIES);
     // What the deck costs is what its cards print (a spell priced for one play counts its own
@@ -57,6 +57,8 @@ describe('ready decks', () => {
     const spells = d.items.filter((id) => itemCard(id)!.type === 'spell').length;
     expect(spells).toBeGreaterThan(0);
     expect(spells).toBeLessThanOrEqual(DECK_SIZE / 2);
+    // A base health item in every deck, two at least (Patrick, 2026-11-18).
+    expect(counts.extra_health ?? 0).toBeGreaterThanOrEqual(2);
     // Listed cheapest tier first, as the Loadout prints it.
     const listed = d.items.map((id) => itemCard(id)!.tier);
     expect(listed).toEqual([...listed].sort((a, b) => a - b));

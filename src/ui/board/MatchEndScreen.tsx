@@ -6,7 +6,7 @@ import { isRespawning, otherPlayer, standingVerdict, structureHp } from '@/engin
 import { ROUND_CAP } from '@/engine/constants';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
-import { fonts, spring } from '../tokens';
+import { TYPE, fonts, spring } from '../tokens';
 import { chamfer, clipBoth, poster, sheetStyle } from '../poster';
 import { DecoRule, PatronSigil, bandStyle, scale } from '../hud';
 import { PosterButton } from '../chrome';
@@ -146,7 +146,7 @@ export function MatchEndScreen({
           )}
           <h1 style={{
             fontFamily: fonts.display,
-            fontSize: isMobile ? 56 : 84,
+            fontSize: isMobile ? TYPE.display : TYPE.display,
             lineHeight: 1,
             textTransform: 'uppercase',
             color: tone,

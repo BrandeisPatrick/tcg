@@ -16,7 +16,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { CardId } from '@/engine/types';
 import { cardName, itemCard } from '@/cards';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, shopInk } from '../poster';
 import { Souls } from '../hud';
 import { RuleText } from '../card/RuleText';
@@ -156,10 +156,10 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '9px 10px 9px 9px', background: ink, color: poster.ink }}>
           <ItemIcon itemId={itemId} size={40} chip />
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontFamily: fonts.display, fontSize: 16, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.05 }}>{data.name}</span>
+            <span style={{ fontFamily: fonts.display, fontSize: TYPE.title, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.05 }}>{data.name}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <TierDiamonds tier={data.tier} size={7} ink={poster.ink} faint="rgba(23, 20, 16, 0.4)" />
-              <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.16em', color: poster.ink }}>Tier {data.tier} · {CATEGORY_WORD[data.slot]}</span>
+              <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.ink }}>Tier {data.tier} · {CATEGORY_WORD[data.slot]}</span>
             </span>
           </div>
           <span
@@ -168,7 +168,7 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
           >
             <Souls n={cost} size={15} tone={short ? 'short' : 'mint'} />
             {price !== undefined && price < list && (
-              <span style={{ fontFamily: fonts.display, fontSize: 11, lineHeight: 1, color: poster.creamFaint, textDecoration: 'line-through' }}>{list}</span>
+              <span style={{ fontFamily: fonts.display, fontSize: TYPE.small, lineHeight: 1, color: poster.creamFaint, textDecoration: 'line-through' }}>{list}</span>
             )}
           </span>
         </div>
@@ -178,8 +178,8 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
           <Rows>
             {stats.map((s) => (
               <div key={s.label} style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span style={{ fontFamily: fonts.display, fontSize: 16, lineHeight: 1, color: ink, minWidth: 26 }}>{s.value}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: poster.cream }}>{s.label}</span>
+                <span style={{ fontFamily: fonts.display, fontSize: TYPE.title, lineHeight: 1, color: ink, minWidth: 26 }}>{s.value}</span>
+                <span style={{ fontSize: TYPE.body, fontWeight: 600, color: poster.cream }}>{s.label}</span>
               </div>
             ))}
           </Rows>
@@ -190,21 +190,21 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
           <div style={{ padding: '8px 10px 2px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{
-                ...text.label, fontSize: 9.5, letterSpacing: '0.2em',
+                ...text.label, fontSize: TYPE.small, letterSpacing: '0.2em',
                 padding: '3px 6px', borderRadius: 3,
                 background: use.kind === 'active' ? poster.gold : 'transparent',
                 color: use.kind === 'active' ? poster.ink : poster.creamDim,
                 border: use.kind === 'active' ? 'none' : `1px solid ${poster.edge}`,
               }}>{use.kind === 'active' ? 'Active' : 'Passive'}</span>
               {use.kind === 'active' && (
-                <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: poster.creamDim }}>
+                <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.14em', color: poster.creamDim }}>
                   {SPELL_USE}
                 </span>
               )}
             </div>
             {effect && (
               <div style={{
-                ...text.body, fontSize: 12.5, lineHeight: 1.4,
+                ...text.body, fontSize: TYPE.body, lineHeight: 1.4,
                 padding: '8px 10px', borderRadius: 5,
                 background: poster.paperBand, color: poster.ink,
               }}>
@@ -225,11 +225,11 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
         {/* The Sell line, on a card you own. */}
         {sale && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderTop: `1px solid ${poster.edge}` }}>
-            <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.16em', color: poster.creamDim }}>Sell</span>
+            <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.creamDim }}>Sell</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Souls n={`+${sale.refund}`} size={14} />
             </span>
-            <span style={{ fontSize: 11, color: poster.creamDim, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: TYPE.small, color: poster.creamDim, flex: 1, minWidth: 0 }}>
               {sale.blockedReason ?? (sale.full ? 'all it cost — bought this turn' : 'half — bought before this turn')}
             </span>
             {sale.onSell && !sale.blockedReason && (
@@ -240,7 +240,7 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
                 style={{
                   border: 'none', borderRadius: 4, padding: '6px 10px', cursor: 'pointer',
                   background: poster.red, color: poster.paper,
-                  fontFamily: fonts.display, fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1,
+                  fontFamily: fonts.display, fontSize: TYPE.small, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1,
                 }}
               >Sell +{sale.refund}</button>
             )}
@@ -248,12 +248,12 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive 
         )}
 
         <div style={{ padding: '6px 10px 8px', borderTop: `1px solid ${poster.edge}`, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {note && <span style={{ fontSize: 11.5, color: poster.cream }}>{note}</span>}
+          {note && <span style={{ fontSize: TYPE.small, color: poster.cream }}>{note}</span>}
           {short && price !== undefined && souls !== undefined && (
-            <span style={{ fontSize: 11.5, color: poster.red }}>Need {soulsWord(price)} — you have {souls}</span>
+            <span style={{ fontSize: TYPE.small, color: poster.red }}>Need {soulsWord(price)} — you have {souls}</span>
           )}
           {!passive && onOpenCard && (
-            <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.18em', color: poster.creamFaint }}>Tap again for the full card</span>
+            <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.18em', color: poster.creamFaint }}>Tap again for the full card</span>
           )}
         </div>
       </motion.div>
@@ -269,11 +269,11 @@ function Rows({ children }: { children: ReactNode }) {
 function Chain({ label, ids }: { label: string; ids: CardId[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.16em', color: poster.creamDim, width: 78, flexShrink: 0 }}>{label}</span>
+      <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.creamDim, width: 78, flexShrink: 0 }}>{label}</span>
       {ids.map((id) => (
         <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <ItemIcon itemId={id} size={20} chip />
-          <span style={{ fontSize: 12, fontWeight: 600 }}>{cardName(id)}</span>
+          <span style={{ fontSize: TYPE.small, fontWeight: 600 }}>{cardName(id)}</span>
         </span>
       ))}
     </div>

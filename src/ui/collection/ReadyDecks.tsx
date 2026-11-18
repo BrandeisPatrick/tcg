@@ -12,7 +12,7 @@ import { cardName } from '@/cards';
 import { READY_DECKS, type ReadyDeck } from '@/cards/readyDecks';
 import type { CardId } from '@/engine/types';
 import { HERO_IMG_BASE } from '@/art/assets';
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { poster } from '../poster';
 import { PosterButton } from '../chrome';
 
@@ -74,22 +74,22 @@ export function ReadyDecks({ inUse, guarded, onUse, compact }: {
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <h3 style={{
                 margin: 0, flex: 1, minWidth: 0,
-                fontFamily: fonts.display, fontWeight: 400, fontSize: 17, letterSpacing: '0.06em',
+                fontFamily: fonts.display, fontWeight: 400, fontSize: TYPE.title, letterSpacing: '0.06em',
                 textTransform: 'uppercase', lineHeight: 1.05, color: poster.ink,
               }}>{deck.name}</h3>
               {on && (
-                <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.14em', color: poster.soulInk, whiteSpace: 'nowrap' }}>In use</span>
+                <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.14em', color: poster.soulInk, whiteSpace: 'nowrap' }}>In use</span>
               )}
             </div>
 
             <div aria-hidden style={{ display: 'grid', gridTemplateColumns: `repeat(${SQUAD_SIZE}, minmax(0, 1fr))`, gap: 4 }}>
               {deck.heroes.map((h) => <Portrait key={h} heroId={h} />)}
             </div>
-            <p style={{ ...text.label, margin: 0, fontSize: 10, letterSpacing: '0.08em', color: poster.inkDim, lineHeight: 1.3 }}>
+            <p style={{ ...text.label, margin: 0, fontSize: TYPE.small, letterSpacing: '0.08em', color: poster.inkDim, lineHeight: 1.3 }}>
               Made for {deck.heroes.map((h) => cardName(h)).join(' · ')}
             </p>
 
-            <p style={{ ...text.body, margin: 0, flex: 1, fontSize: 12.5, lineHeight: 1.35, color: poster.inkSoft }}>
+            <p style={{ ...text.body, margin: 0, flex: 1, fontSize: TYPE.body, lineHeight: 1.35, color: poster.inkSoft }}>
               {asking ? 'This replaces your deck.' : deck.blurb}
             </p>
 

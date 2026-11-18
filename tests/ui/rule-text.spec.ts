@@ -489,8 +489,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Fly 3 turns: 1 in 3 hits miss her; her attacks add {sp:1} spirit damage.');
   });
 
-  it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Attack', () => {
-    expect(ABILITIES_BY_ID.skill_paige.text).toBe('Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns.');
+  it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Bullet Power', () => {
+    expect(ABILITIES_BY_ID.skill_paige.text).toBe('Give one of your heroes Shield {sp:2} and +1 Bullet Power for 2 turns.');
     expect(abilitiesSource).toMatch(/addStatus\(G, target, 'shield', 2 \+ spi\(source\), 999\)/);
     expect(abilitiesSource).toMatch(/addStatus\(G, target, 'weapon_power', 1, 2\)/);
   });

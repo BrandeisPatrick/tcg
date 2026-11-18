@@ -33,7 +33,7 @@ import { heroArtFocus, heroPortraitArt } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { useCalmMotion } from '../effects/fx/FxMotionContext';
 import { useViewport } from '../hooks/useViewport';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, shopInk, chamfer, clipBoth } from '../poster';
 import { ItemIcon, itemArtUrl } from '../card/ItemIcon';
 import { PosterButton } from '../chrome';
@@ -138,13 +138,13 @@ export function DeckDraftOverlay({ heroes, rivalHeroes = [], offers, onPick }: P
           : { alignItems: 'baseline', flexWrap: 'wrap', minHeight: 34 }),
       }}>
         <h1 style={{
-          margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? 18 : 24,
+          margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? TYPE.title : TYPE.display,
           letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.cream, lineHeight: 1,
         }}>
           Draft your deck
         </h1>
         {isMobile ? plate : (
-          <span style={{ ...text.label, fontSize: 11, letterSpacing: '0.3em', color: poster.creamDim, whiteSpace: 'nowrap' }}>
+          <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.3em', color: poster.creamDim, whiteSpace: 'nowrap' }}>
             Decks that fit your heroes
           </span>
         )}
@@ -266,11 +266,11 @@ function DeckCard({ offer, numeral, best, chosen, w, compact, enter, onTap }: {
           justifyContent: 'space-between', gap: 6, padding: compact ? '5px 6px 12px' : '6px 8px 14px',
           background: 'linear-gradient(to bottom, rgba(12, 15, 17, 0.88), transparent)',
         }}>
-          <span style={{ fontFamily: fonts.display, fontSize: compact ? 13 : 15, color: colour, letterSpacing: '0.1em', flexShrink: 0, transition: 'color 180ms ease' }}>
+          <span style={{ fontFamily: fonts.display, fontSize: compact ? TYPE.body : TYPE.title, color: colour, letterSpacing: '0.1em', flexShrink: 0, transition: 'color 180ms ease' }}>
             {numeral}
           </span>
           {best && (
-            <span style={{ ...text.label, fontSize: compact ? 8.5 : 10, letterSpacing: compact ? '0.12em' : '0.2em', color: poster.gold, whiteSpace: 'nowrap' }}>
+            <span style={{ ...text.label, fontSize: compact ? TYPE.small : TYPE.small, letterSpacing: compact ? '0.12em' : '0.2em', color: poster.gold, whiteSpace: 'nowrap' }}>
               Best fit
             </span>
           )}
@@ -280,7 +280,7 @@ function DeckCard({ offer, numeral, best, chosen, w, compact, enter, onTap }: {
           <span style={{
             display: 'block', padding: compact ? '6px 4px 7px' : '7px 8px 8px',
             background: chosen ? poster.cream : '#bdb6a6', color: poster.ink, textAlign: 'center',
-            fontFamily: fonts.display, fontSize: compact ? 11 : 'clamp(12px, 1.1vw, 16px)',
+            fontFamily: fonts.display, fontSize: compact ? TYPE.small : TYPE.body,
             letterSpacing: compact ? '0.04em' : '0.06em', textTransform: 'uppercase', lineHeight: 1,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             transition: 'background-color 180ms ease',
@@ -400,17 +400,17 @@ function DeckSheet({ offer, compact, calm, onCustomize }: { offer: DeckOffer; co
     >
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: compact ? '6px 10px' : '8px 16px' }}>
         <h2 style={{
-          margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: compact ? 18 : 24,
+          margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: compact ? TYPE.title : TYPE.display,
           letterSpacing: '0.04em', textTransform: 'uppercase', color: poster.cream, lineHeight: 1,
         }}>{offer.name}</h2>
         {/* On a phone the slots sit beside the name and the why under them. */}
-        <span style={{ order: compact ? 2 : 0, padding: '3px 8px', background: poster.gold, color: poster.ink, ...text.label, fontSize: compact ? 9.5 : 10, letterSpacing: compact ? '0.12em' : '0.18em' }}>
+        <span style={{ order: compact ? 2 : 0, padding: '3px 8px', background: poster.gold, color: poster.ink, ...text.label, fontSize: compact ? TYPE.small : TYPE.small, letterSpacing: compact ? '0.12em' : '0.18em' }}>
           {offer.why}
         </span>
         <span
           role="img"
           aria-label={SLOTS.map((k) => `${Math.round(lean[k] * offer.items.length)} ${SLOT_WORD[k]}`).join(' · ')}
-          style={{ ...text.label, order: 1, display: 'flex', gap: compact ? 10 : 14, marginLeft: 'auto', fontSize: 10, letterSpacing: '0.12em', color: poster.creamDim, whiteSpace: 'nowrap' }}
+          style={{ ...text.label, order: 1, display: 'flex', gap: compact ? 10 : 14, marginLeft: 'auto', fontSize: TYPE.small, letterSpacing: '0.12em', color: poster.creamDim, whiteSpace: 'nowrap' }}
         >
           {SLOTS.map((k) => {
             const count = Math.round(lean[k] * offer.items.length);
@@ -424,13 +424,13 @@ function DeckSheet({ offer, compact, calm, onCustomize }: { offer: DeckOffer; co
         </span>
         {/* Any deck is yours to change: the builder opens on a copy of it. */}
         <span style={{ order: 3, marginLeft: compact ? 'auto' : 0 }}>
-          <PosterButton variant="ghost" size="sm" onClick={onCustomize} ariaLabel={`Customize ${offer.name}`} style={{ padding: compact ? '7px 12px' : '8px 14px', letterSpacing: '0.16em', fontSize: compact ? 11.5 : 12.5 }}>
+          <PosterButton variant="ghost" size="sm" onClick={onCustomize} ariaLabel={`Customize ${offer.name}`} style={{ padding: compact ? '7px 12px' : '8px 14px', letterSpacing: '0.16em', fontSize: compact ? TYPE.small : TYPE.body }}>
             Customize
           </PosterButton>
         </span>
       </div>
 
-      <p style={{ ...text.body, margin: 0, maxWidth: '78ch', fontSize: compact ? 12.5 : 13.5, lineHeight: 1.4, color: poster.creamDim }}>
+      <p style={{ ...text.body, margin: 0, maxWidth: '78ch', fontSize: compact ? TYPE.body : TYPE.body, lineHeight: 1.4, color: poster.creamDim }}>
         {offer.blurb}
       </p>
 
@@ -442,9 +442,9 @@ function DeckSheet({ offer, compact, calm, onCustomize }: { offer: DeckOffer; co
         {counted.map(([id, k]) => (
           <li key={id} style={{ display: 'flex', alignItems: 'center', gap: compact ? 7 : 9, minWidth: 0 }}>
             <ItemIcon itemId={id} size={compact ? 26 : 32} />
-            <span style={{ minWidth: 0, fontSize: compact ? 12 : 13.5, lineHeight: 1.15, color: poster.cream }}>{cardName(id)}</span>
+            <span style={{ minWidth: 0, fontSize: compact ? TYPE.small : TYPE.body, lineHeight: 1.15, color: poster.cream }}>{cardName(id)}</span>
             {k > 1 && (
-              <span style={{ flexShrink: 0, fontWeight: 800, fontSize: compact ? 12 : 13.5, lineHeight: 1, color: poster.gold }}>×{k}</span>
+              <span style={{ flexShrink: 0, fontWeight: 800, fontSize: compact ? TYPE.small : TYPE.body, lineHeight: 1, color: poster.gold }}>×{k}</span>
             )}
           </li>
         ))}
@@ -489,13 +489,13 @@ function DeckWorkshop({ heroes, from, replaces, compact, onCancel, onSave }: {
         padding: compact ? '12px 12px 10px' : '16px clamp(18px, 3vw, 44px) 14px', borderBottom: `1px solid ${poster.edge}`,
       }}>
         <h2 style={{
-          margin: 0, flex: 1, minWidth: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: compact ? 18 : 24,
+          margin: 0, flex: 1, minWidth: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: compact ? TYPE.title : TYPE.display,
           letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.cream, lineHeight: 1,
         }}>{YOUR_DECK}</h2>
         <PosterButton variant="ghost" size="sm" onClick={onCancel} ariaLabel="Leave the deck as it was" style={compact ? { padding: '9px 12px', letterSpacing: '0.14em' } : undefined}>Cancel</PosterButton>
         <PosterButton variant={legal ? 'paper' : 'ghost'} size="sm" disabled={!legal} onClick={() => onSave(items)} ariaLabel="Save it as your deck" style={compact ? { padding: '9px 12px', letterSpacing: '0.14em' } : undefined}>Save deck</PosterButton>
         {/* What saving does, on a line of its own under the name and the buttons. */}
-        <p style={{ ...text.body, flexBasis: '100%', margin: 0, fontSize: compact ? 12 : 13, lineHeight: 1.3, color: poster.creamDim }}>
+        <p style={{ ...text.body, flexBasis: '100%', margin: 0, fontSize: compact ? TYPE.small : TYPE.body, lineHeight: 1.3, color: poster.creamDim }}>
           {started ? `${started} ` : ''}{replaces ? 'Saving replaces the deck in your Loadout.' : 'Saving keeps it as your deck.'}
         </p>
       </header>

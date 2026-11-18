@@ -15,7 +15,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SIZES } from '../card/CardFrame';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, scrimStyle } from '../poster';
 import { CREDIT_CLEAR } from './MapControls';
 import { PosterButton } from '../chrome';
@@ -134,7 +134,7 @@ export function PickOverlay<T extends PickOption>({ kind, title, subtitle, optio
             margin: 0,
             fontFamily: fonts.display,
             fontWeight: 400,
-            fontSize: narrow ? 22 : 30,
+            fontSize: narrow ? TYPE.display : TYPE.display,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
             lineHeight: 1.05,
@@ -144,7 +144,7 @@ export function PickOverlay<T extends PickOption>({ kind, title, subtitle, optio
           {title}
         </h2>
         {subtitle && (
-          <p style={{ ...text.body, margin: 0, fontSize: narrow ? 12.5 : 14, color: poster.creamDim, lineHeight: 1.35 }}>{subtitle}</p>
+          <p style={{ ...text.body, margin: 0, fontSize: narrow ? TYPE.body : TYPE.body, color: poster.creamDim, lineHeight: 1.35 }}>{subtitle}</p>
         )}
       </motion.header>
 

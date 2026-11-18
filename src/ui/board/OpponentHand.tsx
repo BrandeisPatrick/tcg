@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
-import { fonts, spring } from '../tokens';
+import { TYPE, fonts, spring } from '../tokens';
 import { poster } from '../poster';
 
 /**
@@ -53,7 +53,7 @@ export function OpponentHand({ cards, height, maxWidth }: { cards: CardInstance[
         background: poster.ink,
         border: `1.5px solid ${poster.rival}`,
         color: poster.cream,
-        fontFamily: fonts.display, fontSize: 11, lineHeight: 1,
+        fontFamily: fonts.display, fontSize: TYPE.small, lineHeight: 1,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontVariantNumeric: 'tabular-nums',
         flexShrink: 0,

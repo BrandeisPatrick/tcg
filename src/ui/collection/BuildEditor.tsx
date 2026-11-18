@@ -35,7 +35,7 @@ import { ItemTooltip } from '../shop/ItemTooltip';
 import { TierRows } from '../shop/TierRows';
 import { CATEGORY_WORD, SHOP_TABS } from '../shop/itemFacts';
 import { CardPreview } from '../overlays/CardPreview';
-import { fonts, spring } from '../tokens';
+import { TYPE, fonts, spring } from '../tokens';
 import { poster, shopInk } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
@@ -373,7 +373,7 @@ export function BuildEditor({ squad }: {
                   minWidth: 0,
                   fontFamily: fonts.display,
                   fontWeight: 400,
-                  fontSize: isMobile ? 20 : 24,
+                  fontSize: isMobile ? TYPE.title : TYPE.display,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                   lineHeight: 1,
@@ -447,7 +447,7 @@ export function BuildEditor({ squad }: {
                     background: on ? wash : 'transparent',
                     color: on ? poster.cream : poster.creamDim,
                     fontFamily: fonts.display,
-                    fontSize: narrow ? 12.5 : isMobile ? 14 : 15,
+                    fontSize: narrow ? TYPE.body : isMobile ? TYPE.body : TYPE.title,
                     letterSpacing: narrow ? '0.06em' : '0.12em',
                     textTransform: 'uppercase',
                     lineHeight: 1,

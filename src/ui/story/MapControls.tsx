@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { PosterButton } from '../chrome';
 import { poster } from '../poster';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 
 /**
  * The map's corner controls — zoom in, zoom out, and "locate", which flies
@@ -79,7 +79,7 @@ export function OsmCredit({ style }: { style?: CSSProperties }) {
       padding: '2px 6px',
       background: 'rgba(242, 230, 203, 0.86)',
       color: poster.inkDim,
-      fontFamily: fonts.ui, fontSize: 10, fontWeight: 600, lineHeight: '14px',
+      fontFamily: fonts.ui, fontSize: TYPE.small, fontWeight: 600, lineHeight: '14px',
       whiteSpace: 'nowrap', pointerEvents: 'none',
       ...style,
     }}>© OpenStreetMap contributors</div>

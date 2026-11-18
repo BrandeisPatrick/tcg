@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { fonts, spring } from '../tokens';
+import { TYPE, fonts, spring } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import type { BankForecast } from '@/engine/bank';
@@ -51,7 +51,7 @@ export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, s
         variant="red"
         size="sm"
         onClick={onCancel}
-        style={{ width: '100%', height: '100%', padding: 0, fontSize: 13, letterSpacing: '0.14em', textAlign: 'center' }}
+        style={{ width: '100%', height: '100%', padding: 0, fontSize: TYPE.body, letterSpacing: '0.14em', textAlign: 'center' }}
       >Cancel</PosterButton>
     </motion.div>
   );
@@ -87,7 +87,7 @@ export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, s
         ariaLabel={END_TURN}
         style={{
           width: '100%', height: '100%', padding: dock ? '0 0 0 0.2em' : 0,
-          fontSize: dock ? 16 : 13, letterSpacing: dock ? '0.2em' : '0.14em', lineHeight: 1.15, textAlign: 'center',
+          fontSize: dock ? TYPE.title : TYPE.body, letterSpacing: dock ? '0.2em' : '0.14em', lineHeight: 1.15, textAlign: 'center',
           cursor: turnCursor,
           ...(busy && isMyTurn ? { color: poster.inkDim } : {}),
           // On the dark ground under the sheet a waiting button is a cream
@@ -112,7 +112,7 @@ export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, s
         border: `1.5px solid ${autoPlay ? poster.gold : dock ? poster.ink : poster.edge}`,
         ...clipBoth(chamfer(4)),
         fontFamily: fonts.display,
-        fontSize: 11,
+        fontSize: TYPE.small,
         letterSpacing: '0.18em',
         textTransform: 'uppercase',
         lineHeight: 1,

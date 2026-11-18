@@ -11,7 +11,7 @@ import { CARDS_BY_ID, cardName } from '@/cards';
 import type { StoryRun } from '@/story/types';
 import { REGIONS } from '@/story/campaign';
 import { isFight } from '@/story/storyRun';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth, scrimStyle, sheetStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
@@ -26,7 +26,7 @@ const inkTag = {
   background: poster.ink,
   color: poster.paper,
   fontFamily: fonts.display,
-  fontSize: 10.5,
+  fontSize: TYPE.small,
   letterSpacing: '0.2em',
   textTransform: 'uppercase' as const,
   lineHeight: 1,
@@ -125,7 +125,7 @@ function Title({ children, color = poster.ink, compact }: { children: ReactNode;
         margin: 0,
         fontFamily: fonts.display,
         fontWeight: 400,
-        fontSize: compact ? 28 : 46,
+        fontSize: compact ? TYPE.display : TYPE.display,
         letterSpacing: '0.02em',
         textTransform: 'uppercase',
         lineHeight: 0.98,
@@ -148,7 +148,7 @@ function Intro({ compact }: { compact: boolean }) {
         <span
           style={{
             fontFamily: fonts.script,
-            fontSize: compact ? 24 : 30,
+            fontSize: compact ? TYPE.display : TYPE.display,
             lineHeight: 1,
             transform: 'rotate(-3deg)',
             transformOrigin: 'left bottom',
@@ -161,7 +161,7 @@ function Intro({ compact }: { compact: boolean }) {
         <Title compact={compact}>Streets of New York</Title>
       </div>
       <Rule />
-      <p style={{ ...text.body, margin: 0, fontSize: compact ? 13.5 : 14.5, color: poster.inkSoft, maxWidth: 520 }}>
+      <p style={{ ...text.body, margin: 0, fontSize: compact ? TYPE.body : TYPE.body, color: poster.inkSoft, maxWidth: 520 }}>
         Start with one hero and recruit up to three. Supply stops hand out items and souls for
         your next fight. Three routes run out of the Battery, and each one ends at a boss. Every
         block is harder than the last.
@@ -186,14 +186,14 @@ function Intro({ compact }: { compact: boolean }) {
             >
               <FramedPortrait hero={boss.enemy} w={compact ? 42 : 48} h={compact ? 54 : 62} border={poster.red} />
               <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-                <span style={{ fontFamily: fonts.display, fontSize: compact ? 17 : 20, letterSpacing: '0.03em', textTransform: 'uppercase', lineHeight: 1.05 }}>
+                <span style={{ fontFamily: fonts.display, fontSize: compact ? TYPE.title : TYPE.title, letterSpacing: '0.03em', textTransform: 'uppercase', lineHeight: 1.05 }}>
                   {r.name}
                 </span>
-                <span style={{ ...text.body, fontSize: compact ? 12 : 13, color: poster.inkDim, lineHeight: 1.3 }}>
+                <span style={{ ...text.body, fontSize: compact ? TYPE.small : TYPE.body, color: poster.inkDim, lineHeight: 1.3 }}>
                   Ends at {boss.name}{bossName ? ` · ${bossName}` : ''}
                 </span>
               </span>
-              <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ ...eyebrow, fontSize: TYPE.small, color: poster.inkDim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                 {r.locs.length} stops
               </span>
             </div>
@@ -227,7 +227,7 @@ function Outcome({ run, compact }: { run: StoryRun; compact: boolean }) {
         </Title>
       </div>
       <Rule />
-      <p style={{ ...text.body, margin: 0, fontSize: compact ? 13.5 : 14.5, color: poster.inkSoft }}>{line}</p>
+      <p style={{ ...text.body, margin: 0, fontSize: compact ? TYPE.body : TYPE.body, color: poster.inkSoft }}>{line}</p>
 
       <dl
         style={{
@@ -252,7 +252,7 @@ function Outcome({ run, compact }: { run: StoryRun; compact: boolean }) {
             return id ? (
               <figure key={id} style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 6, width: w }}>
                 <FramedPortrait hero={id} w={w} h={h} border={poster.you} />
-                <figcaption style={{ ...text.label, fontSize: 10, letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <figcaption style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {cardName(id)}
                 </figcaption>
               </figure>
@@ -294,8 +294,8 @@ function Fact({ label, value, compact, rule }: { label: string; value: string; c
         minWidth: 0,
       }}
     >
-      <dt style={{ ...eyebrow, fontSize: 9.5, letterSpacing: '0.16em', color: poster.inkDim, whiteSpace: 'nowrap' }}>{label}</dt>
-      <dd style={{ margin: 0, fontFamily: fonts.display, fontSize: compact ? 26 : 32, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+      <dt style={{ ...eyebrow, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.inkDim, whiteSpace: 'nowrap' }}>{label}</dt>
+      <dd style={{ margin: 0, fontFamily: fonts.display, fontSize: compact ? TYPE.display : TYPE.display, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
         {value}
       </dd>
     </div>

@@ -37,7 +37,7 @@ import { nextTip, type TipRequest } from '../shop/tips';
 import { CATEGORY_WORD, SHOP_TABS } from '../shop/itemFacts';
 import { CardPreview } from '../overlays/CardPreview';
 import { PosterButton } from '../chrome';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, shopInk } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
@@ -256,18 +256,18 @@ export function DeckEditor({ squad, onChange, value, onEdit }: {
           <div style={{ padding: isMobile ? '10px 10px 14px' : '14px 14px 18px', borderBottom: `1px solid ${poster.edge}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 32, flexWrap: 'wrap' }}>
               <h3 style={{
-                margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? 20 : 24,
+                margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? TYPE.title : TYPE.display,
                 letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1, color: poster.cream,
               }}>Deck</h3>
               <span aria-label={`${deck.length} of ${DECK_SIZE} items`} style={{
-                fontFamily: fonts.display, fontSize: 16, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                fontFamily: fonts.display, fontSize: TYPE.title, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
                 color: full ? poster.gold : poster.creamDim,
               }}>{deck.length}/{DECK_SIZE}</span>
               <span style={{ flex: 1 }} />
               <PosterButton variant="paper" size="sm" onClick={fromBuilds} ariaLabel="Fill the deck from the squad's builds">From builds</PosterButton>
               <PosterButton variant="ink" size="sm" onClick={clear} disabled={deck.length === 0} ariaLabel="Clear the deck">Clear</PosterButton>
             </div>
-            <p style={{ ...text.body, margin: '8px 0 10px', fontSize: 12.5, color: poster.creamDim }}>{status}</p>
+            <p style={{ ...text.body, margin: '8px 0 10px', fontSize: TYPE.body, color: poster.creamDim }}>{status}</p>
             <div role="group" aria-label="The deck" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, minHeight: tile + 6 }}>
               <AnimatePresence initial={false}>
                 {distinct.map((id) => (
@@ -293,7 +293,7 @@ export function DeckEditor({ squad, onChange, value, onEdit }: {
                 ))}
               </AnimatePresence>
               {deck.length === 0 && (
-                <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.16em', color: poster.creamFaint, alignSelf: 'center' }}>
+                <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.creamFaint, alignSelf: 'center' }}>
                   Tap an item below to add it
                 </span>
               )}
@@ -318,7 +318,7 @@ export function DeckEditor({ squad, onChange, value, onEdit }: {
                     padding: isMobile ? '12px 4px 10px' : '13px 6px 11px',
                     border: 'none', borderBottom: `3px solid ${on ? ink : 'transparent'}`, marginBottom: -1,
                     background: on ? wash : 'transparent', color: on ? poster.cream : poster.creamDim,
-                    fontFamily: fonts.display, fontSize: narrow ? 12.5 : isMobile ? 14 : 15,
+                    fontFamily: fonts.display, fontSize: narrow ? TYPE.body : isMobile ? TYPE.body : TYPE.title,
                     letterSpacing: narrow ? '0.06em' : '0.12em', textTransform: 'uppercase', lineHeight: 1, cursor: 'pointer',
                   }}
                 >
@@ -350,7 +350,7 @@ export function DeckEditor({ squad, onChange, value, onEdit }: {
           >
             <span style={{
               padding: '8px 16px', background: poster.red, color: poster.paper, borderRadius: 3,
-              fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase',
+              fontFamily: fonts.display, fontSize: TYPE.small, letterSpacing: '0.2em', textTransform: 'uppercase',
             }}>{notice}</span>
           </motion.div>
         )}

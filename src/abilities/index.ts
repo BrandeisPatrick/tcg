@@ -2360,7 +2360,7 @@ const skill_warden: HeroAbilityDef = {
 const skill_wraith: HeroAbilityDef = {
   id: 'skill_wraith', trigger: 'activate', target: 'self',
   name: 'Full Auto',
-  text: 'Wraith gets +{sp:2} Attack for 2 turns.',
+  text: 'Wraith gets +{sp:2} Bullet Power for 2 turns.',
   base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2523,7 +2523,7 @@ const skill_yamato: HeroAbilityDef = {
 const skill_dynamo: HeroAbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', cooldown: 4,
   name: 'Rejuvenating Aurora',
-  text: 'Your heroes heal {sp:5} each and get +1 Attack for 2 turns.',
+  text: 'Your heroes heal {sp:5} each and get +1 Bullet Power for 2 turns.',
   base: 5,
   scalesSpirit: true,
   run: (G, ctx, { source }) => {
@@ -2555,7 +2555,7 @@ const skill_kelvin: HeroAbilityDef = {
 const skill_paige: HeroAbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero',
   name: 'Plot Armor',
-  text: 'Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns.',
+  text: 'Give one of your heroes Shield {sp:2} and +1 Bullet Power for 2 turns.',
   base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2576,7 +2576,7 @@ const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
-  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Attack, then returns to your bench.',
+  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Bullet Power, then returns to your bench.',
   base: 4,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {

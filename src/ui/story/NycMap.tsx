@@ -29,7 +29,7 @@ import {
 } from './nycSheet';
 import { MapUnderlay, MapOverlay, cellClip, CELLS } from './MapDetails';
 import { poster } from '../poster';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 
 const VW = SHEET_VIEW.w, VH = SHEET_VIEW.h;
 
@@ -210,7 +210,7 @@ export const NycMap = memo(function NycMap() {
         <polygon points="0,-21 4.5,-4 0,0 -4.5,-4" fill={KEYLINE} />
         <polygon points="0,21 4.5,4 0,0 -4.5,4" fill={poster.paper} stroke={KEYLINE} strokeWidth="0.8" />
         <text x={0} y={-30} textAnchor="middle" fill={KEYLINE}
-          style={{ fontFamily: fonts.display, fontSize: 11 }}>N</text>
+          style={{ fontFamily: fonts.display, fontSize: TYPE.small }}>N</text>
       </g>
 
       {/* Title cartouche — a paper plate with a double ink rule. */}
@@ -218,9 +218,9 @@ export const NycMap = memo(function NycMap() {
         <rect width={196} height={50} fill={poster.paper} stroke={KEYLINE} strokeWidth="1.6" />
         <rect x={4} y={4} width={188} height={42} fill="none" stroke={KEYLINE} strokeWidth="0.6" />
         <text x={98} y={26} textAnchor="middle" fill={KEYLINE}
-          style={{ fontFamily: fonts.display, fontSize: 16, letterSpacing: '0.24em' }}>NEW YORK CITY</text>
+          style={{ fontFamily: fonts.display, fontSize: TYPE.title, letterSpacing: '0.24em' }}>NEW YORK CITY</text>
         <text x={98} y={39} textAnchor="middle" fill="rgba(23, 20, 16, 0.6)"
-          style={{ fontFamily: fonts.script, fontSize: 10, letterSpacing: '0.04em' }}>the five boroughs &amp; the harbour</text>
+          style={{ fontFamily: fonts.script, fontSize: TYPE.small, letterSpacing: '0.04em' }}>the five boroughs &amp; the harbour</text>
       </g>
     </svg>
   );

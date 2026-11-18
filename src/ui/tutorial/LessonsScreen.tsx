@@ -7,7 +7,7 @@
  * screen and the loadout sheet.
  */
 import { motion } from 'framer-motion';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
@@ -81,7 +81,7 @@ export function LessonsScreen({ onBack, onStart }: Props) {
             style={{
               margin: 0,
               fontFamily: fonts.display,
-              fontSize: isMobile ? 26 : 'clamp(28px, 3vw, 40px)',
+              fontSize: TYPE.display,
               fontWeight: 400,
               letterSpacing: '0.02em',
               textTransform: 'uppercase',
@@ -94,7 +94,7 @@ export function LessonsScreen({ onBack, onStart }: Props) {
             style={{
               ...text.label,
               marginLeft: 'auto',
-              fontSize: 10.5,
+              fontSize: TYPE.small,
               letterSpacing: '0.2em',
               color: poster.inkDim,
               whiteSpace: 'nowrap',
@@ -242,7 +242,7 @@ function LessonRow({
           aria-hidden
           style={{
             fontFamily: fonts.display,
-            fontSize: compact ? 26 : 34,
+            fontSize: compact ? TYPE.display : TYPE.display,
             lineHeight: 1,
             color: done || next ? poster.ink : poster.inkFaint,
             fontVariantNumeric: 'tabular-nums',
@@ -274,7 +274,7 @@ function LessonRow({
             <span
               style={{
                 fontFamily: fonts.display,
-                fontSize: compact ? 17 : 22,
+                fontSize: compact ? TYPE.title : TYPE.display,
                 letterSpacing: '0.02em',
                 textTransform: 'uppercase',
                 lineHeight: 1.1,
@@ -282,11 +282,11 @@ function LessonRow({
             >
               {title}
             </span>
-            <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
+            <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.22em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
               Lesson {number}
             </span>
           </span>
-          <span style={{ ...text.body, fontSize: compact ? 11.5 : 13, color: poster.inkDim, lineHeight: 1.4 }}>
+          <span style={{ ...text.body, fontSize: compact ? TYPE.small : TYPE.body, color: poster.inkDim, lineHeight: 1.4 }}>
             {blurb}
           </span>
           {compact && <Sticker {...sticker} small />}
@@ -316,7 +316,7 @@ function Sticker({ label, background, color, border, small }: {
         border: border ?? '1.5px solid transparent',
         borderRadius: 3,
         fontFamily: fonts.display,
-        fontSize: small ? 9.5 : 10.5,
+        fontSize: small ? TYPE.small : TYPE.small,
         letterSpacing: '0.22em',
         textTransform: 'uppercase',
         lineHeight: 1,

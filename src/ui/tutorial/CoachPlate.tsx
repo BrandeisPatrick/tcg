@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardId, GameState, PlayerID } from '@/engine/types';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markLessonDone } from '@/storage/playerData';
@@ -276,7 +276,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
             <span
               style={{
                 ...text.label,
-                fontSize: 10,
+                fontSize: TYPE.small,
                 letterSpacing: '0.2em',
                 color: poster.inkDim,
                 fontVariantNumeric: 'tabular-nums',
@@ -304,7 +304,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
                 cursor: 'pointer',
                 color: poster.inkDim,
                 fontFamily: fonts.ui,
-                fontSize: 15,
+                fontSize: TYPE.title,
                 lineHeight: 1,
               }}
             >
@@ -327,7 +327,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               <div
                 style={{
                   fontFamily: fonts.display,
-                  fontSize: isMobile ? 13 : 18,
+                  fontSize: isMobile ? TYPE.body : TYPE.title,
                   letterSpacing: '0.02em',
                   textTransform: 'uppercase',
                   lineHeight: 1.1,
@@ -336,7 +336,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               >
                 {done ? `${lesson.title} · done` : current.title}
               </div>
-              <div style={{ ...text.body, fontSize: isMobile ? 11 : 13, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
+              <div style={{ ...text.body, fontSize: isMobile ? TYPE.small : TYPE.body, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
                 {bodyText}
                 {done && (
                   <span style={{ display: 'block', marginTop: isMobile ? 2 : 4, color: poster.inkFaint }}>× keeps this match going.</span>
@@ -350,7 +350,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               {!done ? (
                 <>
                   <TaskDot ticked={ticked} waiting={!!waitText} />
-                  <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>
+                  <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>
                     {status}
                   </span>
                 </>
@@ -429,7 +429,7 @@ function PlateAction({ label, onClick, muted }: {
         color: muted ? poster.inkDim : poster.paper,
         ...clipBoth(chamfer(6)),
         fontFamily: fonts.display,
-        fontSize: 11,
+        fontSize: TYPE.small,
         letterSpacing: '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1,

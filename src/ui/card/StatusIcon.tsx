@@ -1,6 +1,6 @@
 import type { StatusId } from '@/engine/types';
 import { STATUSES_BY_ID } from '@/statuses';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster } from '../poster';
 import { StatusMark } from './statusMarks';
 
@@ -209,7 +209,7 @@ export function StatusIcon({ id, value, duration, size = 'normal', titled = true
         border: `1px solid ${poster.ink}`,
         borderRadius: 2,
         fontFamily: fonts.ui,
-        fontSize: 12,
+        fontSize: TYPE.small,
         fontWeight: 700,
         whiteSpace: 'nowrap',
         lineHeight: 1.1,

@@ -5,12 +5,14 @@ import { poster, scrimStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { scale as T } from '../hud';
 
-/** The full card's size (CardFrame SIZES.full) and the phone's share of it:
- *  the whole card filled a phone's width edge to edge. Fixed, not fluid — the
- *  preview is the same size every time it opens on a given screen. */
+/** The full card's size (CardFrame SIZES.full), and how much larger the
+ *  preview draws it: big enough that its rules read at a glance (Patrick,
+ *  2026-11-18: "text too small"), and on a phone as wide as the screen leaves
+ *  after its 20px margins. Fixed per screen — the preview is the same size
+ *  every time it opens there. */
 const FULL_W = 300;
 const FULL_H = 420;
-const PHONE_SCALE = 0.8;
+const PREVIEW_SCALE = 1.15;
 
 /** The card at the preview's size: drawn at full size and scaled, so its
  *  type stays set as designed. */
@@ -56,8 +58,10 @@ interface Props {
  * the eye learns where to look, and a phone never has it hanging off an edge.
  */
 export function CardPreview({ cardId, cost, hideCost, onClose, hover = false, action }: Props) {
-  const { isMobile } = useViewport();
-  const scale = isMobile ? PHONE_SCALE : 1;
+  const { width: vw, height: vh } = useViewport();
+  // As large as PREVIEW_SCALE, but never wider than the screen less 20px a
+  // side, nor taller than three quarters of it (the action rides under it).
+  const scale = Math.min(PREVIEW_SCALE, (vw - 40) / FULL_W, (vh * 0.75) / FULL_H);
   if (hover) {
     return (
       <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 92, pointerEvents: 'none' }}>

@@ -22,7 +22,7 @@ import {
   placeLabel, project, type MapLabel, type Tier, type VignetteId,
 } from './mapDetail';
 import { poster } from '../poster';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 
 /** The water the waterlines are cut back to: NycMap's MAP_WATER (importing
  *  it would loop the two modules; a test keeps them equal). */
@@ -106,7 +106,7 @@ export const MapUnderlay = memo(function MapUnderlay() {
 
         {/* Soundings, in a chart's italic figures. */}
         <g fill={CREAM(0.3)} textAnchor="middle"
-          style={{ fontFamily: fonts.ui, fontStyle: 'italic', fontSize: type(3.2) }}>
+          style={{ fontFamily: fonts.ui, fontStyle: 'italic', fontSize: type(TYPE.small) }}>
           {SOUNDINGS.map((s) => {
             const p = project(s.lat, s.lng);
             return <text key={`${s.lat},${s.lng}`} x={p.x} y={p.y}>{s.depth}</text>;
@@ -118,7 +118,7 @@ export const MapUnderlay = memo(function MapUnderlay() {
           <rect x={0} y={-0.6} width={MILE} height={1.2} fill={CREAM(0.22)} />
           <rect x={MILE} y={-0.6} width={MILE} height={1.2} fill="none" />
           <g fill={CREAM(0.34)} stroke="none" textAnchor="middle"
-            style={{ fontFamily: fonts.ui, fontWeight: 600, fontSize: type(2.4), letterSpacing: '0.12em' }}>
+            style={{ fontFamily: fonts.ui, fontWeight: 600, fontSize: type(TYPE.small), letterSpacing: '0.12em' }}>
             <text x={0} y={-2.4}>0</text>
             <text x={MILE} y={-2.4}>1</text>
             <text x={MILE * 2} y={-2.4}>2</text>

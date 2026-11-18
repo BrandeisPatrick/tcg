@@ -18,7 +18,7 @@ import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
 import { defaultBuild } from '@/cards/builds';
 import { DECK_OFFERS, deckOffers } from '@/cards/deckOffers';
 import { READY_DECKS } from '@/cards/readyDecks';
-import { buildsAcross, copyCounts, deckFromBuilds, deckProblem, evolvesFrom, fitDeck, isBaseItem, isLegalDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
+import { BASE_HEALTH, BASE_HEALTH_COPIES, buildsAcross, copyCounts, deckFromBuilds, deckProblem, evolvesFrom, fitDeck, isBaseItem, isLegalDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
 import { DeadlockGame } from '@/engine/game';
 import { setupGame } from '@/engine/actions/setup';
 import { buildOf, nextRandom, shuffle, sideDeckIds } from '@/engine/deck';
@@ -158,8 +158,9 @@ describe('the deck made from the heroes\' builds', () => {
     const across: CardId[] = [];
     for (let i = 0; i < 6; i++) for (const h of heroes) across.push(defaultBuild(h)[i]);
     expect(buildsAcross(heroes.map(defaultBuild))).toEqual(across);
-    // Taken in that order while each has room under the cap.
-    const want: CardId[] = [];
+    // Extra Health ×2 first (every deck carries a base health item, 2026-11-18), then the
+    // builds taken in that order while each has room under the cap.
+    const want: CardId[] = Array(BASE_HEALTH_COPIES).fill(BASE_HEALTH);
     for (const id of across) if (want.length < DECK_SIZE && want.filter((x) => x === id).length < MAX_COPIES) want.push(id);
     expect(deck).toEqual(want);
   });
@@ -175,7 +176,7 @@ describe('the deck made from the heroes\' builds', () => {
     for (let i = 0; i < all.length; i++) {
       const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length]]; // a squad: SQUAD_SIZE (3) heroes
       const deck = deckFromBuilds(four.map(defaultBuild));
-      const named = new Set(four.flatMap(defaultBuild));
+      const named = new Set([...four.flatMap(defaultBuild), BASE_HEALTH]);
       expect(deck.filter((id) => !named.has(id)), four.join(',')).toEqual([]);
     }
   });
@@ -184,7 +185,8 @@ describe('the deck made from the heroes\' builds', () => {
     const deck = deckFromBuilds([['grit'], ['grit'], ['grit', 'cold_front'], ['grit']]);
     expect(copyCounts(deck).grit).toBe(MAX_COPIES);
     expect(copyCounts(deck).cold_front).toBe(MAX_COPIES);
-    expect(deck).toHaveLength(2 * MAX_COPIES);  // nothing more can go in
+    expect(copyCounts(deck)[BASE_HEALTH]).toBe(BASE_HEALTH_COPIES);
+    expect(deck).toHaveLength(2 * MAX_COPIES + BASE_HEALTH_COPIES);  // nothing more can go in
     expect(deckFromBuilds([])).toEqual([]);
     expect(deckFromBuilds([['nope', 'hero_haze']])).toEqual([]);
   });
@@ -205,7 +207,7 @@ describe('the deck made from the heroes\' builds', () => {
     const short = { ...G, playerDeck: legal.slice(1) };
     const mine = sideDeckIds(short, '0', TEST_ROSTERS['0']);
     expect(mine).toEqual(deckFromBuilds(TEST_ROSTERS['0'].map((h) => buildOf(short, '0', h))));
-    expect(mine[0]).toBe('glass_cannon');
+    expect(mine.slice(0, BASE_HEALTH_COPIES + 1)).toEqual([...Array(BASE_HEALTH_COPIES).fill(BASE_HEALTH), 'glass_cannon']);
   });
 });
 

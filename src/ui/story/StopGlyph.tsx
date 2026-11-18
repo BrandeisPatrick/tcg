@@ -11,7 +11,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { NodeKind } from '@/story/types';
 import { HeroPortrait } from '@/cards/art/heroArt';
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { poster } from '../poster';
 
 /** The accent each kind of stop prints in. */
@@ -81,7 +81,7 @@ export function StopGlyph({ kind, color, size }: {
 /** The small tracked caps over a title: "THE SPINE · STOP 2 OF 7". */
 export const eyebrow: CSSProperties = {
   ...text.label,
-  fontSize: 10,
+  fontSize: TYPE.small,
   letterSpacing: '0.2em',
   lineHeight: 1.3,
 };
@@ -108,7 +108,7 @@ export function Sticker({ label, ink, outline, glyph, small }: {
         border: `1.5px solid ${ink}`,
         borderRadius: 3,
         fontFamily: fonts.display,
-        fontSize: small ? 9.5 : 10.5,
+        fontSize: small ? TYPE.small : TYPE.small,
         letterSpacing: '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1,

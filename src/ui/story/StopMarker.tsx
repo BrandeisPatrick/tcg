@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import type { StoryRun, StoryNode, NodeKind } from '@/story/types';
 import { effectiveKind, stopState, type StopState } from '@/story/describe';
 import { enemyRosterSize } from '@/story/content';
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { KIND_INK, KIND_LABEL, StopGlyph } from './StopGlyph';
 import { MAP_W, MAP_H, coverScale, toScreen, zoomProgress, type Camera, type Frame } from './mapCamera';
@@ -306,7 +306,7 @@ function StopMarker({ view: v, minHit, stamp, calm, onPress, onKeyboardFocus }: 
             minWidth: 16, height: 16, padding: '0 3px', boxSizing: 'border-box', borderRadius: 8,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: poster.ink, color: poster.paper, border: `1.5px solid ${poster.paper}`,
-            fontFamily: fonts.ui, fontWeight: 800, fontSize: 10, lineHeight: 1,
+            fontFamily: fonts.ui, fontWeight: 800, fontSize: TYPE.small, lineHeight: 1,
           }}>{v.foes}</span>
         )}
       </span>
@@ -471,7 +471,7 @@ function Pennant({ edge }: { edge: string }) {
       <polygon points={`1.5,1 ${PENNANT_W},1 ${PENNANT_W - 6},8.5 ${PENNANT_W},16 1.5,16`}
         fill={poster.you} stroke={poster.ink} strokeWidth={1.5} strokeLinejoin="round" />
       <text x={(PENNANT_W - 4) / 2 + 1} y={12.5} textAnchor="middle" fill={poster.ink}
-        style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.06em' }}>YOU</text>
+        style={{ fontFamily: fonts.display, fontSize: TYPE.small, letterSpacing: '0.06em' }}>YOU</text>
     </svg>
   );
 }

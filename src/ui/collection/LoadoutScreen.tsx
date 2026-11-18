@@ -14,7 +14,7 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { HEROES, cardName } from '@/cards';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
@@ -129,7 +129,7 @@ export function LoadoutScreen({ onBack }: Props) {
             style={{
               margin: 0,
               fontFamily: fonts.display,
-              fontSize: isMobile ? 26 : 'clamp(28px, 3vw, 40px)',
+              fontSize: TYPE.display,
               fontWeight: 400,
               letterSpacing: '0.02em',
               textTransform: 'uppercase',
@@ -200,7 +200,7 @@ function SectionHead({ title, note }: { title: string; note?: string }) {
         style={{
           margin: 0,
           fontFamily: fonts.display,
-          fontSize: 18,
+          fontSize: TYPE.title,
           fontWeight: 400,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
@@ -210,7 +210,7 @@ function SectionHead({ title, note }: { title: string; note?: string }) {
         {title}
       </h2>
       {note && (
-        <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.18em', color: poster.inkDim }}>
+        <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.18em', color: poster.inkDim }}>
           {note}
         </span>
       )}
@@ -317,7 +317,7 @@ function Squad({ slots, onAdd, onClear, compact, split }: {
                   background: poster.paperBand,
                   color: poster.ink,
                   fontFamily: fonts.display,
-                  fontSize: 9,
+                  fontSize: TYPE.small,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                   lineHeight: 1,
@@ -353,7 +353,7 @@ function OrderStamp({ n }: { n: number }) {
         color: poster.paper,
         borderRadius: '50%',
         fontFamily: fonts.display,
-        fontSize: 11,
+        fontSize: TYPE.small,
         lineHeight: 1,
       }}
     >
@@ -410,7 +410,7 @@ function PickSlot({ index, heroId, onClear }: {
               background: poster.paperBand,
               color: poster.ink,
               fontFamily: fonts.display,
-              fontSize: 10,
+              fontSize: TYPE.small,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
               lineHeight: 1,
@@ -432,7 +432,7 @@ function PickSlot({ index, heroId, onClear }: {
             alignItems: 'center',
             justifyContent: 'center',
             fontFamily: fonts.display,
-            fontSize: 22,
+            fontSize: TYPE.display,
             color: poster.inkDim,
             lineHeight: 1,
           }}

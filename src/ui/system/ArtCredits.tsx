@@ -5,7 +5,7 @@
  * and on the Gallery's Credits tab; the list itself lives in
  * src/art/credits.ts.
  */
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { poster, printEdge } from '../poster';
 import { ART_CREDITS, ART_DISCLAIMER, ORIGINAL_ART_NOTE, type ArtCredit, type CreditThumb } from '@/art/credits';
 
@@ -28,7 +28,7 @@ export function ArtCredits({ compact = false, columns = 1 }: {
             style={{
               margin: 0,
               fontFamily: fonts.display,
-              fontSize: 11,
+              fontSize: TYPE.small,
               fontWeight: 400,
               letterSpacing: '0.28em',
               textTransform: 'uppercase',
@@ -68,7 +68,7 @@ export function ArtCredits({ compact = false, columns = 1 }: {
         }}
       >
         <p style={{ ...text.body, margin: 0, color: poster.ink }}>{ORIGINAL_ART_NOTE}</p>
-        <p style={{ ...text.body, margin: 0, fontSize: 12, color: poster.inkDim }}>{ART_DISCLAIMER}</p>
+        <p style={{ ...text.body, margin: 0, fontSize: TYPE.small, color: poster.inkDim }}>{ART_DISCLAIMER}</p>
       </div>
     </div>
   );
@@ -94,7 +94,7 @@ function CreditRow({ item, compact }: { item: ArtCredit; compact: boolean }) {
         <div
           style={{
             fontFamily: fonts.display,
-            fontSize: compact ? 14 : 16,
+            fontSize: compact ? TYPE.body : TYPE.title,
             letterSpacing: '0.03em',
             textTransform: 'uppercase',
             lineHeight: 1.15,
@@ -103,8 +103,8 @@ function CreditRow({ item, compact }: { item: ArtCredit; compact: boolean }) {
         >
           {item.title}
         </div>
-        <div style={{ ...text.body, fontSize: compact ? 12 : 13, color: poster.ink }}>{item.by}</div>
-        <div style={{ ...text.body, fontSize: compact ? 11.5 : 12.5, color: poster.inkDim }}>{item.where}</div>
+        <div style={{ ...text.body, fontSize: compact ? TYPE.small : TYPE.body, color: poster.ink }}>{item.by}</div>
+        <div style={{ ...text.body, fontSize: compact ? TYPE.small : TYPE.body, color: poster.inkDim }}>{item.where}</div>
         {item.links.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 2 }}>
             {item.links.map((l) => (
@@ -115,7 +115,7 @@ function CreditRow({ item, compact }: { item: ArtCredit; compact: boolean }) {
                 rel="noreferrer noopener"
                 style={{
                   ...text.label,
-                  fontSize: 10.5,
+                  fontSize: TYPE.small,
                   letterSpacing: '0.12em',
                   color: poster.ink,
                   textDecoration: 'underline',
@@ -128,7 +128,7 @@ function CreditRow({ item, compact }: { item: ArtCredit; compact: boolean }) {
             ))}
           </div>
         )}
-        <div style={{ ...text.body, fontSize: 11, lineHeight: 1.4, color: poster.inkDim }}>{item.terms}</div>
+        <div style={{ ...text.body, fontSize: TYPE.small, lineHeight: 1.4, color: poster.inkDim }}>{item.terms}</div>
       </div>
     </li>
   );

@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, PAPER_MOTTLE, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { StorySkyline } from './cardScenes';
@@ -286,7 +286,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
 
 const stripText = {
   fontFamily: fonts.display,
-  fontSize: 10.5,
+  fontSize: TYPE.small,
   letterSpacing: '0.24em',
   textTransform: 'uppercase' as const,
   color: ink.dim,
@@ -417,7 +417,7 @@ function TitleBlock({ compact }: { compact: boolean }) {
         variants={rise}
         style={{
           fontFamily: fonts.display,
-          fontSize: compact ? 9.5 : 12,
+          fontSize: compact ? TYPE.small : TYPE.small,
           letterSpacing: compact ? '0.2em' : '0.42em',
           textTransform: 'uppercase',
           color: ink.dim,
@@ -436,7 +436,7 @@ function TitleBlock({ compact }: { compact: boolean }) {
         variants={rise}
         style={{
           fontFamily: fonts.display,
-          fontSize: compact ? 9.5 : 11,
+          fontSize: compact ? TYPE.small : TYPE.small,
           letterSpacing: compact ? '0.16em' : '0.3em',
           textTransform: 'uppercase',
           color: ink.dim,
@@ -725,7 +725,7 @@ function ModeCard({
                   background: ink.red,
                   color: ink.paper,
                   fontFamily: fonts.display,
-                  fontSize: 10,
+                  fontSize: TYPE.small,
                   letterSpacing: '0.24em',
                   textTransform: 'uppercase',
                   lineHeight: 1,
@@ -746,7 +746,7 @@ function ModeCard({
                   background: ink.paper,
                   color: ink.black,
                   fontFamily: fonts.display,
-                  fontSize: 9.5,
+                  fontSize: TYPE.small,
                   letterSpacing: '0.2em',
                   textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
@@ -779,7 +779,7 @@ function ModeCard({
             <div
               style={{
                 fontFamily: fonts.display,
-                fontSize: compact ? 19 : 'clamp(18px, 1.7vw, 25px)',
+                fontSize: compact ? TYPE.title : TYPE.display,
                 lineHeight: 1.1,
                 letterSpacing: '0.02em',
                 textTransform: 'uppercase',
@@ -799,7 +799,7 @@ function ModeCard({
             <div
               style={{
                 ...text.label,
-                fontSize: 10,
+                fontSize: TYPE.small,
                 color: ink.dim,
                 display: 'flex',
                 alignItems: 'flex-start',
