@@ -212,7 +212,8 @@ HP 6 · Attack 1 · Retreat 1 · per level +3 HP +1 Spirit
 
 **Viscous** · in the game today — peaks mid, many targets; mix tank 2 · damage 1 · control 3 · support 2  
 HP 6 · Attack 1 · Retreat 1 · per level +2 HP +1 Spirit
-- Skill, waits 4 — **The Cube**: Cube one of your heroes until your next turn, and heal it 3✦.
+- Skill, waits 4 — **The Cube**: Cube your Active until your next turn, and heal it 3✦.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Ultimate, medium, waits 6 — **Goo Ball**: Deal 2✦ spirit damage to every enemy. Stun the enemy Active 1 turn.
 - Why: Viscous saves his carry inside The Cube and bowls the enemy team over with Goo Ball, but deals little damage himself.
 - Changed from today: HP 4 to 6 and Attack 2 to 1 to match tank 2, damage 1. His skill becomes The Cube, his signature, so his hard control lives only in Goo Ball (an exception to the control-3 rule). Goo Ball drops its Unstoppable and its damage goes 3 to 2.
@@ -232,7 +233,8 @@ HP 8 · Attack 2 · Retreat 2 · per level +1 Attack +1 HP
 
 **Victor** — peaks late, many targets; mix tank 3 · damage 2 · control 0 · support 0  
 HP 6 · Attack 1 · Retreat 2 · per level +3 HP +1 Spirit
-- Passive — **Aura of Suffering**: While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor.
+- Passive — **Aura of Suffering**: While Victor is Active, at the start of your turn deal 1✦ spirit damage to the enemy Active and 1 to Victor.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Charged ultimate, medium, 10 damage taken — **Shocking Reanimation**: When Victor falls, you may use this: he revives where he is with half HP. *Ready once Victor has taken 10 damage.*
 - Why: The tank who won't die: his aura burns everyone, himself included, and every hit he soaks up brings his revive closer.
 
@@ -276,8 +278,9 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
 
 **Silver** — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
-- Skill, waits 3 — **Boot Kick**: Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns.
-- Charged ultimate, medium, 8 damage dealt — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: +3 Bullet Power and Shield 6. *Ready once Silver has dealt 8 damage.*
+- Skill, waits 4 — **Boot Kick**: Deal Silver's Bullet Power as bullet damage to the enemy Active. It is Vulnerable 2 turns.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
+- Charged ultimate, medium, 8 damage dealt — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: + her Bullet Power again, and Shield 6. *Ready once Silver has dealt 8 damage.*
 - Why: She kick-marks one target and shotguns it; the more she hurts the enemy, the sooner she turns wolf for a shielded melee burst.
 
 
@@ -285,7 +288,8 @@ HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Haze** · in the game today — peaks late, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +3 Attack +1 HP
-- Passive — **Fixation**: Haze's attacks deal +1 bullet damage to an enemy below full HP.
+- Passive — **Fixation**: Haze's attacks deal + her Bullet Power to an enemy below full HP.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Ultimate, large, waits 8 — **Bullet Dance**: Deal Haze's Attack as bullet damage to every enemy.
 - Why: Haze is the late carry: weak at Level 1, then Fixation keeps biting at whoever she has hurt, and a late Bullet Dance shreds the whole enemy team.
 - Changed from today: Attack 3 to 1 and HP 5 to 4: she starts weak and grows +3 Attack a level. The Level 3 extra attack becomes Fixation, her real passive. Bullet Dance now uses her Attack, so it grows as she does.
@@ -309,7 +313,8 @@ HP 5 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
 
 **Vindicta** · in the game today — peaks early, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +2 Attack
-- Skill, 2 charges, 5 turns each — **Assassinate**: Snipe any enemy, bench too: deal 4✦ spirit damage.
+- Skill, 2 charges, 5 turns each — **Assassinate**: Snipe the enemy Active: deal 3✦ spirit damage.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Ultimate, small, waits 4 — **Flight**: Fly 3 turns: 1 in 3 hits miss her; her attacks add 1✦ spirit damage.
 - Built so on 2026-11-16 (Patrick). Until then Flight was her passive (1✦ on each swing) and Assassinate her ultimate (medium: 8✦ to any enemy). The reasoning is in "Vindicta: the snipe and Flight" at the end.
 - Why: Vindicta floats out of reach adding spirit damage to her rifle, then snipes any wounded hero on the board, bench included.
@@ -356,7 +361,8 @@ HP 5 · Attack 1 · Retreat 0 · per level +2 Spirit
 **Graves** — peaks mid, many targets; mix tank 1 · damage 2 · control 2 · support 0  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
 - Skill, waits 4 — **Grasping Hands**: Deal 1✦ spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck.
-- Ultimate, small, waits 4 — **Borrowed Decree**: Raise a Gravestone on your bench: each turn it shuffles a Ghoul into your deck.
+- Ultimate, small, waits 4 — **Borrowed Decree**: Raise a Gravestone on your bench: each turn it shuffles Ghouls into your deck, as many as Graves' Spirit.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Why: The necromancer traps the lane and raises the dead. Her Ghouls are cards (Patrick, 2026-11-16): she fills her own deck with them, and each one that dies takes a card off the enemy's.
 - Built 2026-11-16 to Patrick's design; this replaces the proposal of 2026-11-09 (Essence Theft and a Borrowed Decree that hit every enemy). The reasoning is in "Units, the mill and Graves" at the end.
 
@@ -371,8 +377,10 @@ HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
 
 **Drifter** · in the game today — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
-- Passive — **Bloodscent**: His attacks deal +2 bullet damage to a hero below half HP.
-- Ultimate, medium, waits 6 — **Eternal Night**: Deal 5✦ spirit damage to the enemy Active. It takes +1 damage for 3 turns.
+- Passive — **Bloodscent**: After Drifter attacks, he heals his Bullet Power.
+- Attack — **Rend**: His attacks deal + his Bullet Power to a hero below half HP.
+- Ultimate, medium, waits 6 — **Eternal Night**: Silence every enemy hero but the Active 2 turns. Deal 2✦ spirit damage to each.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Why: Drifter is the stalker who smells blood: he hits wounded heroes harder and traps one target alone in the dark.
 - Changed from today: Attack 3 to 2 (the Level 1 cap) and HP 5 to 6 (tank 2); lifesteal becomes his real Bloodscent passive. Eternal Night now hits one target and leaves it taking +1 damage, instead of silencing two heroes.
 - **Changed 2026-11-16 (Patrick: long passives and skills say one rule; Mirage's Djinn's Mark is kept as it is, its own mechanic).** Bloodscent was +1 to a hero below half HP and +1 Attack for the game for each knockout while he was Active (max +2). It is now one rule, +2 to a hero below half HP. The knockouts came in the second half of a match, so the Attack they gave was worth about one more point on the swings that finish a hero, which is where the second point now goes. A passive is worth 1–2 points an own turn; at about half his swings below half, +2 is about 1.
@@ -381,7 +389,8 @@ HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
 - Skill, waits 2 — **Grapple**: Leap in from the bench; attack again.
 - Attack — **Ground Strike**: The turn Lash steps in from the bench, his attacks deal 3✦ more spirit damage.
-- Ultimate, large, waits 8 — **Death Slam**: Return an enemy hero to its player's hand; its items are shuffled into their deck.
+- Ultimate, large, waits 8 — **Death Slam**: Return the enemy Active to its player's hand; its items are shuffled into their deck.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Why: Lash swings, slips out (Retreat 0), whips back in off the bench and slams down for a second, harder swing; then he lifts their best-geared hero clean off the board.
 - Changed from today: HP 4 to 5 (tank 1); the Vulnerable skill becomes Ground Strike with a root because control 3 needs hard control in the skill. Death Slam now stuns every enemy instead of only the Active, trading some damage for it.
 - **Changed 2026-11-17 (Patrick: the skill is the jump, the landing a passive that is always on; §5).** Ground Strike was a skill that waited 4: 1✦ to every enemy and a root on the Active. It is now his passive, and his skill is Grapple.
@@ -409,7 +418,8 @@ HP 4 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +2 Spirit
 
 **Yamato** · in the game today — peaks mid, one target; mix tank 1 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
-- Skill, waits 3 — **Flying Slash**: Deal 2✦ spirit damage to any enemy, bench too.
+- Skill, waits 3 — **Flying Slash**: Deal 2✦ spirit damage to the enemy Active.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Ultimate, medium, waits 6 — **Shadow Transformation**: For 2 turns: +3 Bullet Power and Unstoppable.
 - Why: Yamato grapples onto whoever retreats to the back and is nearly impossible to kill or lock down while transformed.
 - Changed from today: HP 6 to 5 (tank 1). Her skill becomes Flying Slash at 2✦ melee for 2 souls (was 1✦). Shadow Transformation drops the heal 5 and gives 2 turns of +3 Attack and Unstoppable.
@@ -465,14 +475,16 @@ HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
 
 **Paige** · in the game today — peaks early, many targets; mix tank 0 · damage 1 · control 1 · support 3  
 HP 5 · Attack 1 · Retreat 1 · per level +2 Spirit
-- Skill, waits 3 — **Plot Armor**: Give one of your heroes Shield 2✦ and +1 Bullet Power for 2 turns.
+- Skill, waits 3 — **Plot Armor**: Give your Active Shield 2✦ and +1 Bullet Power for 2 turns.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Ultimate, medium, waits 6 — **Rallying Charge**: Heal your heroes 3✦. Deal 2✦ spirit damage to every enemy.
 - Why: Paige is the safe backline support who shields her carry and boosts its gun, and her knights heal the team and hit every enemy from anywhere.
 - Changed from today: Attack 2 to 1 and HP 4 to 5 (spirit support, early +1 on HP); Plot Armor's real gun boost replaces bullet resist. Rallying Charge trimmed from heal 4 and 4✦ to 3✦ and 2✦, so it fits medium for a damage-1 hero.
 
 **Rem** · in the game today — peaks late, one target; mix tank 0 · damage 0 · control 1 · support 3  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
-- Skill, waits 3 — **Tag Along**: Rem rides on one of your heroes for 2 turns, healing it 4✦, then returns to your bench.
+- Skill, waits 3 — **Tag Along**: Rem rides on one of your heroes for 2 turns, healing it 4✦ and giving it +2 Bullet Power, then returns to your bench.
+- **Changed 2026-11-18:** see "No halves, the Active as target, and Drifter (2026-11-18)" at the end.
 - Ultimate, small, waits 4 — **Naptime**: Sleep the enemy Active 2 turns.
 - Why: Rem is the tiny support who rides on her allies to heal them and sends the enemy Active to sleep, and her Spirit growth makes both strong late. She stands in the lane like any hero, and riding off is her way out of a lane she is losing.
 - Changed from today: Stats stay 1/4: the late -1 cannot be paid because HP 4 and Attack 1 are both at the floor. Rem is no longer bench-only (Patrick, 2026-11-09). Tag Along keeps the ride (the old merge) but drops its max-HP buff for a plain heal on the bearer, lasts 2 turns and works from the lane too; Naptime becomes small, just the 2-turn sleep, since her damage score is 0.
@@ -965,3 +977,81 @@ stays that control's worth to the AI.
 | Lash: Death Slam | lift to hand, items to deck | the same, and every other enemy takes {sp:1} | about 15, inside large (12–18) |
 | Graves: Borrowed Decree | a Ghoul a turn | {sp:1/2} Ghouls a turn (1 + half his Spirit) | 3 a turn at Level 3: the mill grows with him |
 | Sinclair: Audience Participation | unchanged | | the copied ultimate is cast as his own, with his Spirit |
+
+### No halves, the Active as target, and Drifter (2026-11-18)
+
+Patrick: "½ BP should be 1 BP, modify all, avoid half BP or SP, cuz it is too
+hard for player to understand"; "most skills should not have freedom of
+choosing hero, just active" (naming Flying Slash); and for Drifter: "ult should
+be disable skill for all enemy heroes, besides the active", "passive, attack
+heal him up", "attack: deal x damage, + x when enemy is below half HP".
+
+**No halves.** No card prints `{bp:N/2}` or `{sp:N/2}` any more. A half in a
+skill or passive read "half of twice Spirit Power" on the card. Each number is
+now a whole Bullet Power or Spirit Power, or a flat rider where a whole one
+would break the budget. The figures by level, from each hero's growth:
+
+| Card | Was | Now | Level 1 / 2 / 3 / 4, was → now |
+|---|---|---|---|
+| Haze, Fixation (to an enemy below full HP) | +1 + ½ BP | + BP | 1/3/4/6 → 1/4/7/10 |
+| Drifter, below half HP (now Rend) | +1 + ½ BP | + BP | 2/3/4/5 → 2/4/6/8 |
+| Silver, Boot Kick | 1 + ½ BP | BP | 2/2/3/3 → 2/3/4/5 |
+| Silver, Lycan Curse (from Level 3) | +1 + ½ BP | + BP | 3/3 → 4/5 |
+| Graves, Borrowed Decree Ghouls a turn (from Level 3) | 1 + ½ Spirit | Spirit | 3/4 → 4/6 |
+| Victor, Aura of Suffering | 1 + Spirit to every enemy | 1✦ (1 + 2 × Spirit) to the enemy Active | 1/2/3/4 each → 1/3/5/7 on one |
+| Rem, Tag Along's Bullet Power | +1 + Spirit | +2, flat | 1/4/7/10 → 2/2/2/2 |
+
+- **Bullet Power cards** (Haze, Drifter, Silver): Patrick's "½ BP should be 1
+  BP". Level 1 is unchanged for all three. They gain 1 a hit at Level 2 and 2
+  or 3 at Level 3. Since the exp change of the same day (balance-model.md §15)
+  Level 3 comes around own turn 10 on a board of two, so most of a match is
+  played where the gain is 0 or 1.
+- **Victor**: a whole Spirit in a passive counts twice, so `{sp:1}` on every
+  enemy would be 7 each at Level 4, far over a passive's budget. The aura now
+  burns the one hero in his lane. Against a board of two its total is about the
+  same from Level 2 (3 against 4, 5 against 6, 7 against 8) and 1 less at Level 1.
+- **Rem**: in a skill `{sp:1}` would be +1/7/13/19 Bullet Power. The heal
+  (4✦) is the number that scales, and the Bullet Power becomes a flat rider
+  (CLAUDE.md: a rider may stay flat). +2 is above the old figure at Level 1
+  and under it from Level 2; a late Rem loses her biggest number.
+- **Graves**: his Spirit in Ghouls, 4 at Level 3 when the ultimate unlocks (was 3).
+
+**The Active as target.** These no longer ask which hero:
+- Flying Slash (Yamato) and Assassinate (Vindicta) hit the enemy Active.
+  Reaching the bench was what made both strong. Vindicta's win rate was 71% and
+  Yamato's 68% before the 2026-11-17 pass, and Assassinate went from 4 to 3 so
+  it stopped killing fresh bench heroes. The numbers stay (2✦ and 3✦): on the
+  Active alone they sit at the bottom of their bands, which suits two heroes
+  that were the strongest.
+- Plot Armor (Paige) and The Cube (Viscous) go on your Active. The hero being
+  hit is the one they were mostly used on, so little is lost.
+- Death Slam (Lash, ultimate) lifts the enemy Active, which empties its lane.
+  Mystic and Greater Expansion still widen it.
+- Kept: Tag Along (Rem picks the ally she rides on; she cannot ride on herself
+  in the lane) and Traveler (Mirage picks the bench ally to swap with). In
+  both the pick is the skill.
+
+**Drifter.** His kit now has three parts:
+- Attack, **Rend**: + his Bullet Power to a hero below half HP (the old
+  Bloodscent number, whole).
+- Passive, **Bloodscent**: after he attacks he heals his Bullet Power, not on
+  a Ricochet bounce. At 0.5 a point of heal that is 1.0 a swing at Level 1 (2),
+  landing in full about two swings in three, so about 0.7 a turn. Deadlock's
+  Drifter heals off his kills; this is the TCG's simpler lifesteal.
+- Ultimate, **Eternal Night** (medium): every enemy hero but the Active is
+  Silenced 2 turns (no skill and no ultimate: Silence blocks both) and takes
+  2✦ spirit damage, the number that scales. A bench hero's skill comes every 3
+  or 4 turns, so 2 turns of Silence takes about half a use, some 1.5 points.
+  With the 2 damage that is 3.5 a bench hero: 7 against a bench of two, 10.5
+  against three, against a medium's 8–12. Drifter grows no Spirit, so the 2
+  stays 2 unless he wears Spirit items. It was 5✦ on the enemy Active, which
+  then took +1 damage for 3 turns.
+
+His kit is worth more than before: the lifesteal is new and Rend grows a whole
+Bullet Power. Eternal Night trades burst on the Active for shutting down the
+enemy's casters.
+
+**Left for testing** (only when Patrick asks by name): Haze at Level 3 and up
+(14 a swing on a hurt enemy); Drifter's sustain with the lifesteal; Vindicta
+and Yamato without the bench snipe; Rem with a flat +2.
+

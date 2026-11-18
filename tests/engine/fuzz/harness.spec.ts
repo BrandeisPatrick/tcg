@@ -26,7 +26,7 @@ import {
   COOLDOWN_ITEMS, DRAW_CARDS, callMove, chooseActiveBlockedOracle, diffPaths,
   discardBlockedOracle, everyCard, evolvesFromOracle, filterForItem, filterForSkill, freeBenchSlotOracle, heroesOfSide, itemData, itemPriceOracle,
   netWorthOracle, netWorthOracleWithoutHand, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, slotCapOracle, spellCasterOracle,
-  spellTargetsOracle, targetLegal, upgradeComponentOracle, upgradesOfOracle, wornWorth,
+  skillExcludesSelf, spellTargetsOracle, targetLegal, upgradeComponentOracle, upgradesOfOracle, wornWorth,
 } from './oracle';
 import { splitKnown, type Hit } from './hits';
 import { killBounty } from '@/engine/rounds';
@@ -634,7 +634,7 @@ describe('the transition rules fire', () => {
     // The mark left unset, or an ultimate used when the side had used one this turn, is reported.
     const unmarked = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large }; });
     unmarked.before.G.players['0'].bench[1]!.level = ULT_UNLOCK_LEVEL;
-    // (Death Slam is aimed at an enemy hero since 2026-11-17.)
+    // (Death Slam is aimed since 2026-11-17: at the enemy Active since 2026-11-18.)
     const foe = (G: GameState) => G.players['1'].active!.iid;
     expect(moveIds(unmarked, 'useSkill', [lash, foe(unmarked.before.G), 'eff_ult_lash'])).toContain('ult-per-turn');
     ult.before.G.ultUsed = { '0': true };
@@ -1155,7 +1155,14 @@ describe('the rules oracles', () => {
     expect(filterForItem(giveCard(G, '0', 'grit'))).toBe('noTarget');
     expect(filterForItem(giveItem(G, me.active!, 'extra_spirit'))).toBe('passive');
     expect(filterForItem(me.bench[0]!)).toBeNull();
-    expect(filterForSkill(me.bench[2]!)).toBe('allyHero'); // Paige
+    // Since 2026-11-18 most skills take the Active, no choice: Paige's Plot Armor shields
+    // her side's Active (noTarget), Vindicta's Assassinate snipes the enemy Active. Rem's
+    // Tag Along still chooses an ally, never herself.
+    expect(filterForSkill(me.bench[2]!)).toBe('noTarget'); // Paige
+    expect(filterForSkill(me.bench[0]!)).toBe('enemyActive'); // Vindicta
+    const rem = makeHero('hero_rem', '0', 'bench', 1);
+    expect(filterForSkill(rem)).toBe('allyHero');
+    expect(skillExcludesSelf(rem)).toBe(true);
     expect(targetLegal('enemyActive', foe.active!, undefined, '0')).toBe(true);
     expect(targetLegal('enemyActive', foe.bench[1]!, undefined, '0')).toBe(false);
     expect(targetLegal('enemyAny', dead, undefined, '0')).toBe(false);

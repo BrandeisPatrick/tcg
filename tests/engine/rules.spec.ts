@@ -232,7 +232,7 @@ describe('rule: a hero unlocks its ultimate at Level 3', () => {
     // Nobody on the other side falls (a kill would pay a bounty).
     for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) h.hp = h.hpMax = 50;
     // P0's roster: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's and, since
-    // 2026-11-17, Lash's Death Slam need a target).
+    // 2026-11-17, Lash's Death Slam need a target; since 2026-11-18 the Slam's is the enemy Active).
     const [haze, vindicta, lash, paige] = [G.players['0'].active!, ...G.players['0'].bench] as NonNullable<typeof G.players['0']['active']>[];
     // No ultimate costs souls.
     expect([haze, vindicta, lash, paige].map((h) => kitCost(h, heroData(h)!.ult))).toEqual([0, 0, 0, 0]);
@@ -243,7 +243,7 @@ describe('rule: a hero unlocks its ultimate at Level 3', () => {
     G.ultUsed = undefined; // a new turn
     expect(runMove('useSkill', G, '0', vindicta.iid, G.players['1'].active!.iid, 'eff_ult_vindicta')).not.toBe('INVALID_MOVE');
     G.ultUsed = undefined;
-    expect(runMove('useSkill', G, '0', lash.iid, G.players['1'].bench[0]!.iid, 'eff_ult_lash')).not.toBe('INVALID_MOVE');
+    expect(runMove('useSkill', G, '0', lash.iid, G.players['1'].active!.iid, 'eff_ult_lash')).not.toBe('INVALID_MOVE');
     G.ultUsed = undefined;
     expect(runMove('useSkill', G, '0', paige.iid, undefined, 'eff_ult_paige')).not.toBe('INVALID_MOVE');
     expect(G.players['0'].souls).toBe(0);

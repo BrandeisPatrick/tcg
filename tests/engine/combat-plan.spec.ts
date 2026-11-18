@@ -301,11 +301,14 @@ describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", (
       { hp: 1, gear: ['leech', 'frenzy'], swings: [6, 3] }],
     ['Siphon Bullets moves the bearer along with its max HP',
       { hp: 3, hpMax: 11, gear: ['frenzy', 'siphon_bullets'], swings: [6, 3] }],
-    // The other side of the trade: Drifter's Bloodscent reads the target's HP,
-    // swing by swing too. His first swing heals him over half (Frenzy's +3 is
-    // gone) and drops the rival Active below half (Bloodscent's +2 comes in).
-    ["Drifter's Bloodscent comes in on the swing after the one that drops the target below half",
-      { hero: 'hero_drifter', hp: 9, hpMax: 20, gear: ['frenzy'], doctor: (_G, _a, d) => { d.hp = 24; }, swings: [6, 5] }],
+    // The other side of the trade: Drifter's Rend reads the target's HP,
+    // swing by swing too, and adds his Bullet Power, Frenzy's +3 counted in;
+    // his Bloodscent heals him his Bullet Power after each swing (2026-11-18).
+    // His first swing drops the rival Active below half and heals him 6 + 2,
+    // still below half: the second is 6 + Rend 6. Its heals lift him over half,
+    // so Frenzy's +3 goes and the third is 3 + Rend 3.
+    ["Drifter's Rend comes in on the swing after the one that drops the target below half; Bloodscent's heal counts toward Frenzy's threshold",
+      { hero: 'hero_drifter', hp: 1, hpMax: 20, gear: ['frenzy'], extra: 2, doctor: (_G, _a, d) => { d.hpMax = 60; d.hp = 34; }, swings: [6, 12, 6] }],
     ['Healing Boost adds to each heal',
       { hp: 2, gear: ['frenzy'], doctor: (G, a) => addStatus(G, a, 'healing_boost', 2, 999), swings: [6, 3] }],
     ['Healing Blocked stops the heal, so the +3 stays',

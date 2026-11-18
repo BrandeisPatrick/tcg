@@ -283,7 +283,7 @@ describe('status words in card text explain the status', () => {
 
   it('Fixation says what it does in its own words: a bonus on Haze\'s attacks, no status to explain', () => {
     expect(STATUSES_BY_ID.fixation).toBeUndefined();
-    expect((ABILITIES_BY_ID.passive_haze_fixation as { text?: string }).text).toBe("Haze's attacks deal +{bp:1/2} bullet damage to an enemy below full HP.");
+    expect((ABILITIES_BY_ID.passive_haze_fixation as { text?: string }).text).toBe("Haze's attacks deal +{bp:0} bullet damage to an enemy below full HP.");
   });
 
   it('an id the registry does not know still reads', () => {
@@ -365,9 +365,11 @@ const READS_SPIRIT = abilitiesReadingSpirit();
 const BP_SCALING: string[] = [
   'toxic_bullets',
   // Every hero skill and passive scales with Spirit or Bullet Power (Patrick, 2026-11-17);
-  // these three with Bullet Power: 1 + half the hero's Attack (`effectiveAtk`), counted once.
-  'skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent',
-  // And two ultimates: Bullet Dance ({bp:0}, her Attack) and Lycan Curse ({bp:1/2}).
+  // these four with Bullet Power, {bp:0}: the hero's Bullet Power (`effectiveAtk`) itself
+  // (1 + half of it until 2026-11-18, when the halves went). Drifter's two since 2026-11-18:
+  // Bloodscent heals it, Rend adds it below half HP.
+  'skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent', 'passive_drifter_rend',
+  // And two ultimates: Bullet Dance ({bp:0}, her Attack) and Lycan Curse ({bp:0}).
   'ult_haze', 'ult_silver',
 ];
 
@@ -452,11 +454,23 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     }
   });
 
-  it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — Tag Along\'s Attack and Victor\'s aura (2026-11-17: Spirit counted once, as gear counts it, and on every enemy)', () => {
-    const halfMarked = [...READS_SPIRIT].filter((id) => textOf(id).some((t) => /\{sp:\d+\/2\}/.test(t)));
-    const halfCode = abilitiesSource.match(/Math\.floor\((?:spi|activeSpi|ultSpi|effectiveSpirit)\([^)]*\) \/ 2\)/g) ?? [];
-    expect(halfMarked.sort()).toEqual(['eff_ult_graves', 'passive_victor_aura', 'skill_rem']);
-    expect(halfCode).toHaveLength(3);
+  it('no card writes half-scaling, {sp:N/2} or {bp:N/2}, and the code adds no floor(Spirit / 2) or floor(Bullet Power / 2) (2026-11-18: Patrick wants no halves)', () => {
+    // Until 2026-11-18 Tag Along's Attack, Victor's aura and Borrowed Decree's Ghouls were
+    // {sp:1/2} (1 + floor(Spirit / 2)); Fixation, Bloodscent, Boot Kick and Lycan Curse {bp:1/2}.
+    const half = /\{(?:sp|bp):\d+\/2\}/;
+    const halfMarked = [...READS_SPIRIT].filter((id) => textOf(id).some((t) => half.test(t)));
+    expect(halfMarked).toEqual([]);
+    expect(ABILITY_TEXT.filter((a) => half.test(a.text)).map((a) => a.id)).toEqual([]);
+    expect(ALL_CARDS.filter((c) => half.test(('text' in c ? c.text : undefined) ?? '')).map((c) => c.id)).toEqual([]);
+    const halfCode = abilitiesSource.match(/Math\.floor\(\(?(?:source \? )?(?:spi|activeSpi|ultSpi|effectiveSpirit|effectiveAtk)\([^)]*\)[^/\n]*\/ 2\)/g) ?? [];
+    expect(halfCode).toEqual([]);
+    // The three that were {sp:1/2} read it whole now: Victor's aura {sp:1}, Borrowed Decree {sp:0};
+    // Tag Along's rider is flat (+2), its heal the number that scales.
+    expect(textOf('passive_victor_aura')[0]).toMatch(/\{sp:1\} spirit damage/);
+    expect(abilitiesSource).toMatch(/damageUnit\(G, foe, 1 \+ spi\(source\), 'spirit', 'Aura of Suffering'/);
+    expect(textOf('eff_ult_graves')[0]).toMatch(/\{sp:0\} Ghouls/);
+    expect(abilitiesSource).toMatch(/passive_gravestone: ultSpi\(\)/);
+    expect(textOf('skill_rem')[0]).toMatch(/\+2 Bullet Power/);
   });
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
@@ -476,11 +490,14 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     // And the code adds it: Toxic Bullets' burst reads its bearer's Bullet Power.
     const toxic = /const eff_toxic_bullets: AbilityDef = \{\n([\s\S]*?)^\};/m.exec(abilitiesSource)?.[1] ?? '';
     expect(toxic).toMatch(/TOXIN_BURST \+ effectiveAtk\(source\)/);
-    // The hero abilities' {bp:1/2}: 1 + half the Attack.
-    for (const id of ['skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent']) {
+    // The hero abilities' {bp:0}: the hero's Bullet Power itself, no half (2026-11-18).
+    for (const id of ['skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent', 'passive_drifter_rend']) {
       const body = new RegExp(`const ${id}: HeroAbilityDef = \\{\\n([\\s\\S]*?)^\\};`, 'm').exec(abilitiesSource)?.[1] ?? '';
-      expect(body, id).toMatch(/1 \+ Math\.floor\(\(?(?:source \? )?effectiveAtk\((?:source|self)\)/);
+      expect(body, id).toMatch(/effectiveAtk\((?:source|self)\)/);
+      expect(body, id).not.toMatch(/Math\.floor/);
     }
+    // Lycan Curse ({bp:0}): her Bullet Power again, as Bullet Power.
+    expect(abilitiesSource).toMatch(/addStatus\(G, t, 'weapon_power', effectiveAtk\(t\), 2\)/);
   });
 
   it('the spells and ultimates the marks were written for print them', () => {
@@ -489,8 +506,9 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Fly 3 turns: 1 in 3 hits miss her; her attacks add {sp:1} spirit damage.');
   });
 
-  it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Bullet Power', () => {
-    expect(ABILITIES_BY_ID.skill_paige.text).toBe('Give one of your heroes Shield {sp:2} and +1 Bullet Power for 2 turns.');
+  it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Bullet Power, on your Active (2026-11-18)', () => {
+    expect(ABILITIES_BY_ID.skill_paige.text).toBe('Give your Active Shield {sp:2} and +1 Bullet Power for 2 turns.');
+    expect(abilitiesSource).toMatch(/const skill_paige: HeroAbilityDef = \{\n[\s\S]*?const target = G\.players\[ctx\.movingPlayer\]\.active;/);
     expect(abilitiesSource).toMatch(/addStatus\(G, target, 'shield', 2 \+ spi\(source\), 999\)/);
     expect(abilitiesSource).toMatch(/addStatus\(G, target, 'weapon_power', 1, 2\)/);
   });

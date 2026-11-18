@@ -19,9 +19,10 @@ import { poster } from '../poster';
  * src/abilities and src/engine/statusOps.ts): the text prints "3", never
  * "3+Sp". Two extensions of the markup, for the two shapes the rules have:
  *
- *   `{sp:1/2}`  half the power, rounded down: Dynamo's and Paige's skills add
- *               1 + floor(Spirit / 2). The number after the slash divides the
- *               stat; omitted it is 1.
+ *   `{sp:1/2}`  half the power, rounded down. The number after the slash
+ *               divides the stat; omitted it is 1. No card uses it since
+ *               2026-11-18 (Patrick: halves are "too hard for player to
+ *               understand"; CLAUDE.md), but the parser keeps it.
  *   `{sp:0}`    nothing but the power itself (Wraith's Mixed Bullets deal
  *               Spirit Power as spirit damage). With no live value to print
  *               it reads as the words "Spirit Power", never as a "0".

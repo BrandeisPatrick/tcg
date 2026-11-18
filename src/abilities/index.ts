@@ -6,7 +6,7 @@ import { bounceToHand, raiseUnit, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBlocked, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
-  otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
+  otherPlayer, effectiveSpirit, isUnit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
 import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
@@ -2307,14 +2307,17 @@ const skill_mo_krill: HeroAbilityDef = {
 // Since 2026-11-16 (Patrick: "when you're cubed you can't attack, retreat or
 // use a skill, you receive no damage or status, and you heal"), Deadlock's own:
 // the hero is encased (the Cube status) until your next turn, and heals.
+// Since 2026-11-18 it is your Active, no choice (Patrick: "most skills should
+// not have freedom of choosing hero, just active").
 const skill_viscous: HeroAbilityDef = {
-  id: 'skill_viscous', trigger: 'activate', target: 'allyHero', cooldown: 4,
+  id: 'skill_viscous', trigger: 'activate', target: 'noTarget', cooldown: 4,
   name: 'The Cube',
-  text: 'Cube one of your heroes until your next turn, and heal it {sp:3}.',
+  text: 'Cube your Active until your next turn, and heal it {sp:3}.',
   base: 3,
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target) return;
+  run: (G, ctx, { source }) => {
+    const target = G.players[ctx.movingPlayer].active;
+    if (!target || target.hp <= 0 || isRespawning(target)) return;
     healUnit(G, target, 3 + spi(source), 'The Cube');
     addStatus(G, target, 'cube', 1, 1);
   },
@@ -2514,11 +2517,12 @@ const passive_lash_ground_strike: HeroAbilityDef = {
   },
 };
 
-// Yamato — Flying Slash: she grapples onto any enemy, bench too.
+// Yamato — Flying Slash: she grapples onto the enemy Active (any enemy, bench
+// too, until 2026-11-18; Patrick: "should be just active").
 const skill_yamato: HeroAbilityDef = {
-  id: 'skill_yamato', trigger: 'activate', target: 'enemyHero',
+  id: 'skill_yamato', trigger: 'activate', target: 'enemyActive',
   name: 'Flying Slash',
-  text: 'Deal {sp:2} spirit damage to any enemy, bench too.',
+  text: 'Deal {sp:2} spirit damage to the enemy Active.',
   base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2566,15 +2570,17 @@ const skill_kelvin: HeroAbilityDef = {
   },
 };
 
-// Paige — Plot Armor: shields her carry and boosts its gun.
+// Paige — Plot Armor: shields your Active and boosts its gun (one of your
+// heroes until 2026-11-18; Patrick: "just active").
 const skill_paige: HeroAbilityDef = {
-  id: 'skill_paige', trigger: 'activate', target: 'allyHero',
+  id: 'skill_paige', trigger: 'activate', target: 'noTarget',
   name: 'Plot Armor',
-  text: 'Give one of your heroes Shield {sp:2} and +1 Bullet Power for 2 turns.',
+  text: 'Give your Active Shield {sp:2} and +1 Bullet Power for 2 turns.',
   base: 2,
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target) return;
+  run: (G, ctx, { source }) => {
+    const target = G.players[ctx.movingPlayer].active;
+    if (!target || target.hp <= 0 || isRespawning(target)) return;
     addStatus(G, target, 'shield', 2 + spi(source), 999);
     addStatus(G, target, 'weapon_power', 1, 2);
   },
@@ -2582,23 +2588,24 @@ const skill_paige: HeroAbilityDef = {
 
 // Rem — Tag Along (Patrick, 2026-11-09): she rides on another standing hero of
 // her side, bench or Active, as equipment for 2 of her owner's turns, and it
-// heals 4✦ and gets +1 Attack a point of her Spirit more (Patrick, 2026-11-17: the
-// buff of a hero worn as gear grows with her Spirit); then she returns to her bench (the engine's ride, `rideOn` and
+// heals 4✦ and gets +2 Bullet Power, flat (2026-11-18: it was 1 + her Spirit,
+// printed as half of twice it, and Patrick wants no halves); then she returns to her bench (the engine's ride, `rideOn` and
 // `returnRemToBench` in death.ts: her bench slot kept for her, the first free
 // one when she rode from the lane, the rescue when her bearer falls). Riding
 // off from the lane leaves it to be filled as when an Active falls.
 const TAG_ALONG_TURNS = 2;
+const TAG_ALONG_BP = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
-  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +{sp:1/2} Bullet Power, then returns to your bench.',
+  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4} and giving it +2 Bullet Power, then returns to your bench.',
   base: 4,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
     if (!source || !target || target === source) return;
     healUnit(G, target, 4 + spi(source), 'Tag Along');
-    // The ride is Rem worn as gear: its Attack counts her Spirit once, as an item's stat does ({sp:1/2}).
-    addStatus(G, target, 'weapon_power', 1 + Math.floor(spi(source) / 2), TAG_ALONG_TURNS);
+    // The rider is flat; the heal is the number that scales (CLAUDE.md: a rider may stay flat).
+    addStatus(G, target, 'weapon_power', TAG_ALONG_BP, TAG_ALONG_TURNS);
     rideOn(G, G.players[ctx.movingPlayer], source, target, TAG_ALONG_TURNS);
   },
 };
@@ -2625,12 +2632,12 @@ const skill_sinclair: HeroAbilityDef = {
 const skill_silver: HeroAbilityDef = {
   id: 'skill_silver', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Boot Kick',
-  text: 'Deal {bp:1/2} bullet damage to the enemy Active. It is Vulnerable 2 turns.',
-  base: 1,
+  text: 'Deal {bp:0} bullet damage to the enemy Active. It is Vulnerable 2 turns.',
+  base: 0,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    // A kick with her gun's weight: 1 + half her Bullet Power, counted once as Bullet Power always is.
-    damageUnit(G, target, 1 + Math.floor((source ? effectiveAtk(source) : 0) / 2), 'attack', 'Boot Kick');
+    // A kick with her gun's weight: her Bullet Power (1 + half of it until 2026-11-18: no halves).
+    damageUnit(G, target, source ? effectiveAtk(source) : 0, 'attack', 'Boot Kick');
     addStatus(G, target, 'bullet_resist_down', 1, 2);
     addStatus(G, target, 'spirit_resist_down', 1, 2);
   },
@@ -2639,21 +2646,22 @@ const skill_silver: HeroAbilityDef = {
 // ----- Hero passives (always on, no cast) -----
 
 // Victor — Aura of Suffering: while he stands in the Active slot, his own turn
-// opens with 1 spirit damage to every enemy and to Victor himself — and what
+// opens with spirit damage to the enemy Active and 1 to Victor himself (every
+// enemy at 1 + his Spirit until 2026-11-18: the half went, and with it the
+// area; 1 + twice his Spirit on the one hero in his lane) — and what
 // he takes charges his ultimate (it counts the damage he takes). In a proc
 // frame of his: a kill is his, and nothing he wears reacts to it.
 const passive_victor_aura: HeroAbilityDef = {
   id: 'passive_victor_aura', trigger: 'startOfTurn', target: 'self',
   name: 'Aura of Suffering',
-  text: 'While Victor is Active, at the start of your turn deal {sp:1/2} spirit damage to every enemy and 1 to Victor.',
+  text: 'While Victor is Active, at the start of your turn deal {sp:1} spirit damage to the enemy Active and 1 to Victor.',
   run: (G, ctx, { source }) => {
     if (!source || isRespawning(source) || source.hp <= 0) return;
     const found = findCardOnBoard(G, source.iid);
     if (!found || found.card !== source || source.zone !== 'active') return;
     withCast(source, 'proc', () => {
-      for (const c of liveBoardCards(G.players[otherPlayer(ctx.movingPlayer)])) {
-        if (c.hp > 0) damageUnit(G, c, 1 + Math.floor(spi(source) / 2), 'spirit', 'Aura of Suffering', { source }); // {sp:1/2}: it hits every enemy, so Spirit counts once
-      }
+      const foe = G.players[otherPlayer(ctx.movingPlayer)].active;
+      if (foe && foe.hp > 0 && !isRespawning(foe)) damageUnit(G, foe, 1 + spi(source), 'spirit', 'Aura of Suffering', { source });
       damageUnit(G, source, 1, 'spirit', 'Aura of Suffering', { source });
     });
   },
@@ -2704,10 +2712,10 @@ const passive_abrams_heal: HeroAbilityDef = {
 const passive_haze_fixation: HeroAbilityDef = {
   id: 'passive_haze_fixation', trigger: 'ongoing', target: 'self',
   name: 'Fixation',
-  text: "Haze's attacks deal +{bp:1/2} bullet damage to an enemy below full HP.",
+  text: "Haze's attacks deal +{bp:0} bullet damage to an enemy below full HP.",
   attackBonus: (self, target) => {
     if (!target || target.hp <= 0 || target.hp >= target.hpMax) return null;
-    const amount = 1 + Math.floor(effectiveAtk(self) / 2); // {bp:1/2}: grows with her gun
+    const amount = effectiveAtk(self); // {bp:0}: her Bullet Power (1 + half of it until 2026-11-18)
     return { amount, label: `Fixation +${amount}` };
   },
   run: () => {},
@@ -2718,10 +2726,12 @@ const passive_haze_fixation: HeroAbilityDef = {
 
 // Assassinate — the snipe. Charged, as in Deadlock (2 charges, her longest
 // cooldown): two shots held, and each takes 5 turns to come back.
+// Since 2026-11-18 it snipes the enemy Active (any enemy, bench too, until then;
+// Patrick: "most skills should not have freedom of choosing hero, just active").
 const skill_vindicta: HeroAbilityDef = {
-  id: 'skill_vindicta', trigger: 'activate', target: 'enemyHero', cooldown: 5, charges: 2,
+  id: 'skill_vindicta', trigger: 'activate', target: 'enemyActive', cooldown: 5, charges: 2,
   name: 'Assassinate',
-  text: 'Snipe any enemy, bench too: deal {sp:3} spirit damage.',
+  text: 'Snipe the enemy Active: deal {sp:3} spirit damage.',
   base: 3,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2742,19 +2752,31 @@ const status_flying: AbilityDef = {
   },
 };
 
-// Drifter — Bloodscent (Patrick, 2026-11-16: one rule, not two): his swing
-// hits a hero below half HP for 2 more. It was +1 there and +1 Attack for the
-// game for each knockout made while he was Active (max +2); the knockouts came
-// late, so their Attack was worth about what the second point is now.
+// Drifter (Patrick, 2026-11-18: "passive, attack heal him up"; "attack: deal
+// x damage, + x when enemy is below half HP"). Two rules about his swing:
+// Bloodscent, the passive row, heals him his Bullet Power after each attack
+// (not on a Ricochet bounce, as Bullet Lifesteal); Rend, printed with his
+// Attack, adds his Bullet Power again on a hero below half HP. Until then
+// Bloodscent was the one rule, +1 and half his Bullet Power below half HP.
 // docs/hero-design.md, Drifter.
 const passive_drifter_bloodscent: HeroAbilityDef = {
-  id: 'passive_drifter_bloodscent', trigger: 'ongoing', target: 'self',
+  id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
   name: 'Bloodscent',
-  text: 'His attacks deal +{bp:1/2} bullet damage to a hero below half HP.',
+  text: 'After Drifter attacks, he heals {bp:0}.',
+  run: (G, _ctx, { source, target, params }) => {
+    if (!source || params?.bounce || source.hp <= 0) return;
+    healUnit(G, source, effectiveAtk(source), 'Bloodscent', { tag: 'lifesteal', from: target });
+  },
+};
+const passive_drifter_rend: HeroAbilityDef = {
+  id: 'passive_drifter_rend', trigger: 'ongoing', target: 'self',
+  attackRule: true,
+  name: 'Rend',
+  text: 'His attacks deal +{bp:0} bullet damage to a hero below half HP.',
   attackBonus: (self, target) => {
     if (!target || !heroData(target) || !belowHalf(target)) return null;
-    const amount = 1 + Math.floor(effectiveAtk(self) / 2); // {bp:1/2}: 2 at his Attack 2, as before
-    return { amount, label: `Bloodscent +${amount}` };
+    const amount = effectiveAtk(self); // {bp:0}: his Bullet Power again
+    return { amount, label: `Rend +${amount}` };
   },
   run: () => {},
 };
@@ -2839,8 +2861,10 @@ const eff_ult_lady_geist: AbilityDef = {
 // Mystic Expansion lifts the heroes next to it on the board too, Greater
 // Expansion every enemy hero. The Cube holds its hero down; a Counterspell
 // stops it for its hero (the one aimed at, in useSkill; the rest, here).
+// Since 2026-11-18 it lifts the enemy Active (any enemy hero until then;
+// Patrick: "just active"); Expansion still widens it.
 const eff_ult_lash: AbilityDef = {
-  id: 'eff_ult_lash', trigger: 'onPlay', target: 'enemyHero',
+  id: 'eff_ult_lash', trigger: 'onPlay', target: 'enemyActive',
   base: 6,
   run: (G, ctx, { source, target }) => {
     if (!target) return;
@@ -2946,8 +2970,8 @@ const eff_ult_graves: AbilityDef = {
   aim: (G, pid) => (freeBenchSlot(G.players[pid]) === undefined ? null : { target: 'noTarget' }),
   run: (G, ctx) => {
     const stone = raiseUnit(G, G.players[ctx.movingPlayer], GRAVESTONE);
-    // {sp:1/2} Ghouls a turn: 1 + half Graves' Spirit, set as the stone is raised.
-    if (stone) stone.tally = { ...stone.tally, passive_gravestone: 1 + Math.floor(ultSpi() / 2) };
+    // {sp:0} Ghouls a turn: Graves' Spirit (1 + half of it until 2026-11-18: no halves), set as the stone is raised.
+    if (stone) stone.tally = { ...stone.tally, passive_gravestone: ultSpi() };
   },
 };
 const eff_ult_sinclair: AbilityDef = {
@@ -3034,16 +3058,23 @@ const eff_ult_mirage: AbilityDef = {
     pushLog(G, `Traveler: ${cardName(source.cardId)} swaps with ${cardName(target.cardId)} (Shield ${shield} each).`);
   },
 };
-// Eternal Night: one target alone in the dark, taking +1 damage of either type
-// for 3 of the caster's turns (both resists down: they tick on its own turns).
+// Eternal Night (Patrick, 2026-11-18: "disable skill for all enemy heroes,
+// besides the active"): night falls on the enemy's back line. Every enemy hero
+// but the Active is Silenced 2 turns (no skill, no ultimate) and takes {sp:2}
+// spirit damage, the number that scales. Until then it was 5✦ on the enemy
+// Active, which took +1 damage for 3 turns. docs/hero-design.md, Drifter.
+const ETERNAL_NIGHT_TURNS = 2;
 const eff_ult_drifter: AbilityDef = {
-  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'enemyActive',
-  base: 5,
-  run: (G, _ctx, { target }) => {
-    if (!target) return;
-    damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Eternal Night');
-    addStatus(G, target, 'bullet_resist_down', 1, 3);
-    addStatus(G, target, 'spirit_resist_down', 1, 3);
+  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'noTarget',
+  base: 2,
+  run: (G, ctx) => {
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    const dark = enemy.bench.filter((c): c is CardInstance => !!c && c.hp > 0 && !isRespawning(c) && !!heroData(c) && !isUnit(c));
+    for (const c of dark) {
+      addStatus(G, c, 'silenced', 1, ETERNAL_NIGHT_TURNS);
+      damageUnit(G, c, 2 + ultSpi(), 'spirit', 'Eternal Night');
+    }
+    resolve(G);
   },
 };
 
@@ -3076,7 +3107,7 @@ const eff_ult_silver: AbilityDef = {
     const t = target ?? source;
     if (!t) return;
     addStatus(G, t, 'wolf_form', 1, 2);
-    addStatus(G, t, 'weapon_power', 1 + Math.floor(effectiveAtk(t) / 2), 2); // {bp:1/2}, read before the wolf's own bonus
+    addStatus(G, t, 'weapon_power', effectiveAtk(t), 2); // {bp:0}: her Bullet Power again, read before the wolf's own bonus (1 + half of it until 2026-11-18)
     addStatus(G, t, 'shield', 6, 999);
   },
 };
@@ -3135,7 +3166,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   skill_seven, skill_vindicta, status_flying, skill_graves, passive_ghoul, passive_gravestone, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
   skill_sinclair, skill_silver,
   // ----- Hero passives -----
-  passive_abrams_heal, passive_haze_fixation, passive_drifter_bloodscent,
+  passive_abrams_heal, passive_haze_fixation, passive_drifter_bloodscent, passive_drifter_rend,
   passive_mirage_djinns_mark, passive_victor_aura, passive_lash_ground_strike,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,

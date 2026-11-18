@@ -23,6 +23,11 @@ Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redes
 - Every hero skill, passive and ultimate scales with Spirit Power (`{sp:N}`) or Bullet Power (`{bp:N}`),
   as Deadlock's do (Patrick, 2026-11-17). A rider may stay flat; the main number scales. Where the main
   effect is control with no number (a lift, a Sleep, a revival), a scaling rider sits beside it.
+- No halves on a card (Patrick, 2026-11-18: "too hard for player to understand"): a number scales
+  with a whole Bullet Power or Spirit Power (`{bp:N}`, `{sp:N}`, never `/2`), or stays flat.
+- A hero skill aims at the Active, its side's or the enemy's, without a choice (Patrick, 2026-11-18:
+  "most skills should not have freedom of choosing hero, just active"). Kept: where the pick is the
+  skill itself (Rem's Tag Along, Mirage's Traveler). docs/hero-design.md, end.
 - A hero's strength is a curve, not one number (Patrick, 2026-11-17): judge it in its own phase
   (early, mid, late) and with the items it needs. Win rates from short AI games under-rate late heroes.
 

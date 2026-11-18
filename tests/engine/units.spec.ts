@@ -283,24 +283,27 @@ describe('Graves', () => {
     expect(perform(G, '0', use)).toBe(INVALID);
   });
 
-  it('it raises a Gravestone on her bench: a Ghoul into her deck at the start of each of her turns, and its wait is a small ultimate\'s', () => {
+  it('it raises a Gravestone on her bench: {sp:0} Ghouls (her Spirit) into her deck at the start of each of her turns, and its wait is a small ultimate\'s', () => {
     const { G, graves } = withGraves(ULT_UNLOCK_LEVEL);
+    graves.spiritMod = 2; // {sp:0}: 2 Ghouls a turn (1 + half her Spirit until 2026-11-18)
     act(G, '0', { type: 'useSkill', heroIid: graves.iid, skillId: 'eff_ult_graves' });
     const stone = G.players['0'].bench[2]!;
     expect([stone.cardId, stone.hp, stone.zone, stone.slot]).toEqual([GRAVESTONE, 1, 'bench', 3]);
+    expect(stone.tally?.passive_gravestone).toBe(2);   // set as the stone is raised
     expect(graves.cooldowns?.eff_ult_graves).toBe(ULT_WAIT.small);
     expect(G.players['0'].deck).toHaveLength(0);
     nextTurn(G, '0');                                   // the rival's turn: nothing yet
     expect(ids(G.players['0'].deck)).toEqual([]);
-    nextTurn(G, '1');                                   // her turn: one Ghoul (drawn at once: the deck held nothing else)
+    nextTurn(G, '1');                                   // her turn: two Ghouls (in the deck, or drawn: the deck held nothing else)
     const mine = [...G.players['0'].deck, ...G.players['0'].hand];
-    expect(ids(mine).filter((id) => id === GHOUL)).toHaveLength(1);
-    nextTurn(G, '0'); nextTurn(G, '1');                 // and another
-    expect(ids([...G.players['0'].deck, ...G.players['0'].hand]).filter((id) => id === GHOUL)).toHaveLength(2);
+    expect(ids(mine).filter((id) => id === GHOUL)).toHaveLength(2);
+    nextTurn(G, '0'); nextTurn(G, '1');                 // and two more
+    expect(ids([...G.players['0'].deck, ...G.players['0'].hand]).filter((id) => id === GHOUL)).toHaveLength(4);
   });
 
   it('any damage destroys the Gravestone, and the Ghouls stop', () => {
     const { G, graves } = withGraves(ULT_UNLOCK_LEVEL);
+    graves.spiritMod = 2; // a stone that would raise 2 Ghouls a turn, were it standing
     act(G, '0', { type: 'useSkill', heroIid: graves.iid, skillId: 'eff_ult_graves' });
     const stone = G.players['0'].bench[2]!;
     nextTurn(G, '0');

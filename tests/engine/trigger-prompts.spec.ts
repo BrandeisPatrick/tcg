@@ -293,13 +293,17 @@ describe('charged ultimates: ready once the hero\'s count reaches what they need
 });
 
 describe('Victor — Aura of Suffering', () => {
-  it('while he is Active, his turn opens with 1 spirit damage to every enemy (the bench too) and to Victor, which charges his ultimate', () => {
+  it('while he is Active, his turn opens with {sp:1} spirit damage to the enemy Active alone (every enemy until 2026-11-18) and 1 to Victor, which charges his ultimate', () => {
     const G = freshReadyGame();
     const victor = standIn(G, '0', 'hero_victor');
-    const foes = [G.players['1'].active!, ...G.players['1'].bench.filter((c): c is CardInstance => !!c)];
-    const before = foes.map((f) => f.hp);
+    victor.spiritMod = 1;
+    const front = G.players['1'].active!;
+    const bench = G.players['1'].bench.filter((c): c is CardInstance => !!c);
+    const frontHp = front.hp;
+    const benchHp = bench.map((f) => f.hp);
     beginTurn(G, '0', G.turnNumber);
-    foes.forEach((f, i) => expect(f.hp, f.cardId).toBe(before[i] - 1));
+    expect(front.hp).toBe(frontHp - (1 + 2 * 1)); // {sp:1}: a passive counts Spirit twice
+    bench.forEach((f, i) => expect(f.hp, f.cardId).toBe(benchHp[i])); // the bench is spared
     expect(victor.hp).toBe(victor.hpMax - 1);
     expect(victor.tally?.[VICTOR_ULT]).toBe(1);
     expect(ultCharge(victor)).toEqual({ have: 1, need: VICTOR_NEED });
@@ -321,26 +325,30 @@ describe('Victor — Aura of Suffering', () => {
 });
 
 describe('Silver — Boot Kick and Lycan Curse', () => {
-  it('Boot Kick: {bp:1/2} bullet damage to the enemy Active (2 at her Attack 2), then Vulnerable 2 turns (takes +1 damage: both resists down), for no souls, and then it waits', () => {
+  it('Boot Kick: {bp:0} bullet damage to the enemy Active (her Bullet Power, 4 at Bullet Power 4), then Vulnerable 2 turns (takes +1 damage: both resists down), for no souls, and then it waits', () => {
     const G = freshReadyGame();
     const silver = standIn(G, '0', 'hero_silver');
+    silver.atkMod = 2;
+    expect(effectiveAtk(silver)).toBe(4);
     const foe = G.players['1'].active!;
     const hp = foe.hp;
     G.players['0'].souls = 2;
     expect(perform(G, '0', { type: 'useSkill', heroIid: silver.iid, targetIid: foe.iid })).not.toBe(INVALID);
     expect(G.players['0'].souls).toBe(2);                              // a skill costs no souls
     expect(silver.cooldowns?.skill_silver).toBe(4);                   // 4 since it scales (2026-11-17)
-    expect(foe.hp).toBe(hp - (1 + Math.floor(2 / 2)));
+    expect(foe.hp).toBe(hp - 4);                                       // her Bullet Power, no half (2026-11-18)
     expect(foe.statuses.find((s) => s.id === 'bullet_resist_down')).toMatchObject({ value: 1, duration: 2 });
     expect(foe.statuses.find((s) => s.id === 'spirit_resist_down')).toMatchObject({ value: 1, duration: 2 });
-    expect(silver.tally?.[SILVER_ULT]).toBe(2);                        // the kick charged her: the 2 it dealt
+    expect(silver.tally?.[SILVER_ULT]).toBe(4);                        // the kick charged her: the 4 it dealt
   });
 
-  it('Lycan Curse: Wolf form for 2 of her turns — +{bp:1/2} Attack (1 + half her Attack), Shield 6, the wolf on her card — and then she is Silver again', () => {
+  it('Lycan Curse: Wolf form for 2 of her turns — +{bp:0} Bullet Power (her Bullet Power again), Shield 6, the wolf on her card — and then she is Silver again', () => {
     const G = freshReadyGame();
     const silver = standIn(G, '0', 'hero_silver');
+    silver.atkMod = 2;
     const atk = effectiveAtk(silver);
-    const wolf = 1 + Math.floor(atk / 2);
+    expect(atk).toBe(4);
+    const wolf = atk; // {bp:0}: 1 + half of it until 2026-11-18
     silver.tally = { [SILVER_ULT]: SILVER_NEED };
     expect(heroForm(silver)).toBeUndefined();
     expect(perform(G, '0', { type: 'useSkill', heroIid: silver.iid, skillId: SILVER_ULT, targetIid: silver.iid })).not.toBe(INVALID);
@@ -383,7 +391,7 @@ describe('the charged lines print on their own, under the effect', () => {
     expect(ultimateCard(VICTOR_ULT)!.charged).toEqual({ need: 10, by: 'taken', text: 'Ready once Victor has taken 10 damage.' });
     expect(ultimateCard(SILVER_ULT)!.charged).toEqual({ need: 8, by: 'dealt', text: 'Ready once Silver has dealt 8 damage.' });
     expect(ultimateCard(VICTOR_ULT)!.text).toBe('Falling, Victor may revive at half HP and deal {sp:1} spirit damage to every enemy.');
-    expect(ultimateCard(SILVER_ULT)!.text).toBe('Silver turns into a wolf for 2 turns: +{bp:1/2} Bullet Power and Shield 6.');
+    expect(ultimateCard(SILVER_ULT)!.text).toBe('Silver turns into a wolf for 2 turns: +{bp:0} Bullet Power and Shield 6.');
   });
 });
 
