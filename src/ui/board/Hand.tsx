@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRef, useState } from 'react';
 import type { CardInstance } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
 import { placeCost } from '@/engine/legality';
 import { CardFrame, SIZES } from '../card/CardFrame';
@@ -333,6 +333,8 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                   tapExplains={false}
                   // A hero back from the lane keeps its level: its frame says so.
                   level={CARDS_BY_ID[c.cardId]?.type === 'hero' ? c.level : undefined}
+                  // ... and the items it still wears (2026-11-18: a fallen hero keeps its gear).
+                  worn={CARDS_BY_ID[c.cardId]?.type === 'hero' ? (c.attached ?? []).filter((a) => !!itemCard(a.cardId)).map((a) => a.cardId) : undefined}
                 />
               </div>
             </motion.div>

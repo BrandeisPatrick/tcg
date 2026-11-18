@@ -133,15 +133,18 @@ describe('rule: hero respawn after KO', () => {
     expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toDeck' && e.iid === iid)).toBe(true);
   });
 
-  it('what the fallen hero wore is shuffled in beside it, each its own card again', () => {
+  it('what the fallen hero wore stays on it in the deck (Patrick, 2026-11-18: it keeps its exp and equipment)', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     const worn = giveItem(G, hero, 'extra_health');
+    const max = hero.hpMax;
     damageUnit(G, hero, 9999, 'pure');
     reapDead(G, G.players['0']);
     const deck = G.players['0'].deck;
-    expect(deck.find((c) => c.iid === hero.iid)?.attached ?? []).toEqual([]);
-    expect(deck.find((c) => c.iid === worn.iid)?.zone).toBe('deck');
+    expect(deck.find((c) => c.iid === hero.iid)?.attached).toEqual([worn]);
+    expect(deck.some((c) => c.iid === worn.iid)).toBe(false);          // not a card of its own
+    expect([worn.zone, worn.attachedTo]).toEqual(['equipment', hero.iid]);
+    expect([hero.hpMax, hero.hp]).toEqual([max, max]);                    // its +2 HP stays, and it is at full HP
   });
 
   it("hero KO pushes the fallen hero's level + 1 into its structures (overflow discarded)", () => {

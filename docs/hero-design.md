@@ -172,7 +172,7 @@ Patrick, 2026-11-09: Victor's revive should come from a separate system that oth
 
 - **Decided:** the ultimate is a button on the hero, not a card. The other two options were a card in the deck, and a card made at Level 2.
 - **Decided: a fallen hero is shuffled back into your deck** (Patrick, 2026-11-18: "when hero die, just shuffle back to the deck").
-  - Its slot is left empty at once; no corpse stays on the board. It keeps its level, and what it wore is shuffled in beside it.
+  - Its slot is left empty at once; no corpse stays on the board. It keeps its level, its exp and what it wore (Patrick, 2026-11-18: "I want them to keep the experience and equipment"); for a few hours its items went in beside it as their own cards.
   - It replaced "to your hand after 2 turns" (2026-11-09), which left a dead hero on the board for those turns.
   - Victor's ultimate lets him skip the fall and get back up where he is.
 - **New engine rules the cards need:**
@@ -405,7 +405,7 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
     - Arcane Surge's +3 Spirit on stepping in counts twice in it: a 9✦ swing at Level 1.
     - The root and the area are gone from his skill. His control is the swap; his area is Death Slam's with Expansion.
 - **Changed 2026-11-17 (Patrick: Death Slam lifts one hero back to the hand; Expansion makes it an area).** It was 3✦ to every enemy and a Stun on each.
-  - **What the lift costs the rival.** The hero comes back as a fallen hero does (full HP, its level), so the damage on it is undone. What it loses is its place and its items: they are shuffled into its deck, to be drawn again and paid for again, and if it was the Active a bench hero steps up. Placing a hero is free, so the lift is worth what it wore.
+  - **What the lift costs the rival.** The hero comes back at full HP with its level, as a fallen hero does, so the damage on it is undone. What it loses is its place and its items: they are shuffled into its deck, to be drawn again and paid for again, and if it was the Active a bench hero steps up. Placing a hero is free, so the lift is worth what it wore. Since 2026-11-18 a fallen hero keeps its items, so the lift is now the one way to strip a hero of its gear; it was the harsher fate already.
   - **The number.** By Level 3 (when the ultimate opens, about turn 8) a carry wears about 3 items: 1 + 2 + 4 = 7 souls, 14 points to buy back. In the deck they are also out of reach until drawn: a deck of about 15 cards, a draw a turn, gives each one back after several turns, about 4 points more for the three. Add the forced step-up (2) and take off the heal (about 4 HP, 2): **about 18**, the top of a large ultimate's 12–18 (14 when they went to the hand). The cards in the deck also put off the rival's deck-out a little. On a hero with no items it is about 2: the value is in the choice of target.
   - **With Expansion it is past any band.** Mystic Expansion adds about 1.5 neighbours (×2.5, about 35 points); Greater Expansion lifts the whole side (×4, about 56), all of its items back to the hand at once. Patrick asked for it ("can be AOE if he has the Expansion"). It is kept as asked and marked for testing: Greater Expansion on Lash is likely the strongest line in the game.
 

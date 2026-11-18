@@ -88,7 +88,7 @@ describe('the category spike', () => {
     expect([haze.hpMax, haze.hp]).toEqual([max, 2]);
   });
 
-  it('a fallen hero\'s items go into the deck with it: the spike goes too, and it waits there at its own max', () => {
+  it('a fallen hero keeps its items in the deck (2026-11-18): the spike stays, and it waits there at full HP with the spike\'s point', () => {
     const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
     const max = vindicta.hpMax;
@@ -96,7 +96,8 @@ describe('the category spike', () => {
     expect(vindicta.hpMax).toBe(max + 1);
     damageUnit(G, vindicta, 999, 'pure');
     resolve(G);
-    expect([vindicta.zone, vindicta.hpMax, vindicta.hp]).toEqual(['deck', max, max]);
+    expect([vindicta.zone, vindicta.hpMax, vindicta.hp]).toEqual(['deck', max + 1, max + 1]);
+    expect(vindicta.vitalitySpike).toBe(true);
   });
 
   it('the spike follows the hand: playing the third item brings it, and an evolve that keeps the tab keeps it', () => {

@@ -305,7 +305,11 @@ board is just empty, dont leave a dead hero on the board … just shuffle back t
   steps a bench hero up (the promotion).
 - It goes in at full HP, with no statuses and no skill waits, and keeps its level and exp: drawn and
   put down again, it comes back at its rank. (Its ultimate's opening wait runs on.)
-- What it wore is shuffled in beside it, each item its own card again.
+- It keeps what it wore (Patrick, 2026-11-18: "I want them to keep the experience and equipment"):
+  the items ride into the deck on the hero card, their bonuses with them, their own waits cleared.
+  Drawn, its card in the hand shows them down its left edge; put down, it comes back geared. (Until
+  then each item was shuffled in beside it as a card of its own.) A hero discarded from the hand goes
+  into the deck the same way, still wearing them.
 - It replaces the 2-turn wait in the slot (2026-11-09 to 2026-11-18). Bosses keep their own respawn.
 
 ## Rival AI
@@ -330,8 +334,9 @@ where a lesson teaches the shop, change it to teach the deck.
 
 Built on `deck-and-heroes`. Where the build reads the plan one way of several:
 
-- A fallen hero is shuffled into its deck at once, its items beside it as their own cards
-  (2026-11-18; until then it waited 2 turns as a corpse and went to the hand wearing them).
+- A fallen hero is shuffled into its deck at once, still wearing its items (2026-11-18; until
+  then it waited 2 turns as a corpse and went to the hand wearing them; for a few hours on
+  2026-11-18 its items went in beside it as their own cards).
 - A returning hero goes to the hand even when it is full (the cap of 10 limits draws).
 - An empty lane (a fallen Active gone to the deck) can take a hero straight from
   the hand. A hero benched while the lane is open steps up, as a promotion.

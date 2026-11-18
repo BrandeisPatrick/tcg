@@ -145,8 +145,9 @@ is `pid`'s own turn's, before or after an attack.
   more than the hand holds; none does since the Cooldown family went back to
   equipment) sets `G.pendingDiscard`, which makes `discard(cardIids)` — any
   cards of the hand, up to what is owed — the only legal move until it is paid.
-- Items stay on through death, and a fallen hero carries them back to the
-  hand. A hero wearing three items of one tab has that tab's category spike
+- Items stay on through death: a fallen hero carries them into the deck and back
+  to the hand (2026-11-18), and `heroBackIntoDeck` (a hero discarded from the hand)
+  keeps them too. A hero wearing three items of one tab has that tab's category spike
   (+1 Bullet Power, Spirit Power or max HP), read off what it wears. Hand
   items count in net worth at list price (a hero card at 0).
 
@@ -217,8 +218,11 @@ nothing). It pushes the victim's level + 1 into the victim's side's structures
 (`killPush`) and goes on the record (`MapRecord.kills`, `.bounty`). The
 fallen hero leaves the board at once (2026-11-18, `heroToDeck`): its slot is left
 empty and it is shuffled into its owner's deck at full HP, with no statuses and no
-skill waits, its level and exp kept; what it wore is shuffled in beside it, each
-item its own card (a 'toDeck' event, and a 'raise' for each item). An empty Active slot is filled from the bench
+skill waits, its level, exp and worn items kept (Patrick, 2026-11-18): the items
+stay attached, `zone: 'equipment'`, their own waits cleared (a 'toDeck' event).
+A hero card in the deck is the one deck card that carries anything, and only items
+(the fuzz invariant `deck-card-state`). Death Slam's lift is the exception: its
+items are shuffled in as cards (`wornIntoDeck`, Patrick's 2026-11-17 design). An empty Active slot is filled from the bench
 (`laneOpen`: the promotion), or, empty, from the hand (`placeHero`). A board with
 every hero down is no loss by itself: at the End, if the rival has no standing
 hero, the ending player's standing Active pushes its bullet power into the
@@ -324,7 +328,7 @@ full HP with its items and level (a `revive` event with `credit`), a credit
 spent. Credits lapse as their last round ends (`lapseRevives`).
 
 **The fall.** A fallen hero is shuffled into its owner's deck at once, in every
-round, whatever it wears (`heroToDeck`). The Mid-Boss keeps its own return
+round, still wearing its items (`heroToDeck`). The Mid-Boss keeps its own return
 (`BOSS_RESPAWN_ROUNDS`).
 
 **The end.** `checkWinner` (boardgame.io's `endIf`): a side whose Patron has

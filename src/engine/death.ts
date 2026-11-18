@@ -111,9 +111,11 @@ function wornIntoDeck(G: GameState, ps: PlayerState, hero: CardInstance): number
  * shuffle back to the deck"): out of its slot, which is left empty (an
  * Active's lane opens and its side steps a hero up, `resolve`), and shuffled
  * into its owner's deck at full HP, with no statuses and no skill waits (its
- * ultimate's opening wait runs on); its worn items are shuffled in beside it,
- * each its own card again. Its level and exp stay on the card: drawn and put
- * down again, it comes back at its rank.
+ * ultimate's opening wait runs on). Its level, its exp and its worn items stay
+ * on the card (Patrick, 2026-11-18: "I want them to keep the experience and
+ * equipment"; until then the items were shuffled in beside it, each its own
+ * card again): drawn and put down again, it comes back at its rank, geared.
+ * The items' own waits go, as the skills' do.
  */
 export function heroToDeck(G: GameState, ps: PlayerState, hero: CardInstance) {
   if (ps.active === hero) {
@@ -141,9 +143,10 @@ export function heroToDeck(G: GameState, ps: PlayerState, hero: CardInstance) {
   hero.chargesSpent = undefined;
   ps.deck.splice(Math.floor(nextRandom(G) * (ps.deck.length + 1)), 0, hero);
   pushFx(G, { kind: 'deck', what: 'toDeck', pid: ps.id, iid: hero.iid, cardId: hero.cardId });
-  const items = wornIntoDeck(G, ps, hero);
+  const items = (hero.attached ?? []).filter((a) => !!itemCard(a.cardId));
+  for (const it of items) it.cooldowns = undefined;
   hero.hp = hero.hpMax;
-  pushLog(G, `${cardName(hero.cardId)} is shuffled into P${ps.id}'s deck${items > 0 ? ` with ${items === 1 ? 'its item' : `its ${items} items`}` : ''}.`);
+  pushLog(G, `${cardName(hero.cardId)} is shuffled into P${ps.id}'s deck${items.length > 0 ? `, still wearing ${items.length === 1 ? 'its item' : `its ${items.length} items`}` : ''}.`);
 }
 
 /** The kill exp a hero that may cancel its own fall held back (`downedBy`,

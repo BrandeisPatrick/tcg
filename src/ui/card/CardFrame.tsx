@@ -11,13 +11,14 @@ import {
   FoilEdge, GlossPanel, HoloLayer, foilTextClass, TILT_TRANSFORM,
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL, itemCard } from '@/cards';
-import type { CardData } from '@/engine/types';
+import type { CardData, CardId } from '@/engine/types';
 import { heroAbilities, heroAttackRule, skillWait, ultimateCard, ultWait } from '@/engine/query';
 import { PRICE, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
 import { SwordIcon, HeartIcon } from './Icons';
+import { ItemIcon } from './ItemIcon';
 
 type Size = 'hand' | 'full';
 
@@ -72,6 +73,10 @@ interface Props {
    *  its level): the frame prints in its level green, as the tile's does.
    *  Omitted, the plain charcoal-edge frame of a card with no level yet. */
   level?: number;
+  /** The items a hero instance still wears (a hero drawn back after a fall
+   *  keeps its gear, Patrick 2026-11-18): small chips down the left edge,
+   *  under the seal, the edge a fan leaves showing. The clean face only. */
+  worn?: CardId[];
   /** Another form's art for a hero's window (`heroForm`: Silver's Wolf
    *  form), a file under public/heroes/. The board's miniature passes it. */
   art?: string;
@@ -146,6 +151,8 @@ const NAME_BASE = 19;
 const NAME_FLOOR = 11;
 const NAME_BAND = 50;
 const SEAL = 22;
+/** A worn item's chip on a hero card in the hand, px. */
+const WORN_CHIP = 22;
 
 /** The two sizes a card is printed at, in px. */
 export const SIZES: Record<Size, { w: number; h: number }> = {
@@ -340,7 +347,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false, tapExplains = true, level, art, clean = false, nameRoom, nameMin, dimmed = false,
+  holoPalette = 'amber', tilt = false, tapExplains = true, level, worn, art, clean = false, nameRoom, nameMin, dimmed = false,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -463,6 +470,17 @@ export function CardFrame({
           <Seal data-card-hp ink={poster.ink}
             mark={<HeartIcon size={Math.round(SEAL * 0.62)} color={poster.stat.hp} />}
             n={(data as any).hp} />
+        )}
+        {/* What a hero back from a fall still wears: its items' own shop art,
+            in a column under the seal. */}
+        {isHero && worn && worn.length > 0 && (
+          <div data-card-worn aria-label={`Wearing ${worn.map((id) => CARDS_BY_ID[id]?.name ?? id).join(', ')}`} style={{
+            position: 'absolute', top: 56, left: 8, zIndex: 5,
+            display: 'flex', flexDirection: 'column', gap: 3, pointerEvents: 'none',
+            filter: dimmed ? 'grayscale(0.9) brightness(0.55)' : undefined,
+          }}>
+            {worn.slice(0, 4).map((id, i) => <ItemIcon key={i} itemId={id} size={WORN_CHIP} />)}
+          </div>
         )}
 
         {/* The foot: the name in ink on the paper band, its category's rule

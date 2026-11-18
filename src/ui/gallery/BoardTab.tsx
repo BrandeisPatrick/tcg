@@ -14,6 +14,7 @@ import { SoulsRail } from '../board/SoulsRail';
 import { boardRows } from '../board/BoardTable';
 import { HeroSlot } from '../board/HeroSlot';
 import { LevelRing } from '../card/LevelRing';
+import { CardFrame } from '../card/CardFrame';
 import { poster } from '../poster';
 import { TYPE, radius } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
@@ -79,9 +80,32 @@ export function BoardTab() {
     <Section title="Level edge" id="level-edge">
       <LevelEdgeDemo />
     </Section>
+
+    <Section title="A fallen hero, drawn again" id="fallen-hand">
+      <Caption>
+        A fallen hero is shuffled into its deck and keeps its level, its exp and what it wore (Patrick,
+        2026-11-18). Drawn again, its card in the hand prints its level in the frame and its items down the
+        left edge, under the seal; put down, it comes back geared. Beside it, a hero with no level yet.
+      </Caption>
+      <Row>
+        {FALLEN.map((f) => (
+          <div key={f.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <CardFrame cardId={f.hero} size="hand" clean tapExplains={false} level={f.level} worn={f.worn} />
+            <div style={{ fontSize: TYPE.small, color: poster.inkDim }}>{f.label}</div>
+          </div>
+        ))}
+      </Row>
+    </Section>
     </>
   );
 }
+
+/** Hand cards for the fallen-hero sample: a geared hero back from a fall, and a fresh one. */
+const FALLEN: { label: string; hero: string; level?: number; worn?: string[] }[] = [
+  { label: 'Back from a fall · Lv3, 3 items', hero: 'hero_haze', level: 3, worn: ['titanic_magazine', 'extra_health', 'mystic_burst'] },
+  { label: 'Back from a fall · Lv2, 1 item', hero: 'hero_abrams', level: 2, worn: ['extra_health'] },
+  { label: 'Fresh from the deck', hero: 'hero_kelvin' },
+];
 
 const TRIM_LEVELS = [1, 2, 3, 4] as const;
 
