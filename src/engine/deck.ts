@@ -224,17 +224,11 @@ function isHeroProper(card: CardInstance): boolean {
 
 /** A hero that would be discarded goes back into its owner's deck instead,
  *  and the deck is shuffled (Patrick, 2026-11-16: a side must not lose a hero
- *  to a discard). A deck card carries nothing, so the items a hero back from a
- *  fall still wears in the hand are discarded: the hero is saved, its gear is
- *  not. */
+ *  to a discard). The items a hero back from a fall still wears go with it,
+ *  as they do when it falls (Patrick, 2026-11-18: a hero keeps its exp and
+ *  equipment; `heroToDeck`). */
 function heroBackIntoDeck(G: GameState, pid: PlayerID, hero: CardInstance) {
   const ps = G.players[pid];
-  const worn = (hero.attached ?? []).filter((a) => !!itemCard(a.cardId));
-  if (worn.length > 0) {
-    hero.attached = (hero.attached ?? []).filter((a) => !itemCard(a.cardId));
-    for (const it of worn) toDiscard(G, pid, it);
-    pushLog(G, `${cardName(hero.cardId)}'s items are discarded.`);
-  }
   hero.zone = 'deck';
   hero.slot = undefined;
   ps.deck.push(hero);

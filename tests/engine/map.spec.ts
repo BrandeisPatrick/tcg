@@ -148,7 +148,7 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
 });
 
 describe('a fallen hero is shuffled into its deck', () => {
-  it('at once, in any round: full HP, its level kept, what it wore shuffled in beside it, its slot empty', () => {
+  it('at once, in any round: full HP, its level and what it wore kept (2026-11-18), its slot empty', () => {
     const G = at(10);
     const p1 = G.players['1'];
     const rival = p1.active!;
@@ -160,9 +160,9 @@ describe('a fallen hero is shuffled into its deck', () => {
     expect(p1.active).not.toBe(rival);
     expect(p1.bench).not.toContain(rival);
     expect(p1.deck).toContain(rival);
-    expect(p1.deck).toContain(worn);
+    expect(p1.deck).not.toContain(worn);
     expect(rival).toMatchObject({ zone: 'deck', hp: rival.hpMax, level: 3 });
-    expect(rival.attached ?? []).toEqual([]);
+    expect(rival.attached).toEqual([worn]);
     expect(rival.respawnTurnsLeft).toBeUndefined();
     expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toDeck' && e.iid === rival.iid)).toBe(true);
   });

@@ -151,8 +151,8 @@ describe('LEVEL_THRESHOLDS exposed correctly', () => {
   });
 });
 
-describe('equipment goes into the deck with its fallen bearer', () => {
-  it('each worn item is shuffled in beside the hero as its own card, its bonus gone with it', () => {
+describe('equipment stays on its fallen bearer (Patrick, 2026-11-18: a hero keeps its exp and equipment)', () => {
+  it('each worn item goes into the deck on the hero, its bonus with it', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     // Put the item on directly: its +1 Bullet Power goes onto the bearer.
@@ -163,11 +163,11 @@ describe('equipment goes into the deck with its fallen bearer', () => {
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
     reapDead(G, G.players['1']);
     expect(target.zone).toBe('deck');
-    // Nothing is worn any more: the item is a card in the deck again.
-    expect(target.attached ?? []).toEqual([]);
-    expect(findWornItem(G, eq.iid, '1')).toBeNull();
-    expect(G.players['1'].deck.find((c) => c.iid === eq.iid)?.zone).toBe('deck');
-    expect(target.atkMod ?? 0).toBe(0);
+    // Still worn: the item rides on the hero card, not as a card of its own.
+    expect(target.attached).toEqual([eq]);
+    expect(G.players['1'].deck.some((c) => c.iid === eq.iid)).toBe(false);
+    expect([eq.zone, eq.attachedTo]).toEqual(['equipment', target.iid]);
+    expect(target.atkMod).toBe(1);
   });
 });
 

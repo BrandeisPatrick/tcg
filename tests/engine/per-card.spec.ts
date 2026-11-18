@@ -106,13 +106,13 @@ describe('Active items — tier 3 control and resist', () => {
 
 describe('Equipment passives', () => {
   // Resist 2 read off the item (the `resist` hook), not a status: a hit of its
-  // type deals 2 less while it is worn. A fall shuffles the card into the
-  // deck beside its bearer (2026-11-18).
+  // type deals 2 less while it is worn. A fall takes the card into the deck
+  // still worn by its bearer (Patrick, 2026-11-18: a hero keeps its equipment).
   for (const [itemId, name, type, other, status] of [
     ['bullet_resilience', 'Bullet', 'attack', 'spirit', 'bullet_resist'],
     ['spirit_resilience', 'Spirit', 'spirit', 'attack', 'spirit_resist'],
   ] as const) {
-    it(`${name} Resilience: a ${name.toLowerCase()} hit deals 2 less while worn — no status; a fall takes the card into the deck with its bearer`, () => {
+    it(`${name} Resilience: a ${name.toLowerCase()} hit deals 2 less while worn — no status; a fall takes the card into the deck on its bearer`, () => {
       const G = freshG();
       const t = G.players['1'].bench[0]!;
       t.hpMax = 30; t.hp = 30; // above half HP: the resist alone
@@ -127,8 +127,9 @@ describe('Equipment passives', () => {
       damageUnit(G, t, 99, 'pure');
       resolve(G);
       expect(t.zone).toBe('deck');
-      expect(itemResist(t, type)).toBe(0);
-      expect(G.players['1'].deck).toContain(worn);
+      expect(itemResist(t, type)).toBe(2);                // still worn
+      expect(t.attached).toContain(worn);
+      expect(G.players['1'].deck).not.toContain(worn);   // not a card of its own
     });
   }
 

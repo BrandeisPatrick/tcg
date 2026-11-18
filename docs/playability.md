@@ -27,7 +27,8 @@ against about forty games and corrects it in places; read its §3 before buildin
   the Active attacks. Retreat costs 2. Three items a hero.
 - Levels: each turn 1 exp to a random hero on the board, +1 on equip, +1 on a kill, 3 / 5 / 7 to level
   (balance-model.md §15, 2026-11-18); each level +1 HP / BP / Spirit; the ultimate comes at level 3 (level 2 until 2026-11-16).
-- A hero that dies **loses its items** to the discard and respawns in 3 turns.
+- A hero that dies is shuffled into its deck at full HP, keeping its level, exp and items (2026-11-18;
+  it once lost its items to the discard and respawned in 3 turns).
   The patron (10) loses the dead hero's level. Patron at 0, or every hero down,
   is the loss.
 

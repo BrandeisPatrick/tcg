@@ -99,12 +99,19 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
 
   // ---- the deck, the hand and the discard pile ----
   for (const pid of PIDS) {
-    // The deck: face-down cards, set going by nothing — items, and heroes as they were drafted.
+    // The deck: face-down cards, set going by nothing — items, and heroes as they were drafted
+    // or back from a fall. A hero back from a fall still wears its items (Patrick, 2026-11-18:
+    // a hero keeps its exp and equipment), each with no wait; an item carries nothing.
     for (const c of deckOf(G, pid)) {
       const wrong: string[] = [];
       if (c.zone !== 'deck') wrong.push(`zone '${c.zone}'`);
       if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
-      if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
+      if (isHeroCard(c)) {
+        if ((c.attached ?? []).some((a) => !itemData(a.cardId))) wrong.push('carries a hero');
+        const waiting = (c.attached ?? []).filter((a) => Object.keys(a.cooldowns ?? {}).length);
+        if (waiting.length) wrong.push(`wears ${waiting.map((a) => a.cardId).join('+')} still waiting`);
+        checkWearer(c, pid, false);
+      } else if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
       // An item in the deck has no cooldown; a hero there carries only its ultimate's opening
       // wait, which runs from the match's first turn wherever the hero is.
       const ultId = (CARDS_BY_ID[c.cardId] as { ult?: string } | undefined)?.ult;
