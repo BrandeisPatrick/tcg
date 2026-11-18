@@ -17,18 +17,6 @@ export function seededRandom(seed: number): () => number {
   };
 }
 
-/** `count` items of `pool`, drawn uniformly without replacement by `rand`, in
- *  the order drawn (all of them, shuffled, when the pool is short). */
-export function drawWithoutReplacement<T>(pool: readonly T[], count: number, rand: () => number): T[] {
-  const left = [...pool];
-  const out: T[] = [];
-  while (out.length < count && left.length > 0) {
-    const i = Math.floor(rand() * left.length);
-    out.push(left.splice(i, 1)[0]);
-  }
-  return out;
-}
-
 /** A fresh match seed, from `Math.random` (which a driver may pin). */
 export function newSeed(): number {
   return Math.floor(Math.random() * 4294967296) >>> 0;

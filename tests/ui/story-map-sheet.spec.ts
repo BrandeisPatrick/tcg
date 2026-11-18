@@ -89,7 +89,25 @@ function inBorough(rings: Pt[][], x: number, y: number) {
   }
   return inside;
 }
-const onLand = ([x, y]: Pt) => boroughRings.some((r) => inBorough(r, x, y));
+// A borough is only walked when the point falls in its box, and a point is asked once:
+// segments share their ends, and two specs ask of the same roads.
+const boroughBoxes = boroughRings.map((rings) => {
+  const pts = rings.flat();
+  return [Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[1]))];
+});
+const landSeen = new Map<string, boolean>();
+const onLand = ([x, y]: Pt) => {
+  const k = `${x},${y}`;
+  let v = landSeen.get(k);
+  if (v === undefined) {
+    v = boroughRings.some((r, i) => {
+      const [x0, x1, y0, y1] = boroughBoxes[i];
+      return x >= x0 && x <= x1 && y >= y0 && y <= y1 && inBorough(r, x, y);
+    });
+    landSeen.set(k, v);
+  }
+  return v;
+};
 const onSheet = ([a, b]: Seg) => [a, b].every(([x, y]) => x >= 0 && x <= 840 && y >= 0 && y <= 1080);
 
 const { cols, rows, w: CW, h: CH } = SHEET_GRID;
@@ -125,64 +143,72 @@ describe('the baked sheet', () => {
       const cells = cellSegs(SHEET_ROADS[cls]).map(segIndex);
       const raw = rawSegs(NYC_ROADS[cls]);
       let checked = 0;
+      const missed: string[] = [];
       for (const s of raw) {
         if (!onSheet(s) || !onLand(s[0]) || !onLand(s[1])) continue;
         for (const c of cellsReached(s, REACH.road)) {
-          expect(SHEET_LAND_CLIP[c], `${cls}: cell ${c} has no land clip`).not.toBe('');
-          expect(covers(cells[c], s), `${cls} ${JSON.stringify(s)} in cell ${c}`).toBe(true);
+          if (SHEET_LAND_CLIP[c] === '') missed.push(`${cls}: cell ${c} has no land clip`);
+          if (!covers(cells[c], s)) missed.push(`${cls} ${JSON.stringify(s)} in cell ${c}`);
           checked++;
         }
       }
       expect(checked).toBeGreaterThan(raw.length * 0.8);
       // (A lone point stays a dot: a zero-length stroke with round caps.)
       const onRaw = segIndex(segsOf(decode(NYC_ROADS[cls])));
-      for (const segs of cellSegs(SHEET_ROADS[cls])) for (const s of segs) expect(covers(onRaw, s), `${cls} adds ${JSON.stringify(s)}`).toBe(true);
+      for (const segs of cellSegs(SHEET_ROADS[cls])) for (const s of segs) if (!covers(onRaw, s)) missed.push(`${cls} adds ${JSON.stringify(s)}`);
+      expect(missed).toEqual([]);
     }
   });
 
   it('prints the bridges: every major road over the water, and only majors', () => {
     const raw = rawSegs(NYC_ROADS.major);
     const bridges = segIndex(cellSegs(SHEET_BRIDGES).flat());
-    for (const s of raw) if (onSheet(s) && (!onLand(s[0]) || !onLand(s[1]))) expect(covers(bridges, s), JSON.stringify(s)).toBe(true);
+    const missed = raw.filter((s) => onSheet(s) && (!onLand(s[0]) || !onLand(s[1])) && !covers(bridges, s));
+    expect(missed.map((s) => JSON.stringify(s))).toEqual([]);
     const onRaw = segIndex(raw);
-    for (const s of cellSegs(SHEET_BRIDGES).flat()) expect(covers(onRaw, s)).toBe(true);
+    expect(cellSegs(SHEET_BRIDGES).flat().filter((s) => !covers(onRaw, s)).map((s) => `adds ${JSON.stringify(s)}`)).toEqual([]);
     // Far less than the whole network.
     expect(SHEET_BRIDGES.join('').length).toBeLessThan(NYC_ROADS.major.length / 10);
   });
 
   it('draws every outline in the keyline and the dashed rule', () => {
     const keyline = segIndex(cellSegs(SHEET_KEYLINE).flat());
+    const missed: string[] = [];
     NYC_BOROUGHS.forEach((b, k) => {
       const rule = segIndex(cellSegs(SHEET_RULE[k]).flat());
       for (const s of rawSegs(b.d)) {
         if (!onSheet(s)) continue;
-        expect(covers(keyline, s), `${b.name} keyline ${JSON.stringify(s)}`).toBe(true);
-        expect(covers(rule, s), `${b.name} rule ${JSON.stringify(s)}`).toBe(true);
+        if (!covers(keyline, s)) missed.push(`${b.name} keyline ${JSON.stringify(s)}`);
+        if (!covers(rule, s)) missed.push(`${b.name} rule ${JSON.stringify(s)}`);
       }
     });
+    expect(missed).toEqual([]);
   });
 
   it('gives each cell all the coast its see-through halo and waterline reach', () => {
+    const missed: string[] = [];
     NYC_BOROUGHS.forEach((b, k) => {
       const halo = cellSegs(SHEET_HALO[k]).map(segIndex);
       for (const s of rawSegs(b.d)) {
         if (!onSheet(s) || (onLand(s[0]) && onLand(s[1]))) continue;
-        for (const c of cellsReached(s, REACH.coast)) expect(covers(halo[c], s), `${b.name} halo cell ${c}`).toBe(true);
+        for (const c of cellsReached(s, REACH.coast)) if (!covers(halo[c], s)) missed.push(`${b.name} halo cell ${c}`);
       }
     });
     const clipped = cellSegs(SHEET_WATERLINE_CLIPPED).map(segIndex);
     const opaque = segIndex(cellSegs(SHEET_WATERLINE).flat());
     for (const s of rawSegs(NYC_COAST)) {
       if (!onSheet(s) || (onLand(s[0]) && onLand(s[1]))) continue;
-      expect(covers(opaque, s)).toBe(true);
-      for (const c of cellsReached(s, REACH.waterline)) expect(covers(clipped[c], s), `waterline cell ${c}`).toBe(true);
+      if (!covers(opaque, s)) missed.push(`waterline ${JSON.stringify(s)}`);
+      for (const c of cellsReached(s, REACH.waterline)) if (!covers(clipped[c], s)) missed.push(`waterline cell ${c}`);
     }
+    expect(missed).toEqual([]);
   });
 
   it('keeps the rail in every cell it reaches, and every park once', () => {
     // The rail is cut into pieces (in its ties' period), so a cell holds the
     // stretch of a long segment that comes near it: sample that stretch.
     const rail = cellSegs(SHEET_RAIL).map(segIndex);
+    const missed: string[] = [];
     for (const s of rawSegs(NYC_RAIL)) {
       if (!onSheet(s)) continue;
       const [a, b] = s, n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.5);
@@ -191,10 +217,11 @@ describe('the baked sheet', () => {
         for (let k = 0; k <= n; k++) {
           const p: Pt = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n];
           if (p[0] < x0 || p[0] > x0 + CW + 2 * REACH.road || p[1] < y0 || p[1] > y0 + CH + 2 * REACH.road) continue;
-          expect(rail[c](p), `rail ${JSON.stringify(s)} cell ${c}`).toBe(true);
+          if (!rail[c](p)) missed.push(`rail ${JSON.stringify(s)} cell ${c}`);
         }
       }
     }
+    expect(missed).toEqual([]);
     // A ring as the bake keeps it: no repeated point, no repeated start.
     const key = (r: Pt[]) => {
       const pts = r.filter((p, i) => i === 0 || p[0] !== r[i - 1][0] || p[1] !== r[i - 1][1]);

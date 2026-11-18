@@ -448,7 +448,9 @@ resolves, once, at its end.
 
 ## Proving a change
 
-- `npx tsc -b`, `npx vitest run --dir tests`.
+- `npx tsc -b`, `npx vitest run --dir tests`. A change to the engine's rules
+  (src/engine, src/abilities) also runs `npm run test:deep`: the fuzz specs at
+  full depth (FUZZ_DEEP=1; the everyday run plays a slice of the same seeds).
 - **Replay trace** (`scripts/replay-trace.ts`): 300 AI-vs-AI games with
   pinned randomness, a hash of the state after every move. Record one before
   the change and one after, then `compare`: a refactor must reproduce the

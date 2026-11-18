@@ -121,11 +121,6 @@ export const shopInk = (slot: 'weapon' | 'vitality' | 'spirit'): { ink: string; 
 export const atkInk = (atk: number, base: number): string =>
   atk > base ? poster.stat.atkBright : atk < base ? poster.stat.atkDim : poster.stat.atk;
 
-/** The ink a hero's HP prints in: dim while it is hurt, bright while its max
- *  HP is raised above the printed base, else the stat ink. */
-export const hpInk = (hp: number, hpMax: number, base: number): string =>
-  hp < hpMax ? poster.stat.hpDim : hpMax > base ? poster.stat.hpBright : poster.stat.hp;
-
 /** What a hero's health is, for the tile's foot (HeroSlot): `hurt` below its
  *  max; `raised` when whole with its max above the printed base (a level, an
  *  item); else `whole`. */

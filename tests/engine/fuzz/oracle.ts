@@ -865,10 +865,16 @@ export function diffPaths(a: unknown, b: unknown, limit = 20): string[] {
 // Misc spec helpers.
 // ---------------------------------------------------------------------------
 
-/** Number of games a spec plays per policy mix (FUZZ_GAMES overrides). */
-export function fuzzGames(fallback: number): number {
+/**
+ * Number of games a spec plays per policy mix. `npm test` plays the `everyday` count, a
+ * slice of the deep run's first seeds that keeps the whole suite near 20 s; `npm run
+ * test:deep` (FUZZ_DEEP=1) plays the `deep` count, for a change to the engine's rules
+ * (src/engine, src/abilities). FUZZ_GAMES=n plays exactly n.
+ */
+export function fuzzGames(deep: number, everyday: number): number {
   const n = Number(process.env.FUZZ_GAMES);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return process.env.FUZZ_DEEP ? deep : everyday;
 }
 
 /** A readable block for a failed expectation. */

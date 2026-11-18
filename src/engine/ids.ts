@@ -31,12 +31,6 @@ export function allocatorOf(G: Pick<GameState, 'counters'>): IidAllocator {
   return allocatorFor(countersOf(G));
 }
 
-/** A fresh instance id for a card created mid-match (an ultimate unlocking,
- *  Sinclair's copy). */
-export function newIid(G: Pick<GameState, 'counters'>, prefix = 'i'): string {
-  return allocatorOf(G)(prefix);
-}
-
 /** The next FX event sequence number — monotonic for the whole game, across
  *  the per-turn flush of `G.fx`, so the board can keep a high-water mark. */
 export function nextFxSeq(G: Pick<GameState, 'counters'>): number {

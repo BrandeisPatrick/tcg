@@ -21,7 +21,7 @@ import { probeForecast } from './forecast';
 import { describeHit, splitKnown, summarise, type Hit } from './hits';
 import { formatList, fuzzGames } from './oracle';
 
-const GAMES = fuzzGames(40);
+const GAMES = fuzzGames(40, 8);
 /** heuristic, randomLegal-vs-heuristic and the heuristic spotlight (Wraith, Mirage, Shiv, Seven on one side). */
 const MIX_IDS = [0, 1, 3];
 

@@ -41,3 +41,5 @@ on its tier's budget, 2 / 4 / 8 / 16 / 24 points, and since 2026-11-16 it costs 
   there is no automatic "final round".
 - Compile-level hygiene is not testing and always stays: `npx tsc --noEmit`, `npm run build`, and the
   existing vitest suite kept green by fixing what the data broke (never by deleting a test).
+  `npm test` is the everyday run (~30 s; the fuzz specs play a slice of their seeds). A change to the
+  engine's rules (src/engine, src/abilities) also runs `npm run test:deep`, the fuzz at full depth (~65 s).

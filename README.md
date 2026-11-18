@@ -338,8 +338,8 @@ says where the sim gates stand.
   boardgame.io respond stage until the seat asked answers; built so chains and
   an auto/on/off setting can come later (docs/engine-model.md, "Trigger
   prompts").
-- **About 1,450 tests** (vitest), including a seeded fuzz suite that plays
-  hundreds of games (the real AI, random legal play and malformed moves) and
+- **About 1,800 tests** (vitest), including a seeded fuzz suite that plays
+  hundreds of games at full depth (`npm run test:deep`) (the real AI, random legal play and malformed moves) and
   checks the state after every move.
 
 ## Run it locally
@@ -348,7 +348,8 @@ says where the sim gates stand.
 npm install
 npm run dev        # http://localhost:5173 (binds 0.0.0.0, so a phone on the LAN can play)
 npm run build      # type-check and production bundle into dist/
-npm run test       # vitest
+npm run test       # vitest, ~30 s: the fuzz specs play a short slice of their seeds
+npm run test:deep  # vitest with the fuzz specs at full depth, ~65 s: for a change to the engine's rules
 npx tsc --noEmit   # type-check
 ```
 

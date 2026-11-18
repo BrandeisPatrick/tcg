@@ -42,7 +42,7 @@ import { DEFAULT_PROBE, probeLegality, type ProbeOpts } from './legality';
 import { describeHit, splitKnown, summarise, type Hit, type Known } from './hits';
 import { formatList, fuzzGames } from './oracle';
 
-const GAMES = fuzzGames(12);
+const GAMES = fuzzGames(12, 3);
 const PROBE: ProbeOpts = DEFAULT_PROBE;
 
 /** Violations the engine has today, each with its reason (none: every finding is fixed). */
