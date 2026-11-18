@@ -130,6 +130,35 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): CardInstance[
   return drawn;
 }
 
+/** True when `ps`'s deck holds a hero proper (a unit, a Ghoul, is none): what
+ *  a hero draw (Warp Stone, Majestic Leap) needs to be cast at all. */
+export function deckHasHero(ps: PlayerState): boolean {
+  return ps.deck.some(isHeroProper);
+}
+
+/**
+ * Draw up to `n` heroes from `pid`'s deck (Warp Stone, Majestic Leap; Patrick,
+ * 2026-11-18): each the first hero proper from the top, the rest of the deck
+ * left in its order. A full hand (MAX_HAND) skips the draw, as `drawCards`
+ * does; a deck with no hero left draws nothing more. Returns the heroes drawn.
+ */
+export function drawHeroes(G: GameState, pid: PlayerID, n: number): CardInstance[] {
+  const ps = G.players[pid];
+  const drawn: CardInstance[] = [];
+  for (let k = 0; k < n && ps.hand.length < MAX_HAND; k++) {
+    let at = ps.deck.length - 1;
+    while (at >= 0 && !isHeroProper(ps.deck[at])) at--;
+    if (at < 0) break;
+    const [card] = ps.deck.splice(at, 1);
+    card.zone = 'hand';
+    ps.hand.push(card);
+    drawn.push(card);
+    pushFx(G, { kind: 'deck', what: 'draw', pid, iid: card.iid, cardId: card.cardId });
+  }
+  if (drawn.length > 0) pushLog(G, `P${pid} drew ${drawn.length === 1 ? 'a hero' : `${drawn.length} heroes`} from its deck.`);
+  return drawn;
+}
+
 /**
  * The opening hand: `n` cards (OPENING_HAND) from the top of the shuffled
  * deck, at least one a hero that can stand in the lane when the deck holds

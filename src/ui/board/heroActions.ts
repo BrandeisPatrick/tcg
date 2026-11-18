@@ -172,6 +172,7 @@ export function playBlockReason(block: PlayBlock, s: HandSubject = {}): string {
     case 'noHero': return 'Play it onto one of your heroes';
     case 'noCaster': return 'No hero of yours stands to cast it';
     case 'spellLock': return 'Silenced: no spells this turn';
+    case 'nothing': return `${s.item ?? 'That spell'} has nothing to do now: no hero is left in your deck`;
     case 'target': return s.hero ? `${s.item ?? 'That spell'} cannot be played on ${s.hero}` : `${s.item ?? 'That spell'} needs a target`;
     case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
     case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items`;

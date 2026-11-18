@@ -76,9 +76,11 @@ describe('Tuning', () => {
     expect(haze.atkMod).toBe(atk0 + 2);
   });
 
-  it("Warp Stone is a tier 3 Vitality item at its tier's price", () => {
+  // Its tier's price until it became a hero draw priced for one play (2026-11-18: 1).
+  it('Warp Stone is a tier 3 Vitality item at its own price', () => {
     expect(CARDS_BY_ID['warp_stone']).toMatchObject({ type: 'spell', slot: 'vitality', tier: 3 });
-    expect(itemPrice('warp_stone')).toBe(PRICE[3]);
+    expect(itemPrice('warp_stone')).toBe(1);
+    expect(itemPrice('warp_stone')).toBeLessThan(PRICE[3]);
   });
 });
 
@@ -228,7 +230,7 @@ describe('New active items', () => {
     // are spells, so Paige's own ability of the turn is still unspent.
     const paige = (G.players['0'].bench as CardInstance[])[2];
     G.players['0'].souls = 3; // only the silence stands in her way
-    useItem(G, '0', 'warp_stone', paige.iid);
+    useItem(G, '0', 'rescue_beam', paige.iid); // a free swap (Warp Stone's, until 2026-11-18)
     expect(G.players['0'].active).toBe(paige);
     const skill = { type: 'useSkill' as const, heroIid: paige.iid, targetIid: paige.iid };
     expect(blocked(G, '0', skill)).toBeNull();

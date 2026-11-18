@@ -311,7 +311,7 @@ function turnShut(G: GameState, pid: PlayerID): 'notYourTurn' | null {
   return G.draft || seatToMove(G) !== pid ? 'notYourTurn' : null;
 }
 
-export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'duplicate' | 'full' | 'replace' | 'souls' | 'noCaster' | 'target' | 'spellLock';
+export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'duplicate' | 'full' | 'replace' | 'souls' | 'noCaster' | 'target' | 'spellLock' | 'nothing';
 
 /**
  * Why `pid` cannot put the item `cardIid` from its hand on its hero `heroIid`
@@ -349,6 +349,10 @@ export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIi
     // Silence Wave (2026-11-16): the side plays no spells while it is locked.
     if ((G.players[pid].spellLock ?? 0) > 0) return 'spellLock';
     if (!spellCaster(G, pid)) return 'noCaster';
+    // A spell that would do nothing now is not cast (a hero draw with no hero
+    // left in the deck: Warp Stone, Majestic Leap; its `castable`).
+    const castable = getAbility(data.abilities[0])?.castable;
+    if (castable && !castable(G, pid)) return 'nothing';
     const targets = spellTargets(G, pid, card.cardId);
     if (targets !== 'none' && !targets.some((t) => t.iid === heroIid)) return 'target';
     if (replaceIid !== undefined) return 'replace';

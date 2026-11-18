@@ -5,9 +5,10 @@
  * (docs/card-design.md) that play the swap: Sprint Boots and Enduring Speed
  * (the `retreatDiscount` hook, and Enduring Speed's `resists`), Fleetfoot's
  * Swift (a free Retreat), Kinetic Dash (the `onBearerStepIn` trigger) and
- * Majestic Leap (a free swap) — and the AI, which has to see when a swap
- * before the swing is worth its souls. Fleetfoot, Majestic Leap, Warp Stone,
- * Phantom Strike and Vortex Web are active items: a hero wears one and uses it
+ * Rescue Beam (a free swap; Majestic Leap was, until it became a hero draw on
+ * 2026-11-18) — and the AI, which has to see when a swap before the swing is
+ * worth its souls. Fleetfoot, Rescue Beam, Phantom Strike and Vortex Web are
+ * active items: a hero wears one and uses it
  * as its one ability of the turn (`useItem`, the Active the bearer unless a
  * test says otherwise); their texts' "your Active" is the player's Active.
  *
@@ -196,7 +197,7 @@ describe('The Retreat\'s price', () => {
   it('a free swap does not spend a Swift', () => {
     const { G, haze, shiv } = built(0);
     addStatus(G, haze, 'swift', 1, 1);
-    useItem(G, '0', 'majestic_leap', shiv.iid);
+    useItem(G, '0', 'rescue_beam', shiv.iid);
     expect(status(haze, 'swift')).toBeDefined();
   });
 
@@ -220,8 +221,9 @@ describe('Kinetic Dash: +3 Bullet Power for the hero that steps in', () => {
     expect(attackPower(shiv, abrams).total).toBe(bare + 3);
   });
 
-  it('fires on an item\'s swap (Warp Stone, Majestic Leap)', () => {
-    for (const card of ['warp_stone', 'majestic_leap']) {
+  // Warp Stone and Majestic Leap swapped too until they became hero draws (2026-11-18).
+  it('fires on an item\'s swap (Rescue Beam)', () => {
+    for (const card of ['rescue_beam']) {
       const { G, shiv } = built(0);
       giveItem(G, shiv, 'kinetic_dash');
       useItem(G, '0', card, shiv.iid);
@@ -281,11 +283,12 @@ describe('Enduring Speed cannot be Rooted', () => {
   });
 });
 
-describe('Majestic Leap', () => {
-  it('your Active leaps out free and the bench ally you pick steps in to make the attack; the turn\'s Retreat is still there', () => {
+// A card's swap, played by Rescue Beam since Majestic Leap became a hero draw (2026-11-18).
+describe('A card\'s swap (Rescue Beam)', () => {
+  it('your Active steps out free and the bench ally you pick steps in to make the attack; the turn\'s Retreat is still there', () => {
     const { G, me, haze, shiv } = built(10);
-    useItem(G, '0', 'majestic_leap', shiv.iid);
-    expect(me.souls).toBe(10); // using an item is free, and there is no Retreat charge
+    useItem(G, '0', 'rescue_beam', shiv.iid);
+    expect(me.souls).toBe(10); // the card's price handed back, and there is no Retreat charge
     expect(me.active!.iid).toBe(shiv.iid);
     expect(me.bench[1]!.iid).toBe(haze.iid);
     expect(G.retreatUsed).toBe(false);
@@ -294,7 +297,7 @@ describe('Majestic Leap', () => {
 
   it('is played after an attack as before it, and the hero it brings in may attack', () => {
     const { G, shiv } = built(10);
-    const leap = giveCard(G, '0', 'majestic_leap');
+    const leap = giveCard(G, '0', 'rescue_beam');
     makeAttack(G, '0');
     expect(refusal(G, leap, shiv.iid)).toBeNull();
   });
@@ -302,7 +305,7 @@ describe('Majestic Leap', () => {
   it('needs a bench ally to aim at, and a Root on either side holds it', () => {
     const { G, haze, shiv } = built(10);
     G.players['0'].souls = 20;
-    const leap = giveCard(G, '0', 'majestic_leap');
+    const leap = giveCard(G, '0', 'rescue_beam');
     expect(refusal(G, leap, haze.iid)).toBe('target');
     addStatus(G, haze, 'rooted', 1, 1);
     expect(refusal(G, leap, shiv.iid)).toBe('target');
@@ -342,8 +345,8 @@ describe('The new cards', () => {
     expect(CARDS_BY_ID['enduring_speed']).toMatchObject({ type: 'equipment', slot: 'vitality', tier: 2, name: 'Enduring Speed' });
     expect(CARDS_BY_ID['kinetic_dash']).toMatchObject({ type: 'equipment', slot: 'weapon', tier: 2, name: 'Kinetic Dash' });
     for (const id of [...NEW_ITEMS, 'majestic_leap', 'fleetfoot']) {
-      // Majestic Leap prints its own: 1 (a spell priced for one play, 2026-11-16; 2 before prices halved).
-      expect(itemPrice(id), id).toBe(id === 'majestic_leap' ? 1 : PRICE[itemCard(id)!.tier]);
+      // Majestic Leap prints its own: 2 since it became a hero draw (2026-11-18; 1 as a free swap).
+      expect(itemPrice(id), id).toBe(id === 'majestic_leap' ? 2 : PRICE[itemCard(id)!.tier]);
       expect((CARDS_BY_ID[id] as { abilities?: string[] }).abilities, id).toEqual([`eff_${id}`]);
       expect(ABILITIES_BY_ID[`eff_${id}`], id).toBeDefined();
     }
