@@ -70,7 +70,8 @@ export const SPELLS: SpellCard[] = [
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
   { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns.' },
   { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn. A Stun ends a channel.' },
-  { id: 'metal_skin',      name: 'Metal Skin',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 6 for 3 turns.' },
+  // Prints 6, over its tier's 4: Patrick's own exception (2026-11-18, "metal skin is too cheap now"); docs/card-design.md §2.
+  { id: 'metal_skin',      name: 'Metal Skin',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, price: 6, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 6 for 3 turns.' },
   // Three ids keep an item's old name so saved builds still load: debuff_remover
   // is Dispel Magic, silence_glyph is Silence Wave, curse is Cursed Relic.
   // Counterspell is a PASSIVE in Deadlock (Vitality T3), and a spell here by

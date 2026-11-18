@@ -12,6 +12,8 @@ Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redes
   it prints its own price, about half its one-play value (a soul buys 2 points); its tier stays canon (docs/card-design.md §2).
 - Card prices are half the budget (Patrick, 2026-11-16: "equipment and spells, they're too expensive"):
   `PRICE` 1 / 2 / 4 / 8 / 12 by tier. Retreat stays 0–2 for now (docs/balance-model.md §12).
+  One card prints over its tier's price, Patrick's own exception: Metal Skin costs 6 (2026-11-18,
+  "metal skin is too cheap now"; docs/card-design.md §2).
 - Card data always names the damage type: "deal N bullet damage" or "deal N spirit damage", never bare
   "damage". Attacks are bullet. The game prints it shorter (Patrick, 2026-11-17): "deal N damage", with N
   in the type's colour, purple spirit and brown bullet (`parseMarkup`, src/ui/card/scaling.ts); a number
