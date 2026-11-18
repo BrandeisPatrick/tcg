@@ -179,6 +179,12 @@ climbing the city. The level rings, the card icons, the unknown-status mark,
 the fallback card glyphs, the title screen, draft lobby and match board are
 likewise original.
 
+The link preview (`public/link-preview.jpg`, the picture a pasted link shows)
+is a photograph of the game's own `?share=1` page: Valve's wordmark and five
+hero portraits, both credited above, on the title sheet's paper. Nothing on
+it is new art, and the tutorial's cover is not on it. The tab icon
+(`public/favicon.svg`) is the title sheet's dial mark, original.
+
 ## Disclaimer
 
 Deadlock and all related assets © Valve Corporation. This is a non-commercial

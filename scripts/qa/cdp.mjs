@@ -23,7 +23,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'));
 const WebSocket = require('ws');
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// Chrome on a Mac, unless CHROME names another binary. CHROME_FLAGS adds
+// launch flags, space-separated (a Linux container run as root needs
+// --no-sandbox).
+const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_FLAGS = (process.env.CHROME_FLAGS ?? '').split(' ').filter(Boolean);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Every launch makes a fresh Chrome profile in the temp dir (~40 MB each).
@@ -56,7 +60,7 @@ export async function launch({ port = 9333, width = 1440, height = 900, scale = 
   const proc = spawn(CHROME, [
     '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`,
     `--window-size=${width},${height}`, '--no-first-run', '--no-default-browser-check',
-    '--disable-gpu', '--hide-scrollbars', '--mute-audio', 'about:blank',
+    '--disable-gpu', '--hide-scrollbars', '--mute-audio', ...CHROME_FLAGS, 'about:blank',
   ], { stdio: 'ignore' });
   const session = { proc, dir };
   live.add(session);

@@ -15,15 +15,24 @@ const PreviewGallery = React.lazy(() =>
   import('./ui/PreviewGallery').then((m) => ({ default: m.PreviewGallery }))
 );
 
+// The link preview's picture, alone on a bare page to be photographed
+// (ui/share/LinkPreview.tsx) — lazy for the same reason.
+const LinkPreview = React.lazy(() =>
+  import('./ui/share/LinkPreview').then((m) => ({ default: m.LinkPreview }))
+);
+
 const params = new URLSearchParams(window.location.search);
 const isPreview = params.get('preview') === '1';
+const isShare = params.get('share') === '1';
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {isPreview
-      ? <Suspense fallback={null}><PreviewGallery /></Suspense>
-      : <Root />}
+    {isShare
+      ? <Suspense fallback={null}><LinkPreview /></Suspense>
+      : isPreview
+        ? <Suspense fallback={null}><PreviewGallery /></Suspense>
+        : <Root />}
   </React.StrictMode>,
 );

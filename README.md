@@ -412,6 +412,14 @@ The script reads the card files, so a new card gets its icon by its canon
 name. See [`public/ART_PIPELINE.md`](./public/ART_PIPELINE.md) for the full
 workflow, the WebP encoder and the gotchas.
 
+## The link preview
+
+A pasted link to the game shows a picture, a title and a line: Open Graph and
+Twitter-card tags in `index.html`, and `public/link-preview.jpg`, baked from
+the app's own `?share=1` page by `node scripts/art/bake_link_preview.mjs`
+(against the dev server). [`docs/sharing.md`](./docs/sharing.md), "The link
+preview", says what is on it and how to change it.
+
 ## Architecture
 
 ```
