@@ -3,7 +3,7 @@ import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, PlayerID } from '@/engine/types';
 import { INVALID, perform } from '@/engine/engine';
 import { playBlocked } from '@/engine/legality';
-import { itemResist, slotCap, wornItems } from '@/engine/query';
+import { itemResist, slotCap, statusesWithWorn, wornItems } from '@/engine/query';
 import { resolve } from '@/engine/death';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
@@ -129,6 +129,27 @@ describe('Equipment passives', () => {
       expect(t.zone).toBe('deck');
       expect(itemResist(t, type)).toBe(0);
       expect(G.players['1'].deck).toContain(worn);
+    });
+  }
+
+  // Shown, though no status (Patrick, 2026-11-18): the tile and sheet list the worn resist as that
+  // status's chip, with no turns and the item named; a status of the same kind shows the larger.
+  for (const [itemId, status, name] of [
+    ['bullet_resilience', 'bullet_resist', 'Bullet Resilience'],
+    ['spirit_resilience', 'spirit_resist', 'Spirit Resilience'],
+    ['healing_booster', 'healing_boost', 'Healing Booster'],
+  ] as const) {
+    it(`${name} shows as a ${status} chip while worn, the larger of it and a status`, () => {
+      const G = freshG();
+      const t = G.players['1'].bench[0]!;
+      expect(statusesWithWorn(t).some((s) => s.id === status)).toBe(false);
+      giveItem(G, t, itemId);
+      expect(statusesWithWorn(t).find((s) => s.id === status)).toEqual({ id: status, value: 2, duration: 0, worn: name });
+      t.statuses.push({ id: status, value: 1, duration: 2 });
+      expect(statusesWithWorn(t).filter((s) => s.id === status)).toEqual([{ id: status, value: 2, duration: 0, worn: name }]);
+      t.statuses[t.statuses.length - 1] = { id: status, value: 3, duration: 2 };
+      expect(statusesWithWorn(t).filter((s) => s.id === status)).toEqual([{ id: status, value: 3, duration: 2 }]);
+      expect(t.statuses.at(-1)).toEqual({ id: status, value: 3, duration: 2 }); // the hero's own list is not touched
     });
   }
 

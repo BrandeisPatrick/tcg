@@ -27,7 +27,7 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
-  effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, heroAttackRule, ultimateCard,
+  effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, heroAttackRule, statusesWithWorn, ultimateCard,
 } from '@/engine/query';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, SKILL_SPIRIT_RATE, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
@@ -247,7 +247,8 @@ export function HeroDetailSheet({
   const cardW = isMobile ? Math.min(vw - 32, 360) : 360;
   const portraitW = Math.round(HEAD * 280 / 380);
   const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
-  const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
+  // A worn item's Bullet Resist (and the like) is listed as that status (statusesWithWorn).
+  const shownStatuses = statusesWithWorn(card).filter((st) => st.id !== 'shield');
 
   // ---- The actions: skill(s), a passive (a row that is no button), ultimate, attack. ----
   const rows: { key: string; node: ReactNode }[] = [];
@@ -876,6 +877,7 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
     <div style={{ ...eyebrow, fontSize: T.floor, color: poster.inkDim }}>{label}</div>
   );
   const rule = <div aria-hidden style={{ height: 1, background: RULE }} />;
+  const effects = statusesWithWorn(card);
   return (
     <div
       role="region"
@@ -908,14 +910,15 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
           ? 'free'
           : <span role="img" aria-label={souls(data.retreat)} style={{ display: 'inline-flex', verticalAlign: 'middle' }}><Souls n={data.retreat} size={T.body} tone="paper" /></span>}
       </div>
-      {card.statuses.length > 0 && (
+      {effects.length > 0 && (
         <>
           {rule}
           {section('Active effects')}
-          {card.statuses.map((s, i) => {
+          {effects.map((s, i) => {
             const def = STATUSES_BY_ID[s.id];
-            // A status of 99+ turns lasts until it is broken: no count.
-            const turns = s.duration > 0 && s.duration < 99 ? ` ${s.duration} turn${s.duration === 1 ? '' : 's'} left.` : '';
+            // A status of 99+ turns lasts until it is broken: no count. One a
+            // worn item gives lasts while it is worn: it names the item.
+            const turns = s.worn ? ` From ${s.worn}.` : s.duration > 0 && s.duration < 99 ? ` ${s.duration} turn${s.duration === 1 ? '' : 's'} left.` : '';
             return (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
