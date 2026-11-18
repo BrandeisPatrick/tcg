@@ -361,7 +361,7 @@ function Emblem() {
 /* Title block + street window                                         */
 /* ------------------------------------------------------------------ */
 
-const WORDMARK_INK = `${ART_BASE}deadlock_wordmark_ink.png`;
+export const WORDMARK_INK = `${ART_BASE}deadlock_wordmark_ink.png`;
 
 function TitleBlock({ compact }: { compact: boolean }) {
   const rise = {
@@ -525,14 +525,6 @@ function Starburst({
   big: string;
   style?: CSSProperties;
 }) {
-  const points = 26;
-  const star = (outer: number, inner: number) =>
-    Array.from({ length: points * 2 }, (_, i) => {
-      const a = (i * Math.PI) / points - Math.PI / 2;
-      const r = i % 2 === 0 ? outer : inner;
-      return `${(50 + Math.cos(a) * r).toFixed(2)},${(50 + Math.sin(a) * r).toFixed(2)}`;
-    }).join(' ');
-
   return (
     <motion.div
       aria-hidden
@@ -547,6 +539,25 @@ function Starburst({
         ...style,
       }}
     >
+      <StarburstSeal size={size} script={script} big={big} />
+    </motion.div>
+  );
+}
+
+/** The seal itself, still: the red star, its paper keyline and the two lines
+ *  of text. The title sheet stamps it in (`Starburst`); the link preview
+ *  prints it as it is (ui/share/LinkPreview.tsx). Fills a `size` square. */
+export function StarburstSeal({ size, script, big }: { size: number; script: string; big: string }) {
+  const points = 26;
+  const star = (outer: number, inner: number) =>
+    Array.from({ length: points * 2 }, (_, i) => {
+      const a = (i * Math.PI) / points - Math.PI / 2;
+      const r = i % 2 === 0 ? outer : inner;
+      return `${(50 + Math.cos(a) * r).toFixed(2)},${(50 + Math.sin(a) * r).toFixed(2)}`;
+    }).join(' ');
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
       <svg viewBox="0 0 100 100" width="100%" height="100%">
         <polygon points={star(50, 43)} fill={ink.red} />
         <polygon points={star(45, 38.7)} fill="none" stroke={ink.paper} strokeWidth="0.9" strokeOpacity="0.9" />
@@ -578,7 +589,7 @@ function Starburst({
           {big}
         </span>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

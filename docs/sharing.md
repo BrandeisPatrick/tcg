@@ -22,6 +22,39 @@ on the site or in the post.
 - [ ] Post from an account that does other things on the subreddit; Reddit's
       self-promotion norms apply.
 
+## The link preview
+
+Paste the game's link into a chat app, a forum or a feed and it shows a
+picture, a title and a line (2026-11-18). Three things make that:
+
+- **The tags** in `index.html`: Open Graph (`og:title`, `og:description`,
+  `og:image` and its size) and the Twitter card (`summary_large_image`). A
+  crawler runs no script, so they are plain HTML with whole addresses, and
+  the one page answers every link into the game (`?screen=lessons` and
+  `?lesson=3` show the same preview).
+- **The picture**, `public/link-preview.jpg`: 1200 x 630, about 150 kB. It is
+  the title sheet as one card: the lead-in over the wordmark, "A fan-made
+  card game", "Not affiliated with Valve Corporation", the red seal and a fan
+  of five of the game's own hero cards. What must be read sits in the middle
+  square, because some apps crop the picture square. It uses no art that
+  needs a person's OK: the tutorial's cover is not on it.
+- **The page that draws it**, `?share=1` (`src/ui/share/LinkPreview.tsx`),
+  made of the title sheet's and the cards' own components, so nothing is
+  redrawn for it.
+
+To bake it again (the title's look, the card frame or one of the five cards
+changed):
+
+```bash
+npm run dev                                   # in another terminal
+node scripts/art/bake_link_preview.mjs        # writes public/link-preview.jpg
+```
+
+Apps keep a link's picture for days. To make them fetch a new one at once,
+give the file a new name in the bake script and in `index.html` (both tag
+families); `tests/ui/link-preview.spec.ts` checks the tags against the file.
+The tab icon, `public/favicon.svg`, is the title sheet's dial mark.
+
 ## The video
 
 `~/Downloads/deadlock-tcg-tutorial.mp4` — 1 min 51 s, 1920x1080 at 60 fps,
