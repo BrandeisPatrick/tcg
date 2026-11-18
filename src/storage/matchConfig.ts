@@ -2,8 +2,15 @@ import type { CardId, PlayerID, TrackHp } from '@/engine/types';
 
 /** Custom numbers for one hero of a scripted match, by roster position
  *  (Active first, then the bench). `hpMax` sets a hero's full health and
- *  fills it; `hp` alone sets where he stands right now. */
+ *  fills it; `hp` alone sets where it stands right now. */
 export interface HeroStatOverride {
+  /** The level the hero opens at, with the growth of every level under it
+   *  (a lesson about levels: a hero one exp short of its ultimate). The
+   *  numbers below are set after it, so they still win. */
+  level?: number;
+  /** Items the hero opens wearing, as if put on before the match: their
+   *  bonuses are on, and wearing them again earns nothing. */
+  worn?: CardId[];
   atk?: number;
   hpMax?: number;
   hp?: number;

@@ -838,7 +838,7 @@ export function Board(props: BoardProps<GameState>) {
         isStory={isStory}
         isTutorial={isTutorial}
         lessonNumber={lesson?.number}
-        lessonOutro={lesson?.outro}
+        lessonLearned={lesson?.learned}
         onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
         onLessons={lesson && matchNav ? matchNav.toLessons : undefined}
         onRematch={() => { if (matchNav) matchNav.rematch(); else location.reload(); }}
@@ -1435,10 +1435,11 @@ export function Board(props: BoardProps<GameState>) {
           G={G}
           me={me}
           isMyTurn={isMyTurn}
-          targeting={!!pending}
+          targeting={!!pending && pending.kind !== 'placeHero'}
+          placing={pending?.kind === 'placeHero'}
           attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
-          choosing={G.pendingDiscard?.pid === me || G.deckDraft?.pid === me || G.pendingActive === me || prompt?.pid === me || pending?.kind === 'placeHero'}
+          choosing={G.pendingDiscard?.pid === me || G.deckDraft?.pid === me || G.pendingActive === me || prompt?.pid === me}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}

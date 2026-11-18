@@ -638,10 +638,11 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 **Elsewhere**
 - The ultimate button shows each hero's Deadlock ultimate icon, copied into `public/ult/` (credited
   in `public/art/CREDITS.md` and the in-game credits).
-- The tutorial teaches free skills (since 2026-11-15): Frost Grenade costs no souls and holds two
-  charges (the map lesson the same); Lesson 3 brings 2 souls in, which with the turn's 2 pay for
-  Cold Front, against a Lash on 2 (Kelvin's swing is 1 now); the map lesson's rival Patron is 1,
-  for Kelvin's push of 1.
+- The tutorial teaches free skills (since 2026-11-15): the skill lesson's is Yamato's Flying Slash
+  (since 2026-11-18; it was Frost Grenade), which costs no souls and waits 3; the map lesson's is
+  Frost Grenade. The Spells lesson brings 2 souls in, which with the turn's 2 pay for Cold Front,
+  against a Lash on 3 (Kelvin's swing is 1); the map lesson's rival Patron is 1, for Kelvin's push
+  of 1. The Level Up lesson's ultimate is Warden's Last Stand, on a Lash on 6.
 - The AI plays the same legality: it uses skills and ultimates when they are ready and the
   lookahead says the position is better for it; they cost no souls. It counts a charged ultimate
   that is ready as worth something to its hero, so it does not swing into a Victor who will get

@@ -1,12 +1,14 @@
 /**
  * The tutorial coach — a small cream plate printed in the poster's voice that
- * walks a first-time player through one lesson.
+ * walks a first-time player through one lesson, step by step: a row of pips
+ * (one a step), the tap the step is as its heading ("Tap Warden"), and one
+ * line under it.
  *
- * It never drives a move. Task steps watch the game state and tick themselves
- * off when the player does the thing; stated steps advance on Next. Between
- * the two sits the gate: while a step is up, only what it allows can be
- * touched. A player who dismisses the plate gets an ordinary (very winnable)
- * match with the whole board back.
+ * It never drives a move. Every step is one tap: it watches the game state
+ * and ticks itself off when the player makes it. Around it sits the gate:
+ * while a step is up, only what it allows can be touched. A player who
+ * dismisses the plate gets an ordinary (very winnable) match with the whole
+ * board back.
  *
  * Each render the plate is in exactly one mode:
  *   wait     — the rival is moving (or a stated step is holding for a
@@ -18,13 +20,15 @@
  *   live     — the step's own spot and allow.
  *
  * When the script runs out the plate turns into the lesson's closing card:
- * next lesson, the list, or × to keep playing this match.
+ * what it taught (three lines at most), then the next lesson, the list, or ×
+ * to keep playing this match.
  *
  * Mounted by Board only when the match config names a lesson.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardId, GameState, PlayerID } from '@/engine/types';
+import { CARDS_BY_ID } from '@/cards';
 import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
@@ -34,19 +38,23 @@ import {
   type CoachSeen, type CoachView, type GateSpec, type Lesson,
 } from '@/tutorial/lessons';
 import { TutorialGate } from './TutorialGate';
+import { Learned } from './Learned';
 import { useAmbientLoop } from '../hooks/useAmbientLoop';
+import { PATRON_NAMES } from '../board/patrons';
 
 /** Beat between a task ticking off and the next step sliding in, so the
  *  completion is legible rather than a jump-cut. */
 const TICK_MS = 900;
 const NONE: GateSpec[] = [];
 
-export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, choosing = false, lesson, onNextLesson, onLessons }: {
+export function CoachPlate({ G, me, isMyTurn, targeting, placing = false, attacking, sheetHero, choosing = false, lesson, onNextLesson, onLessons }: {
   G: GameState;
   me: PlayerID;
   isMyTurn: boolean;
   /** A skill or item is armed and waiting for its target. */
   targeting: boolean;
+  /** A hero from the hand is picked up and waiting for its spot. */
+  placing?: boolean;
   /** Your attack is being walked (the engine makes it once the walk ends). */
   attacking: boolean;
   /** The hero whose detail sheet is open (where Skill and Retreat live), or null. */
@@ -124,10 +132,23 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
     }
   }, [activeIid]);
 
+  // Heroes you put on the board from your hand: a hero that was in the hand
+  // and now stands in the lane or on the bench is one (a hero that has stood
+  // there all along, or stepped in off the bench, is not).
+  const heroesInHand = myPs.hand.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero').map((c) => c.iid).join(',');
+  const heroesOnBoard = [myPs.active, ...myPs.bench].filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.iid).join(',');
+  const wasInHand = useRef<string[]>([]);
+  useEffect(() => {
+    const board = new Set(heroesOnBoard.split(',').filter(Boolean));
+    const n = wasInHand.current.filter((iid) => board.has(iid)).length;
+    if (n > 0) setSeen((s) => ({ ...s, placed: s.placed + n }));
+    wasInHand.current = heroesInHand.split(',').filter(Boolean);
+  }, [heroesInHand, heroesOnBoard]);
+
   // ---- the step, and which mode it is in ----
   const current = steps[step];
   const done = step >= steps.length;
-  const view: CoachView = { G, me, seen, targeting, attacking, sheetOpen: sheetHero !== null, sheetHero };
+  const view: CoachView = { G, me, seen, targeting, placing, attacking, sheetOpen: sheetHero !== null, sheetHero };
   const complete = !!current?.task && current.task(view);
   /** A card or skill reveal is still on screen. */
   const revealUp = G.action?.state === 'begin';
@@ -136,11 +157,18 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
   // rival's turn; a step may say otherwise (ending the turn completes during it).
   const waitText: string | null = !current || done || complete ? null
     : current.wait ? current.wait(view)
-    : !isMyTurn ? RIVAL_TURN
+    : !isMyTurn ? pick(current.rival ?? RIVAL_TURN, view)
     : null;
   const blocked = !!current && !waitText && !complete && !!current.ready && !current.ready(view);
 
-  const bodyText = done ? lesson.outro
+  // The heading is the tap the step is; while the rival moves or the move is
+  // out of reach it says that instead, so it never names a tap that cannot
+  // be made.
+  const titleText = done ? 'You learned'
+    : waitText ? "Rival's turn"
+    : blocked ? 'Not yet'
+    : pick(current.title, view);
+  const bodyText = done ? ''
     : waitText ? waitText
     : blocked ? pick(current.blocked ?? current.body, view)
     : pick(current.body, view);
@@ -149,8 +177,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
   // gate's measuring effect is not restarted every frame by a fresh array.
   // A promotion you owe is the game's own modal, and the rival waits on it —
   // so are the upgrade a play makes, a draw card's discard and the first
-  // Active: the gate steps aside so the choice can always be made.
-  const gated = !done && open && !!current.spot && G.pendingPromotion !== me && !choosing;
+  // Active: the gate steps aside so the choice can always be made. A hero
+  // picked up from the hand is the same, unless placing it is the step.
+  const gated = !done && open && !!current.spot && G.pendingPromotion !== me && !choosing && !(placing && !current.placing);
   // Hold through a task's landing beat, the rival's turn, and any reveal or
   // attack still in flight — the next thing to tap lights up only once the
   // board can actually take the tap.
@@ -185,8 +214,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
       setTicked(false);
       setStep((i) => i + 1);
     };
-    t = setTimeout(advance, TICK_MS);
+    t = setTimeout(advance, steps[step]?.beat ?? TICK_MS);
     return () => clearTimeout(t);
+    // `steps` is the lesson's own list: it never changes under a match.
   }, [complete, step]);
 
   // The script running out is what "finished the lesson" means — the match
@@ -212,11 +242,30 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
   // actions are the lesson's exits.
   const action = done || waitText ? null : { label: 'Skip', muted: true };
 
+  // On a phone the plate sits over the rival's rule, where its structures are
+  // printed. A step that lights that rule (the map lesson's) needs it seen:
+  // the plate drops to just under it, over the rival's bench, for as long as
+  // the step is up and no hero sheet is open.
+  const lightsRule = isMobile && !done && sheetHero === null
+    && current.spot(view).some((spec) => spec.startsWith(PATRON_NAMES.rival));
+  const [ruleFoot, setRuleFoot] = useState<number | null>(null);
+  useEffect(() => {
+    if (!lightsRule) { setRuleFoot(null); return; }
+    const measure = () => {
+      const rule = [...document.querySelectorAll<HTMLElement>('[aria-label]')]
+        .find((e) => (e.getAttribute('aria-label') ?? '').startsWith(`${PATRON_NAMES.rival}:`));
+      setRuleFoot(rule ? Math.round(rule.getBoundingClientRect().bottom) : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [lightsRule]);
+
   // Phones: a bar in the strip above the board, stopping short of the fixed
   // system gear in that corner (its hit area would otherwise swallow the
   // plate's own Next / dismiss). Desktop: bottom-left, clear of everything.
   const shell: CSSProperties = isMobile
-    ? { left: 8, right: 56, top: 4 }
+    ? { left: 8, right: 56, top: ruleFoot !== null ? ruleFoot + 8 : 4, transition: 'top 220ms ease' }
     : { left: 18, bottom: 18, width: 306 };
 
   const exits = done ? (
@@ -266,13 +315,11 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
             fontFamily: fonts.ui,
           }}
         >
-          {/* Rail: the lesson and step count, the red task dot, a progress
-              rule, and the dismiss. On phones the action rides up here too —
+          {/* Rail: the lesson, its steps as pips (the one you are on ringed
+              red), and the dismiss. On phones the action rides up here too —
               the plate sits in the strip above the board, and a third row
               would push it down over the rival's rule. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 3 : 7 }}>
-            {/* Phones have no footer row, so the task marker rides the rail there. */}
-            {isMobile && !done && <TaskDot ticked={ticked} waiting={!!waitText} />}
             <span
               style={{
                 ...text.label,
@@ -283,9 +330,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
                 whiteSpace: 'nowrap',
               }}
             >
-              {done ? `Lesson ${lesson.number} · done` : `Lesson ${lesson.number} · ${step + 1}/${steps.length}`}
+              {`Lesson ${lesson.number}`}
             </span>
-            <ProgressRule done={done ? 1 : step / steps.length} />
+            <StepPips count={steps.length} at={done ? steps.length : step} ticked={ticked} label={done ? `Lesson ${lesson.number}, done` : `Step ${step + 1} of ${steps.length}`} />
             {isMobile && action && (
               <PlateAction label={action.label} onClick={next} muted={action.muted} />
             )}
@@ -319,7 +366,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               always lands the new text; the fade-in is decoration. */}
           <div>
             <motion.div
-              key={done ? 'done' : `${current.id}:${waitText ? 'w' : blocked ? 'b' : 'l'}`}
+              key={done ? 'done' : `${step}:${waitText ? 'w' : blocked ? 'b' : 'l'}:${titleText}`}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -327,21 +374,25 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               <div
                 style={{
                   fontFamily: fonts.display,
-                  fontSize: isMobile ? TYPE.body : TYPE.title,
+                  fontSize: TYPE.title,
                   letterSpacing: '0.02em',
                   textTransform: 'uppercase',
                   lineHeight: 1.1,
                   marginBottom: isMobile ? 2 : 4,
+                  // The rival's turn and a move out of reach are said quieter
+                  // than a tap to make.
+                  color: !done && (waitText || blocked) ? poster.inkDim : poster.ink,
                 }}
               >
-                {done ? `${lesson.title} · done` : current.title}
+                {titleText}
               </div>
-              <div style={{ ...text.body, fontSize: isMobile ? TYPE.small : TYPE.body, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
-                {bodyText}
-                {done && (
-                  <span style={{ display: 'block', marginTop: isMobile ? 2 : 4, color: poster.inkFaint }}>× keeps this match going.</span>
-                )}
-              </div>
+              {done ? (
+                <Learned lines={lesson.learned} compact={isMobile} />
+              ) : (
+                <div style={{ ...text.body, fontSize: TYPE.body, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
+                  {bodyText}
+                </div>
+              )}
             </motion.div>
           </div>
 
@@ -371,16 +422,29 @@ function pick(t: string | ((v: CoachView) => string), v: CoachView): string {
   return typeof t === 'function' ? t(v) : t;
 }
 
-/** The rail's hairline doubles as the progress bar: ink for what's behind
- *  you, rule grey for what's left. */
-function ProgressRule({ done }: { done: number }) {
+/** The lesson's steps as a row of pips, one a step: ink for the ones behind
+ *  you, a red ring for the one you are on (ink once its tap has landed), rule
+ *  grey for what is left. The row is the plate's progress bar. */
+function StepPips({ count, at, ticked, label }: { count: number; at: number; ticked: boolean; label: string }) {
   return (
-    <span aria-hidden style={{ flex: 1, height: 2, background: poster.inkRule, position: 'relative', minWidth: 24 }}>
-      <motion.span
-        animate={{ width: `${Math.round(done * 100)}%` }}
-        transition={spring.snappy}
-        style={{ position: 'absolute', left: 0, top: 0, bottom: 0, background: poster.ink }}
-      />
+    <span role="img" aria-label={label} style={{ flex: 1, minWidth: 24, display: 'flex', alignItems: 'center', gap: 5 }}>
+      {Array.from({ length: count }, (_, i) => {
+        const behind = i < at || (i === at && ticked);
+        const here = i === at && !ticked;
+        return (
+          <span
+            key={i}
+            aria-hidden
+            style={{
+              width: 8, height: 8, flexShrink: 0, borderRadius: '50%', boxSizing: 'border-box',
+              background: behind ? poster.ink : 'transparent',
+              border: `1.5px solid ${behind ? poster.ink : here ? poster.red : poster.inkRule}`,
+              boxShadow: here ? `0 0 0 2px ${poster.paper}, 0 0 0 3px ${poster.red}` : undefined,
+              transition: 'background 160ms ease, border-color 160ms ease',
+            }}
+          />
+        );
+      })}
     </span>
   );
 }

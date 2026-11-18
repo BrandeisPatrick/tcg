@@ -13,6 +13,7 @@ import { PosterButton } from '../chrome';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
 import { MapIcon } from './MapIcon';
+import { Learned } from '../tutorial/Learned';
 
 /**
  * Full-screen match epilogue, printed as one cream sheet floating on the
@@ -27,7 +28,7 @@ import { MapIcon } from './MapIcon';
  */
 export function MatchEndScreen({
   G, me, won, isStory, isTutorial = false,
-  onRematch, onMenu, onStoryReturn, lessonNumber, lessonOutro, onNextLesson, onLessons,
+  onRematch, onMenu, onStoryReturn, lessonNumber, lessonLearned, onNextLesson, onLessons,
 }: {
   G: GameState;
   me: PlayerID;
@@ -38,8 +39,9 @@ export function MatchEndScreen({
   isTutorial?: boolean;
   /** Which lesson this was, for the eyebrow. */
   lessonNumber?: number;
-  /** The lesson's own closing line, printed over the verdict on a win. */
-  lessonOutro?: string;
+  /** What the lesson taught, three lines at most, listed under the verdict
+   *  on a win. */
+  lessonLearned?: string[];
   /** Lesson exits — the following lesson (absent on the last) and the list. */
   onNextLesson?: () => void;
   onLessons?: () => void;
@@ -60,8 +62,8 @@ export function MatchEndScreen({
     // The deck-out rule decided it (2026-11-16): a side had no card to draw.
     ? (G.deckedOut === me ? 'Your deck ran out' : "The rival's deck ran out")
     : cap ? `Round ${ROUND_CAP} over · ${cap.by === 'structures' ? 'more structure HP' : cap.by === 'netWorth' ? 'structures tied, more net worth' : 'all tied, the second mover'}` : null;
-  // A lesson keeps its own closing line; a match lets the headline speak.
-  const flavor = isTutorial && won ? lessonOutro : undefined;
+  // A lesson closes on what it taught; a match lets the headline speak.
+  const learned = isTutorial && won && lessonLearned?.length ? lessonLearned : undefined;
 
   const myPs = G.players[me];
   const opPs = G.players[opp];
@@ -132,18 +134,6 @@ export function MatchEndScreen({
           transition={spring.bouncy}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: isMobile ? '6px 18px 0' : '10px 32px 0' }}
         >
-          {flavor && (
-            <div style={{
-              fontFamily: fonts.script,
-              fontSize: scale.display,
-              lineHeight: 1.1,
-              color: poster.ink,
-              transform: 'rotate(-2.5deg)',
-              transformOrigin: 'center bottom',
-            }}>
-              {flavor}
-            </div>
-          )}
           <h1 style={{
             fontFamily: fonts.display,
             fontSize: isMobile ? TYPE.display : TYPE.display,
@@ -159,6 +149,15 @@ export function MatchEndScreen({
               fontFamily: fonts.display, fontSize: scale.label, letterSpacing: '0.16em', textTransform: 'uppercase',
               color: poster.inkDim, marginTop: 4,
             }}>{capLine}</div>
+          )}
+          {learned && (
+            <div style={{ maxWidth: 420, marginTop: 6, textAlign: 'left' }}>
+              <div style={{
+                fontFamily: fonts.display, fontSize: scale.label, letterSpacing: '0.16em', textTransform: 'uppercase',
+                color: poster.inkDim, marginBottom: 6, textAlign: 'center',
+              }}>You learned</div>
+              <Learned lines={learned} ink={poster.ink} />
+            </div>
           )}
         </motion.div>
 
@@ -183,8 +182,9 @@ export function MatchEndScreen({
           {opTeam.length > 0 && <RosterStrip side="rival" team={opTeam} fallen={fallen} />}
         </motion.div>
 
-        {/* Stat strip — one ink tag per number. */}
-        <motion.div
+        {/* Stat strip — one ink tag per number. A lesson prints none: what it
+            taught is the list above. */}
+        {!isTutorial && <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...spring.default, delay: 0.3 }}
@@ -214,7 +214,7 @@ export function MatchEndScreen({
               </span>
             </div>
           ))}
-        </motion.div>
+        </motion.div>}
 
         {/* Exits */}
         <motion.div
@@ -234,8 +234,14 @@ export function MatchEndScreen({
                   Next Lesson
                 </PosterButton>
               )}
+              {/* The last lesson, won: the next thing is a real match. */}
+              {!onNextLesson && won && (
+                <PosterButton variant="paper" onClick={onRematch} style={{ minWidth: 170, textAlign: 'center' }}>
+                  Play a Match
+                </PosterButton>
+              )}
               {onLessons && (
-                <PosterButton variant={onNextLesson ? 'ink' : 'paper'} onClick={onLessons} style={{ minWidth: 150, textAlign: 'center' }}>
+                <PosterButton variant="ink" onClick={onLessons} style={{ minWidth: 150, textAlign: 'center' }}>
                   All Lessons
                 </PosterButton>
               )}

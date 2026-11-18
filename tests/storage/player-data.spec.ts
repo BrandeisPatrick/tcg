@@ -134,6 +134,14 @@ describe('the save keeps the rival AI\'s strength', () => {
     expect(loadPlayerData().deck).toEqual(['improved_spirit', ...Array(MAX_COPIES).fill('extra_spirit')]);
   });
 
+  it('a save from the five-lesson tutorial keeps its lessons: the spells lesson, stored as "level", reads as "spells"', () => {
+    store.set(KEY, JSON.stringify({
+      version: 4, preferredHeroes: [null, null, null], builds: {},
+      lessonsDone: ['skill', 'souls', 'level', 'bench', 'map'], tutorialDone: true,
+    }));
+    expect(loadPlayerData().lessonsDone).toEqual(['skill', 'souls', 'spells', 'bench', 'map']);
+  });
+
   it('a version-1 save (no version, decks) still starts its builds from the defaults, keeps the rest, and plays normal', () => {
     store.set(KEY, JSON.stringify({
       preferredHeroes: ['hero_lash', null, null, null],

@@ -84,19 +84,22 @@ function useTitleStatus() {
         : run.status === 'lost'
           ? 'Run lost · start again'
           : `Run · ${run.clearedNodeIds.length}/${run.nodes.length} blocks · ${run.heroes.length} ${run.heroes.length === 1 ? 'hero' : 'heroes'}`;
+    // Counted against the lessons there are now: a save from the five-lesson
+    // tutorial is five of eight, whatever it stored as done.
+    const lessonsDone = LESSONS.filter((l) => data.lessonsDone.includes(l.id)).length;
     return {
       quick: 'Draft · draw · fight',
       story,
       storyActive: active,
       // One line for the sheet: who you asked the draft for, and the deck.
       loadout: `${picks}/${MAX_PREFERRED_HEROES} squad · ${data.deck.length >= DECK_SIZE ? 'deck' : 'deck from builds'}`,
-      tutorial: data.tutorialDone
+      tutorial: lessonsDone >= LESSONS.length
         ? `${LESSONS.length}/${LESSONS.length} lessons · play any again`
-        : data.lessonsDone.length
-          ? `${data.lessonsDone.length}/${LESSONS.length} lessons done`
-          : `${LESSONS.length} short lessons · one move each`,
-      tutorialDone: data.tutorialDone,
-      tutorialStarted: data.lessonsDone.length > 0,
+        : lessonsDone
+          ? `${lessonsDone}/${LESSONS.length} lessons done`
+          : `${LESSONS.length} short lessons · one tap a step`,
+      tutorialDone: lessonsDone >= LESSONS.length,
+      tutorialStarted: lessonsDone > 0,
       gallery: `${HEROES.length} heroes · ${SPELLS.length} spells · ${EQUIPMENT.length} items`,
     };
   }, []);

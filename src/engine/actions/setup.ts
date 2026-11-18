@@ -7,8 +7,9 @@ import type { CardId, CardInstance, GameState, PlayerID, PlayerState, TrackHp } 
 import { CARDS_BY_ID, HEROES, itemCard } from '@/cards';
 import { getMatchConfig, scriptedSetup, type HeroStatOverride, type StorySetup } from '@/storage/matchConfig';
 import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../ids';
-import { makeInstance } from '../instances';
+import { attachItem, makeInstance, syncVitalitySpike } from '../instances';
 import { pushLog } from '../log';
+import { openAtLevel } from '../expSystem';
 import { otherPlayer, ultimateCard, ultWait } from '../query';
 import { ownTurn } from '../rounds';
 import { buildOf, dealOpeningHand, drawCards, fillDeck, shuffleDeck, sideDeckIds, stockDeck } from '../deck';
@@ -276,17 +277,26 @@ export function chooseDeck(G: GameState, index: number, items?: readonly CardId[
   else finishOpening(G);
 }
 
-/** Overwrite a roster's printed numbers (Active first, then the bench).
- *  Attack is stored as a modifier over the card's base, so everything that
- *  reads `effectiveAtk` sees the custom value. */
-function applyHeroStats(ps: PlayerState, stats?: (HeroStatOverride | undefined)[]) {
+/** Overwrite a roster's printed numbers (Active first, then the bench): the
+ *  level a hero opens at and the items it opens wearing, then its attack,
+ *  health and exp. Attack is stored as a modifier over the card's base, so
+ *  everything that reads `effectiveAtk` sees the custom value. */
+function applyHeroStats(G: GameState, pid: PlayerID, stats?: (HeroStatOverride | undefined)[]) {
   if (!stats) return;
+  const ps = G.players[pid];
   const roster = [ps.active, ...ps.bench];
   stats.forEach((o, i) => {
     const c = roster[i];
     if (!c || !o) return;
     const data = CARDS_BY_ID[c.cardId];
     const baseAtk = data?.type === 'hero' ? data.atk : 0;
+    if (o.level !== undefined) openAtLevel(c, o.level);
+    for (const id of o.worn ?? []) {
+      if (itemCard(id)?.type !== 'equipment') continue;
+      attachItem(c, makeInstance(allocatorOf(G), id, pid, 'equipment'));
+      (c.equippedIds ??= []).push(id);
+    }
+    if (o.worn?.length) syncVitalitySpike(c);
     if (o.atk !== undefined) c.atkMod = o.atk - baseAtk;
     if (o.hpMax !== undefined) { c.hpMax = o.hpMax; c.hp = o.hpMax; }
     if (o.hp !== undefined) { c.hp = o.hp; if (c.hpMax < o.hp) c.hpMax = o.hp; }
@@ -342,10 +352,10 @@ export function setupGame(): GameState {
       action: null,
       fx: [],
     };
-    // A lesson builds the exact situation it teaches: custom attack,
-    // health and experience per hero, by roster position.
-    applyHeroStats(G.players['0'], story.playerHeroStats);
-    applyHeroStats(G.players['1'], story.enemyHeroStats);
+    // A lesson builds the exact situation it teaches: a level, worn items,
+    // custom attack, health and experience per hero, by roster position.
+    applyHeroStats(G, '0', story.playerHeroStats);
+    applyHeroStats(G, '1', story.enemyHeroStats);
     // The rosters stand on the board; each deck holds items only. A lesson
     // names its decks (top first, unshuffled); a Story fight's come from the
     // sides' decks and builds.

@@ -15,9 +15,29 @@ from `main` on every push by `.github/workflows/deploy.yml`)
 
 ## How a match plays
 
-The title screen offers Quick Match, the Tutorial (five lessons), Story (a
+The title screen offers Quick Match, the Tutorial (eight lessons), Story (a
 roguelike run over a map of New York), Loadout (your squad, your deck and your
 builds) and the Gallery. A Quick Match goes like this.
+
+### The tutorial
+
+Eight short lessons, step by step (2026-11-18). Every step is one tap: the
+coach's plate names the tap ("Tap Warden") over one short line, a row of pips
+counts the steps, and only the thing to tap is lit. Each lesson is its own
+small fight, set up so the move it teaches is the move that wins, and closes
+on what it taught in three lines at most. The last one's win screen offers a
+real match. The lessons are data in `src/tutorial/lessons.ts`.
+
+| # | Lesson | Teaches | Taps |
+|---|---|---|---|
+| 1 | Attack | Tap your hero, Attack, End Turn; the rival's turn; a kill wins | 5 |
+| 2 | The Skill | A skill is free, takes a target, then waits; skill and attack in one turn | 5 |
+| 3 | Items | 2 souls and a card each turn; an item costs souls and stays on its hero | 4 |
+| 4 | Spells | A spell is paid for, works once and is discarded | 4 |
+| 5 | The Bench | A drawn hero is benched for free; Retreat swaps it in for the leaving hero's price | 6 |
+| 6 | Level Up | Exp fills the level ring; Level 3 unlocks the ultimate | 5 |
+| 7 | A Fallen Hero | A killed hero is shuffled into the deck and comes back with its level and items | 7 |
+| 8 | The Map | Guardian, Walker, Patron; a kill pushes, and so does an empty lane | 4 |
 
 ### Your deck
 
@@ -230,11 +250,11 @@ as any hero does.
 
 **End.** Statuses tick. If the rival has no standing hero, your Active pushes
 into the empty lane for its bullet power (an empty lane is easy to come by
-early, when a side has one hero on the board). Heroes earn exp for the turn: 2
-for the Active, 1 for the bench.
+early, when a side has one hero on the board). Your side earns 1 exp for the
+turn, and it goes to one of your heroes on the board, picked at random.
 
 **Levels.** Exp also comes the first time a hero wears an item (1) and from a
-kill (2). Level 2 takes 5 exp, level 3 7 more and level 4, the cap, 9 more.
+kill (1). Level 2 takes 3 exp, level 3 5 more and level 4, the cap, 7 more.
 Each level adds the hero's own growth: its curve's points (2 a level early, 3
 mid, 4 late) split between Bullet Power, HP and Spirit Power — guns into
 Attack, casters into Spirit, tanks into HP. All three curves are even at
@@ -259,8 +279,8 @@ purple 1 is 1 + 2 × Spirit there); an ultimate or a spell counts it once.
   Rejuvenator, 2 revives good through the end of the second round after. It
   rises again 4 rounds after the round it fell in.
 - A fallen hero is shuffled back into your deck at once (2026-11-18): its slot
-  is left empty, it keeps its level, and what it wore is shuffled in beside it
-  as cards of their own. Drawn again, it is benched again at its rank.
+  is left empty, and it keeps its level, its exp and the items it wore. Drawn
+  again, it is benched again as it was, at full HP.
 - The round cap: after round 20 (12 until 2026-11-16), the side with more structure HP wins, then
   the side with more net worth, then the second mover.
 
