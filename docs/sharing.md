@@ -13,8 +13,8 @@ on the site or in the post.
       Bluesky `@toastyghostey.newgrounds.com`, or the Reddit account that
       posted "In Your Dreams"). Wait for an answer; if none comes, swap the
       Tutorial cover for original art before posting.
-- [ ] Upload the trailer to YouTube (see below). Set it Public, copy the
-      link, and paste it into the Reddit post.
+- [ ] Attach the trailer (see below) to the Reddit post, or upload it to
+      YouTube, set it Public and paste the link into the post.
 - [ ] Read r/DeadlockTheGame's rules and flairs on the day, and post as fan
       content. The official forums (forums.playdeadlock.com) have a fan
       content section and the Deadlock Discord has fan-project channels;
@@ -57,25 +57,45 @@ The tab icon, `public/favicon.svg`, is the title sheet's dial mark.
 
 ## The video
 
-`~/Downloads/deadlock-tcg-tutorial.mp4` — 1 min 51 s, 1920x1080 at 60 fps,
-19 MB, no audio. It walks the four tutorial lessons in order, each behind a
-numbered title card, so a viewer sees exactly what each mechanic does:
+`deadlock-tcg-trailer.mp4` (2026-11-18): 56 s, 1920x1080 at 60 fps, H.264,
+about 26 MB, no audio. It is filmed off the game itself, so everything in it is the real
+build, and the words on it are captions laid over the page.
 
-1. **The Skill** — open a hero's sheet, spend the soul, cast Frost Grenade.
-2. **Souls and Gear** — a card you cannot afford, the refill next turn, then
-   Extended Magazine going on and the attack going up. (The rival's turn in
-   the middle runs at 2.6x so it does not drag.)
-3. **Level Up** — the experience ring one point short, gear supplying the
-   point, and the log spelling out "Kelvin reached Level 2 (+1 Bullet Power,
-   +1 HP, +1 Spirit Power)" as his attack goes 2 to 3.
-4. **The Bench** — Kelvin down to one health, Yamato retreating in for two
-   souls, and the swing that ends it.
+| At | Shot | Caption |
+|---|---|---|
+| 0:00 | The link preview's card, on the dark ground | |
+| 0:03 | The hero draft: three picks, the rival's between them | Draft three heroes |
+| 0:07 | The deck draft: two offers looked at, one taken | Then pick a deck |
+| 0:10 | A whole Quick Match on Auto: the deal and first turns at 1.5x, the middle at 4x, the finish at 1.5x, the Victory sheet | Spend souls on items · One lane. Skills and ultimates. · Fell their Patron to win |
+| 0:34 | Tutorial lesson 6, tap by tap: the level-up, the ultimate, the kill, "You learned" | Learn it in 8 short lessons |
+| 0:44 | The Loadout, the Story sheet, the Gallery: 2.3 s each | Build your own deck · A story run across New York · 22 heroes · 150+ item cards |
+| 0:51 | The card again, over the address | |
 
-Recorded off the live site, so everything in it is the real build. Thumbnail:
-`deadlock-tcg-tutorial-thumbnail.jpg` (the lessons sheet), 1280x720.
+The match is one the game played by itself: Auto plays your seat, the AI the
+rival's, and the speed-ups are in the filming. It is a win in twelve turns,
+with Abrams knocked out and drawn back.
 
-`deadlock-tcg-trailer.mp4` is the earlier 69 s cut — title, draft, a match
-played out, the gallery. Keep it for a second post or the itch/GitHub page.
+Not in it, on purpose: the title screen and the lessons list. The tutorial's
+cover is on both, and it needs its artist's OK first (below).
+
+**How it is made.** `scripts/film/` films the app on its virtual clock
+(`?vtclock=1`): the page's time moves one sixtieth of a second, the frame is
+photographed, and so on, so the video is smooth however slow the machine is.
+`Math.random` is pinned to a seed, so the rival drafts the same heroes and
+the same match plays each time. The captions are strings in `shoot.cjs`.
+
+```bash
+npm run dev                          # in another terminal
+sh scripts/film/shoot-all.sh         # about ten minutes; writes deadlock-tcg-trailer.mp4
+```
+
+It needs Playwright and ffmpeg, which are not dependencies of the repo
+(`scripts/film/lib.cjs` says where to get them). It films at 1600 x 900 at
+1.2x, which is 1920 x 1080 pixels: at 1280 wide the wide board's patron lines
+overlap their labels (a layout bug in small desktop windows, not yet fixed).
+
+The two older files, `deadlock-tcg-tutorial.mp4` (the four-lesson tutorial)
+and the 69 s trailer, show a game that has changed since: do not post them.
 
 It has no soundtrack. Silent is fine, but if you want music, add it in
 YouTube's editor from their free Audio Library — anything else risks a
@@ -85,8 +105,8 @@ copyright claim on a video whose whole job is to look above board.
 
 **Title** (pick one, both under 100 characters):
 
-- How my Deadlock card game plays — the whole tutorial in two minutes
-- Deadlock as a card game: skills, souls, levelling and the bench
+- Deadlock as a card game: a free fan project you can play in your browser
+- I made a Deadlock card game: draft heroes, build a deck from the item shop
 
 **Description:**
 
@@ -95,29 +115,27 @@ copyright claim on a video whose whole job is to look above board.
 > Play it free in your browser: https://brandeispatrick.github.io/tcg/
 > Source (MIT): https://github.com/BrandeisPatrick/tcg
 >
-> The four tutorial lessons, start to finish. Each one is its own small
-> fight, set up so the move it teaches is the move that wins it: a hero's
-> skill, the soul economy and gear, levelling a hero mid-match, and
-> retreating a worn hero to the bench.
->
-> It's a small tabletop-style card game built on Valve's Deadlock. Draft a
-> squad, refill souls each turn to pay for spells and gear, level heroes up,
-> and bring the rival's patron down. There's also a story campaign across a
-> map of New York and a gallery of every card. Matches are against an AI.
-> No ads, no accounts, works on a phone.
+> A one-lane card game built on Valve's Deadlock, played against an AI.
+> Draft three heroes, play a 16-card deck made of Deadlock's shop items,
+> spend souls to gear your heroes up, and push the rival's Guardian, Walker
+> and Patron down. There's an 8-lesson tutorial, a story run across a map of
+> New York, a deck builder and a gallery of every card. No ads, no accounts,
+> works on a phone.
 >
 > Everything Deadlock in it is Valve's: the hero art, the item art, and the
-> in-world posters painted by Evgeniy Evstratiy. The tutorial cover is Toasty
-> Ghostey's "In Your Dreams!" title card. Full credits with links are in the
-> game under System -> Art credits. Anything comes down on request.
+> in-world posters painted by Evgeniy Evstratiy. Full credits with links are
+> in the game under System -> Art credits. Anything comes down on request.
 >
-> 0:00 The lessons, and 1 — The Skill
-> 0:23 2 — Souls and Gear
-> 0:55 3 — Level Up
-> 1:21 4 — The Bench
+> 0:00 Deadlock TCG
+> 0:03 Draft three heroes
+> 0:07 Pick a deck
+> 0:10 A match
+> 0:34 The tutorial
+> 0:44 Deck builder, story, gallery
+> 0:51 Play it
 
 **Tags:** deadlock, deadlock valve, valve, fan game, card game, tcg,
-browser game, tutorial, indie, fan project, deadlock fan art
+browser game, trailer, indie, fan project
 
 **Settings:** Category Gaming; "No, it's not made for kids"; Public. Leave
 comments on — the feedback is the point.
@@ -142,46 +160,55 @@ Short enough for a DM. Fill in the two links.
 
 ## Reddit post
 
-Text post, flair for fan content (the subreddit's "Fan Art" or equivalent),
-images or clip attached, link in the body.
-
-Post it as a link to the YouTube video if the subreddit prefers video
-posts, otherwise a text post with the trailer link at the top.
+Drafted 2026-11-18 for the game as it is now. A video or image post with
+this as its text, flair for fan content (the subreddit shows a "Fan Art"
+flair). Attach the trailer above, or the link preview picture and a few
+screenshots. Read the subreddit's self-promotion rules on the day.
 
 Title, pick one:
 
 - I made a free, unofficial Deadlock card game you can play in your browser
-- Deadlock as a small tabletop card game: a free fan project, with a
-  four-lesson tutorial
+- Deadlock as a card game: draft three heroes, build a deck from the item
+  shop (free fan project)
 
-Body:
+Body (Reddit markdown, paste as it is):
 
-> **Unofficial fan project, not affiliated with Valve.** Free, no ads, no
-> accounts, works on a phone.
->
-> Trailer: <YOUTUBE LINK>
-> Play it here: https://brandeispatrick.github.io/tcg/
->
-> It's a small tabletop-style card game built on Deadlock. You draft a squad
-> of heroes, refill souls each turn to pay for spells and gear, level heroes
-> up, retreat them to the bench, and bring the rival's patron down. There's
-> a four-lesson tutorial that teaches one thing at a time (skills, souls and
-> gear, levelling, the bench), a story campaign across a map of New York, a
-> loadout page for your squad and deck, and a gallery of every card. Matches
-> are against an AI.
->
-> Everything Deadlock in it belongs to Valve: the hero portraits, the item
-> art, the in-game posters (painted by Evgeniy Evstratiy for Valve). The
-> tutorial cover is Toasty Ghostey's "In Your Dreams!" title card
-> [if they've said yes: "used with their okay"; otherwise: "credited, and
-> coming down if they'd rather"]. The full credits, with links, are in the
-> game under System → Art credits. If any of it should come down, say so and
-> it will.
->
-> The code is open source under MIT:
-> https://github.com/BrandeisPatrick/tcg
->
-> I'd love feedback on the tutorial and on balance.
+```
+**Unofficial fan project, not affiliated with Valve.** Free, no ads, no accounts, nothing to install. Works on a phone.
+
+**Play it:** https://brandeispatrick.github.io/tcg/
+
+**Tutorial (8 short lessons):** https://brandeispatrick.github.io/tcg/?screen=lessons
+
+## What it is
+
+A one-lane card game built on Deadlock, played against an AI.
+
+- Draft three heroes, then play a 16-card deck made of Deadlock's shop items. Active items are spells. Passive items are equipment you put on a hero.
+- Souls are a bank: 2 each turn, plus a bounty for every kill. Save up or spend now.
+- One hero fights in the lane and the rest wait on the bench. Skills are free on a cooldown, and ultimates unlock at level 3.
+- Kills push the rival's Guardian, Walker and Patron. Take down the Patron to win.
+- A dead hero is shuffled back into your deck and keeps its level and items.
+
+## What's in it
+
+- 22 heroes and 150+ item cards, each under its own name, shop tab and tier
+- 8 ready-made decks, plus a deck builder laid out like the shop
+- A step-by-step tutorial where every step is one tap
+- A story mode: a roguelike run across a map of New York
+- A gallery of every card
+
+## Credits
+
+Everything Deadlock in it belongs to Valve: the hero portraits, the item art and the in-game posters (painted by Evgeniy Evstratiy for Valve). The tutorial cover is Toasty Ghostey's "In Your Dreams!" title card, [used with their okay / credited, and coming down if they'd rather]. Full credits with links are in the game under System → Art credits. If anything should come down, tell me and it will.
+
+The code is open source (MIT): https://github.com/BrandeisPatrick/tcg
+
+It's still in playtest and the balance is rough. I'd love to hear where the tutorial lost you, and which hero or item felt unfair.
+```
+
+The bracket in the Credits paragraph is the one thing to fill in: it depends
+on Toasty Ghostey's answer (above).
 
 ## Forum post
 
