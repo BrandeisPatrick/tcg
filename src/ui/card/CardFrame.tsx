@@ -1,5 +1,5 @@
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { hpBarInk, levelFrame, levelFrameKeylines, levelGreen, poster, shopInk, soulCoin } from '../poster';
 import { Souls } from '../hud';
 import { RuleText } from './RuleText';
@@ -300,7 +300,7 @@ function ArtWindow({ data, art }: { data: CardData | undefined; art?: string }) 
           <span style={{
             color: poster.cream,
             fontFamily: fonts.display,
-            fontSize: 22,
+            fontSize: TYPE.display,
             letterSpacing: '0.2em',
             marginRight: '-0.2em',
             textTransform: 'uppercase',
@@ -529,7 +529,7 @@ export function CardFrame({
         background: poster.ink,
         color: poster.cream,
         fontFamily: fonts.display,
-        fontSize: 10,
+        fontSize: TYPE.small,
         letterSpacing: '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1.3,
@@ -570,7 +570,7 @@ export function CardFrame({
           className={stamped ? foilTextClass(true) : undefined}
           style={{
             fontFamily: fonts.display,
-            fontSize: size === 'full' ? 14 : 12,
+            fontSize: size === 'full' ? TYPE.title : TYPE.small,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             // Omitted when stamped: an inline colour outranks the stylesheet's
@@ -640,7 +640,7 @@ export function CardFrame({
               ...text.body,
               flex: 1,
               marginTop: isHand ? 3 : 4,
-              fontSize: isHand ? 11 : 12,
+              fontSize: isHand ? TYPE.small : TYPE.body,
               lineHeight: isHand ? 1.25 : 1.35,
               color: isHand ? poster.ink : poster.inkDim,
               overflow: 'hidden',
@@ -663,7 +663,7 @@ export function CardFrame({
             paddingTop: 3,
             borderTop: `1px solid ${poster.inkRule}`,
             textAlign: 'center',
-            fontSize: 11,
+            fontSize: TYPE.small,
             fontWeight: 400,
             color: poster.inkDim,
             fontVariantNumeric: 'tabular-nums',
@@ -721,7 +721,7 @@ function StatPill({ icon, value, big }: { icon: ReactNode; value: number; big?: 
       borderRadius: 3,
       ...(big ? { border: `1px solid ${poster.creamFaint}`, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)' } : null),
       fontWeight: big ? 800 : 700,
-      fontSize: big ? 15 : 12,
+      fontSize: big ? TYPE.title : TYPE.small,
       lineHeight: 1.2,
       fontVariantNumeric: 'tabular-nums',
     }}>

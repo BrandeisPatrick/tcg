@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster, chamfer, soulCoin, clipBoth } from '../poster';
 import { boardRows } from './BoardTable';
 import { useViewport } from '../hooks/useViewport';
@@ -131,7 +131,7 @@ function Rack({ filled, slots, side, mobile }: {
       {/* Stencilled count — the at-a-glance readout at the anchor end. */}
       <span style={{
         fontFamily: fonts.display,
-        fontSize: mobile ? 11 : 15,
+        fontSize: mobile ? TYPE.small : TYPE.title,
         lineHeight: 1,
         fontVariantNumeric: 'tabular-nums',
         color: poster.ink,
@@ -167,7 +167,7 @@ function Rack({ filled, slots, side, mobile }: {
       {overflow > 0 && (
         <span style={{
           fontFamily: fonts.display,
-          fontSize: 10,
+          fontSize: TYPE.small,
           color: poster.inkDim,
           fontVariantNumeric: 'tabular-nums',
           lineHeight: 1,

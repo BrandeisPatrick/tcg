@@ -24,7 +24,7 @@ import { effectiveKind, routeProgress, stopState, type RouteProgress } from '@/s
 import { HeroBadge } from '@/cards/art/heroArt';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { CardPreview } from '../overlays/CardPreview';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, scrimStyle, sheetStyle, tileShadow } from '../poster';
 import { Souls } from '../hud';
 import { PosterButton } from '../chrome';
@@ -211,7 +211,7 @@ function PanelBody({ run, header = true, onPreview, onOpenReward, onFocusStop, o
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 12, borderTop: `1px solid ${poster.edge}` }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
             <span style={{ ...eyebrow, color: poster.creamDim }}>Next fight</span>
-            <span style={{ ...text.label, fontSize: 13, color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ ...text.label, fontSize: TYPE.body, color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>
               {supplies}
             </span>
           </span>
@@ -220,7 +220,7 @@ function PanelBody({ run, header = true, onPreview, onOpenReward, onFocusStop, o
             size="sm"
             onClick={onOpenReward}
             ariaLabel={`View what your next fight starts with: ${supplies}`}
-            style={{ marginLeft: 'auto', minHeight: 40, padding: '9px 14px', fontSize: 11, letterSpacing: '0.18em' }}
+            style={{ marginLeft: 'auto', minHeight: 40, padding: '9px 14px', fontSize: TYPE.small, letterSpacing: '0.18em' }}
           >
             View
           </PosterButton>
@@ -265,7 +265,7 @@ function Block({ label, count, first, children }: { label: string; count?: strin
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <span style={{ ...eyebrow, color: poster.creamDim }}>{label}</span>
         {count && (
-          <span style={{ ...text.label, fontSize: 12, color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+          <span style={{ ...text.label, fontSize: TYPE.small, color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
         )}
       </div>
       {children}
@@ -305,10 +305,10 @@ function StartRow({ node, onPress }: { node: StoryNode; onPress: () => void }) {
     >
       <StopGlyph kind="battle" color={poster.red} size={22} />
       <span style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-        <span style={{ fontFamily: fonts.display, fontSize: 14, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.1 }}>
+        <span style={{ fontFamily: fonts.display, fontSize: TYPE.body, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.1 }}>
           Start · {node.name}
         </span>
-        <span style={{ ...text.body, fontSize: 11.5, color: poster.creamDim, lineHeight: 1.3 }}>
+        <span style={{ ...text.body, fontSize: TYPE.small, color: poster.creamDim, lineHeight: 1.3 }}>
           Win here to open all three routes.
         </span>
       </span>
@@ -352,7 +352,7 @@ function RouteRow({ run, route, dim, onPress }: {
         <span
           style={{
             fontFamily: fonts.display,
-            fontSize: 14,
+            fontSize: TYPE.body,
             letterSpacing: '0.02em',
             textTransform: 'uppercase',
             lineHeight: 1.1,
@@ -367,7 +367,7 @@ function RouteRow({ run, route, dim, onPress }: {
         <span
           style={{
             ...text.body,
-            fontSize: 11.5,
+            fontSize: TYPE.small,
             lineHeight: 1.25,
             color: route.next ? poster.creamDim : poster.gold,
           }}
@@ -441,7 +441,7 @@ function BossBadge({ hero, down, name }: { hero?: CardId; down: boolean; name?: 
   );
 }
 
-const confirmButton = { flex: 1, padding: '12px 6px', fontSize: 12, letterSpacing: '0.14em', whiteSpace: 'nowrap' as const };
+const confirmButton = { flex: 1, padding: '12px 6px', fontSize: TYPE.small, letterSpacing: '0.14em', whiteSpace: 'nowrap' as const };
 
 /** A quiet way out, behind one confirm: a run is a lot to lose to a slip. */
 function AbandonFooter({ onAbandon }: { onAbandon: () => void }) {
@@ -455,7 +455,7 @@ function AbandonFooter({ onAbandon }: { onAbandon: () => void }) {
     <div style={{ flexShrink: 0, padding: '10px 16px 12px', borderTop: `1px solid ${poster.edge}` }}>
       {asking ? (
         <div role="group" aria-label="Abandon this run?" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ ...text.body, margin: 0, fontSize: 12.5, color: poster.cream, lineHeight: 1.4 }}>
+          <p style={{ ...text.body, margin: 0, fontSize: TYPE.body, color: poster.cream, lineHeight: 1.4 }}>
             Abandon this run? Your roster and supplies are lost.
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -475,7 +475,7 @@ function AbandonFooter({ onAbandon }: { onAbandon: () => void }) {
           onClick={() => setAsking(true)}
           style={{
             ...text.label,
-            fontSize: 10.5,
+            fontSize: TYPE.small,
             letterSpacing: '0.16em',
             color: poster.creamDim,
             background: 'transparent',
@@ -545,7 +545,7 @@ function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
       </span>
       <SuppliesStat reward={run.nextFight} />
       <BarStat label="Bosses" value={`${down}/${bosses.length}`} />
-      <span style={{ ...text.label, marginLeft: 'auto', fontSize: 11, letterSpacing: '0.16em', color: poster.cream, whiteSpace: 'nowrap' }}>
+      <span style={{ ...text.label, marginLeft: 'auto', fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.cream, whiteSpace: 'nowrap' }}>
         Run ▴
       </span>
     </motion.button>
@@ -575,8 +575,8 @@ function SuppliesStat({ reward }: { reward: FightReward }) {
 function BarStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-      <span style={{ fontFamily: fonts.display, fontSize: 16, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-      <span style={{ ...eyebrow, fontSize: 8.5, letterSpacing: '0.16em', color: poster.creamDim, lineHeight: 1 }}>{label}</span>
+      <span style={{ fontFamily: fonts.display, fontSize: TYPE.title, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <span style={{ ...eyebrow, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.creamDim, lineHeight: 1 }}>{label}</span>
     </span>
   );
 }
@@ -740,7 +740,7 @@ function RewardSheet({ reward, onPreview, onClose }: {
             borderBottom: `1.5px solid ${poster.ink}`,
           }}
         >
-          <h2 style={{ margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? 22 : 28, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1 }}>
+          <h2 style={{ margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? TYPE.display : TYPE.display, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1 }}>
             Next fight
           </h2>
           <span style={{ ...eyebrow, color: poster.inkDim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>

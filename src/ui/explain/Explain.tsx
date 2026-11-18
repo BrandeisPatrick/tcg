@@ -3,7 +3,7 @@ import {
   type CSSProperties, type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster } from '../poster';
 import type { ExplainContent } from './content';
 import {
@@ -180,17 +180,17 @@ function ExplainCard({ id, content, mode, anchor }: {
         }} />
       )}
       <div id={titleId} style={{
-        fontFamily: fonts.display, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.15,
+        fontFamily: fonts.display, fontSize: TYPE.small, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.15,
       }}>{content.title}</div>
       {content.lead && (
-        <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}>{content.lead}</div>
+        <div style={{ marginTop: 4, fontSize: TYPE.body, fontWeight: 700, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}>{content.lead}</div>
       )}
       {content.lines.map((line, i) => (
-        <div key={i} style={{ marginTop: i === 0 && !content.lead ? 4 : 3, fontSize: 12.5, lineHeight: 1.35, color: poster.inkSoft }}>{line}</div>
+        <div key={i} style={{ marginTop: i === 0 && !content.lead ? 4 : 3, fontSize: TYPE.body, lineHeight: 1.35, color: poster.inkSoft }}>{line}</div>
       ))}
       {mode === 'touch' && (
         <div style={{
-          marginTop: 7, fontFamily: fonts.display, fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.inkDim,
+          marginTop: 7, fontFamily: fonts.display, fontSize: TYPE.small, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.inkDim,
         }}>Tap anywhere to close</div>
       )}
     </div>

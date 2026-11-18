@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { PlayerState, Structure, StructureKind } from '@/engine/types';
 import { structureHp } from '@/engine/query';
-import { text } from '../tokens';
+import { TYPE, text } from '../tokens';
 import { poster } from '../poster';
 import { FX_INK } from '../effects/fx/fxCatalog';
 import { Stamp } from '../effects/fx/primitives';
@@ -103,8 +103,9 @@ function Segment({ s, pushed, accent, isMobile }: { s: Structure; pushed: number
       {!isMobile && (
         <span style={{
           ...text.label,
-          fontSize: 10,
-          letterSpacing: '0.14em',
+          fontSize: TYPE.small,
+          // Tracked tighter than 0.14em since the type went to 12px (2026-11-18): the strip holds its width.
+          letterSpacing: '0.06em',
           color: down ? poster.inkFaint : accent,
           whiteSpace: 'nowrap',
           flexShrink: 0,

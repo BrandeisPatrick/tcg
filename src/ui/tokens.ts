@@ -28,6 +28,18 @@ export const palette = {
   },
 } as const;
 
+/**
+ * The type scale: four sizes, and nothing else (Patrick, 2026-11-18: "text too
+ * small … we should have like max 3 or 4 types of font size, so everything stay
+ * consistent"). Every `fontSize` in the UI is one of these:
+ *  - small   — labels, tags, chips, corner counts, captions, the fine print;
+ *  - body    — running text: rules, descriptions, buttons;
+ *  - title   — names, the numbers a player plays by, a sheet's title;
+ *  - display — a full-screen moment's headline, a big number.
+ * (A name fitted to its band and art drawn in SVG scale with their box.)
+ */
+export const TYPE = { small: 12, body: 14, title: 18, display: 24 } as const;
+
 export const fonts = {
   // UI body / labels — Saira pairs with Saira Stencil One (same family root)
   // and reads with the same humanist-condensed energy as Deadlock's in-game UI text.
@@ -103,7 +115,7 @@ export const statRow = {
  */
 export const systemFont = {
   fontFamily: fonts.ui,
-  fontSize: 12,
+  fontSize: TYPE.small,
   fontWeight: 700,
   letterSpacing: '0.07em',
   textTransform: 'uppercase' as const,
@@ -118,7 +130,7 @@ export const text = {
   // surface reads like a generic web form next to the stenciled home.
   label: {
     fontFamily: fonts.ui,
-    fontSize: 12,
+    fontSize: TYPE.small,
     fontWeight: 700,
     letterSpacing: '0.07em',
     textTransform: 'uppercase' as const,
@@ -126,7 +138,7 @@ export const text = {
   },
   body: {
     fontFamily: fonts.ui,
-    fontSize: 13,
+    fontSize: TYPE.body,
     fontWeight: 400,
     letterSpacing: '0',
     textTransform: 'none' as const,
@@ -134,7 +146,7 @@ export const text = {
   },
   numeric: {
     fontFamily: fonts.ui,
-    fontSize: 22,
+    fontSize: TYPE.display,
     fontWeight: 700,
     letterSpacing: '0',
     fontVariantNumeric: 'tabular-nums' as const,

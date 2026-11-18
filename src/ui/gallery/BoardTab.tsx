@@ -15,7 +15,7 @@ import { boardRows } from '../board/BoardTable';
 import { HeroSlot } from '../board/HeroSlot';
 import { LevelRing } from '../card/LevelRing';
 import { poster } from '../poster';
-import { radius } from '../tokens';
+import { TYPE, radius } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
 import { mockHeroInstance } from './mock';
 import { Section, Caption, Notes, Row, Button, Sub, Grid, Segmented, Toggle, type Option } from './primitives';
@@ -63,8 +63,8 @@ export function BoardTab() {
                     <LevelRing level={r.level} exp={r.exp} size={36} />
                   </div>
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 11.5, letterSpacing: '0.04em', color: poster.ink, fontVariantNumeric: 'tabular-nums' }}>{r.label}</div>
-                <div style={{ fontSize: 11, lineHeight: 1.25, color: poster.inkDim, textAlign: 'center' }}>{r.hint}</div>
+                <div style={{ fontWeight: 700, fontSize: TYPE.small, letterSpacing: '0.04em', color: poster.ink, fontVariantNumeric: 'tabular-nums' }}>{r.label}</div>
+                <div style={{ fontSize: TYPE.small, lineHeight: 1.25, color: poster.inkDim, textAlign: 'center' }}>{r.hint}</div>
               </div>
             ))}
           </Grid>
@@ -279,7 +279,7 @@ function TurnCompassDemo() {
         <div aria-hidden style={{ position: 'absolute', top: 6, bottom: 6, left: '50%', width: 1, background: poster.inkFaint }} />
         <div style={{ transform: boardSize ? `scale(${BOARD_SCALE})` : undefined }}>{node}</div>
       </div>
-      <figcaption style={{ padding: '0 10px 9px', fontWeight: 700, fontSize: 11.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.ink, textAlign: 'center' }}>
+      <figcaption style={{ padding: '0 10px 9px', fontWeight: 700, fontSize: TYPE.small, letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.ink, textAlign: 'center' }}>
         {label}
       </figcaption>
     </figure>

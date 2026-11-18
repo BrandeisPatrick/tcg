@@ -13,6 +13,7 @@ import { PosterButton } from '../chrome';
 import { SIZES } from '../card/CardFrame';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
+import { TYPE } from '../tokens';
 
 /** Height of the sticky masthead. Second-level bars park under it. */
 export const STICK = { desk: 54, phone: 44 } as const;
@@ -78,7 +79,7 @@ export function Button({ children, onClick, disabled, title }: {
       title={title}
       style={{
         padding: '7px 12px',
-        fontSize: 11,
+        fontSize: TYPE.small,
         letterSpacing: '0.14em',
         // The whole border, not its width alone: PosterButton sets the
         // shorthand, and a width beside it is lost the first time the button

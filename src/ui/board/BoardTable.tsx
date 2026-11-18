@@ -1,5 +1,5 @@
 import { forwardRef, type CSSProperties, type ReactNode } from 'react';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster, chamfer, clipBoth, sheetStyle } from '../poster';
 import type { BoardLayout } from './layout';
 
@@ -165,7 +165,7 @@ function RowPlaque({ left, children }: { left: number; children: ReactNode }) {
       color: poster.paper,
       ...clipBoth(chamfer(4)),
       fontFamily: fonts.display,
-      fontSize: 10.5,
+      fontSize: TYPE.small,
       letterSpacing: '0.2em',
       textTransform: 'uppercase',
       lineHeight: 1.25,

@@ -2,7 +2,7 @@ import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { AttackPlan, AttackStep } from '@/engine/forecast';
 import type { PlayerID } from '@/engine/types';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { GunBurst, KoShatter, KoSticker } from './fx/hits';
 import { ShieldDeflect } from './fx/support';
@@ -186,7 +186,7 @@ export function CombatChoreographer({ plan, me, slotRefs, onComplete, stepDurati
               ...clipBoth(chamfer(6)),
               cursor: 'pointer',
               fontFamily: fonts.display,
-              fontSize: 12,
+              fontSize: TYPE.small,
               letterSpacing: '0.2em',
               textTransform: 'uppercase',
               lineHeight: 1,
@@ -360,7 +360,7 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
             color: poster.paper,
             ...clipBoth(chamfer(3)),
             fontFamily: fonts.display,
-            fontSize: 10.5,
+            fontSize: TYPE.small,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
             lineHeight: 1,

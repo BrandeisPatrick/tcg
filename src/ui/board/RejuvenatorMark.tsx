@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { PlayerState } from '@/engine/types';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster } from '../poster';
 import { MapIcon } from './MapIcon';
 
@@ -44,7 +44,7 @@ export function RejuvenatorMark({ ps, isMobile }: { ps: PlayerState; isMobile: b
         background: poster.green,
         color: poster.ink,
         fontFamily: fonts.display,
-        fontSize: isMobile ? 9.5 : 11,
+        fontSize: isMobile ? TYPE.small : TYPE.small,
         lineHeight: 1.1,
         fontVariantNumeric: 'tabular-nums',
         whiteSpace: 'nowrap',

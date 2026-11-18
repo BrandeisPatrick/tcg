@@ -13,7 +13,7 @@ import type { StoryRun, StoryNode } from '@/story/types';
 import { stopFacts, type StopFacts } from '@/story/describe';
 import { rewardSummary } from './RewardFace';
 import { HeroBadge } from '@/cards/art/heroArt';
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { poster, sheetStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { KIND_INK, KIND_LABEL, StopGlyph, Sticker, FramedPortrait, eyebrow } from './StopGlyph';
@@ -70,7 +70,7 @@ export function StopCard({ run, node, compact, onGo, onClose }: {
             margin: 0,
             fontFamily: fonts.display,
             fontWeight: 400,
-            fontSize: compact ? 22 : 26,
+            fontSize: compact ? TYPE.display : TYPE.display,
             letterSpacing: '0.02em',
             textTransform: 'uppercase',
             lineHeight: 1.02,
@@ -103,7 +103,7 @@ export function StopCard({ run, node, compact, onGo, onClose }: {
         <PosterButton
           disabled
           ariaLabel={f.lockedBy?.name ? `Locked. Clear ${f.lockedBy.name} first` : 'Locked'}
-          style={{ width: '100%', padding: compact ? '12px 14px' : '14px 18px', fontSize: compact ? 12 : 13, letterSpacing: '0.16em', lineHeight: 1.2 }}
+          style={{ width: '100%', padding: compact ? '12px 14px' : '14px 18px', fontSize: compact ? TYPE.small : TYPE.body, letterSpacing: '0.16em', lineHeight: 1.2 }}
         >
           {f.lockedBy?.name ? `Clear ${f.lockedBy.name} first` : 'Locked'}
         </PosterButton>
@@ -152,11 +152,11 @@ function CombatBody({ f, compact }: { f: StopFacts; compact: boolean }) {
           <StopGlyph kind="battle" color={poster.cream} size={compact ? 22 : 26} />
         </FramedPortrait>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim }}>{leader ? 'Led by' : 'Facing'}</span>
+          <span style={{ ...eyebrow, fontSize: TYPE.small, color: poster.inkDim }}>{leader ? 'Led by' : 'Facing'}</span>
           <span
             style={{
               fontFamily: fonts.display,
-              fontSize: compact ? 17 : 19,
+              fontSize: compact ? TYPE.title : TYPE.title,
               letterSpacing: '0.03em',
               textTransform: 'uppercase',
               lineHeight: 1.05,
@@ -165,12 +165,12 @@ function CombatBody({ f, compact }: { f: StopFacts; compact: boolean }) {
             {leader ? leader.name : 'A street crew'}
           </span>
           {f.kind === 'boss' && (
-            <span style={{ ...text.body, fontSize: 11.5, color: poster.inkSoft, lineHeight: 1.3 }}>
+            <span style={{ ...text.body, fontSize: TYPE.small, color: poster.inkSoft, lineHeight: 1.3 }}>
               Beat them to take the route.
             </span>
           )}
           {f.warChest > 0 && (
-            <span style={{ ...text.body, fontSize: 11.5, color: poster.inkSoft, lineHeight: 1.3 }}>
+            <span style={{ ...text.body, fontSize: TYPE.small, color: poster.inkSoft, lineHeight: 1.3 }}>
               They start with {f.warChest} souls to spend.
             </span>
           )}
@@ -217,14 +217,14 @@ function Fact({ label, value, compact, rule, small }: {
         minWidth: 0,
       }}
     >
-      <dt style={{ ...eyebrow, fontSize: 9, letterSpacing: '0.16em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
+      <dt style={{ ...eyebrow, fontSize: TYPE.small, letterSpacing: '0.16em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
         {label}
       </dt>
       <dd
         style={{
           margin: 0,
           fontFamily: fonts.display,
-          fontSize: small ? (compact ? 15 : 16) : compact ? 24 : 28,
+          fontSize: small ? (compact ? TYPE.title : TYPE.title) : compact ? TYPE.display : TYPE.display,
           lineHeight: 1,
           minHeight: compact ? 24 : 28,
           display: 'flex',
@@ -253,7 +253,7 @@ function OfferBody({ f, run, compact }: { f: StopFacts; run: StoryRun; compact: 
       : `A cache: two items (${tiers}) or ${f.offer?.souls ?? 0} souls. Take one for your next fight.`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 10 : 12 }}>
-      <p style={{ ...text.body, margin: 0, fontSize: compact ? 13 : 14, color: poster.inkSoft }}>
+      <p style={{ ...text.body, margin: 0, fontSize: compact ? TYPE.body : TYPE.body, color: poster.inkSoft }}>
         {line}
         {paysOut && f.state !== 'cleared' && (
           <> Your roster is full, so this stop pays out supplies instead.</>
@@ -278,7 +278,7 @@ function RosterStrip({ run }: { run: StoryRun }) {
       }}
       aria-label={`Roster ${run.heroes.length} of ${SQUAD_SIZE}`}
     >
-      <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim, marginRight: 4 }}>Roster</span>
+      <span style={{ ...eyebrow, fontSize: TYPE.small, color: poster.inkDim, marginRight: 4 }}>Roster</span>
       {slots.map((i) => {
         const id = run.heroes[i];
         return id ? (
@@ -293,7 +293,7 @@ function RosterStrip({ run }: { run: StoryRun }) {
           />
         );
       })}
-      <span style={{ ...text.label, fontSize: 12, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ ...text.label, fontSize: TYPE.small, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
         {run.heroes.length}/{SQUAD_SIZE}
       </span>
     </div>
@@ -313,8 +313,8 @@ function RewardLine({ run }: { run: StoryRun }) {
       }}
     >
       <StopGlyph kind="supply" color={KIND_INK.supply} size={16} />
-      <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim, whiteSpace: 'nowrap' }}>Next fight</span>
-      <span style={{ ...text.label, fontSize: 12, marginLeft: 'auto', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ ...eyebrow, fontSize: TYPE.small, color: poster.inkDim, whiteSpace: 'nowrap' }}>Next fight</span>
+      <span style={{ ...text.label, fontSize: TYPE.small, marginLeft: 'auto', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         {rewardSummary(run.nextFight)}
       </span>
     </div>

@@ -13,7 +13,7 @@ import { RoundCardIcon } from '../card/RoundCardIcon';
 import { CARDS_BY_ID } from '@/cards';
 import { PRICE } from '@/engine/constants';
 import { poster, scrimStyle } from '../poster';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
 import { FULL } from './primitives';
 
@@ -117,10 +117,10 @@ export function CardLightbox({ ids, id, onPick, onClose }: {
             </div>
           )}
           <div style={{ minWidth: 0, textAlign: onTable ? 'left' : 'center', color: poster.cream, fontFamily: fonts.ui }}>
-            <div style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.2 }}>
+            <div style={{ fontFamily: fonts.display, fontSize: TYPE.title, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1.2 }}>
               {data.name}
             </div>
-            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: poster.creamDim, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ marginTop: 4, fontSize: TYPE.small, fontWeight: 600, color: poster.creamDim, fontVariantNumeric: 'tabular-nums' }}>
               {meta} · {at + 1} of {ids.length}
             </div>
           </div>

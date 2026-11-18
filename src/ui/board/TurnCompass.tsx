@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { fonts, spring } from '../tokens';
+import { TYPE, fonts, spring } from '../tokens';
 import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
@@ -167,7 +167,7 @@ export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, beat
           position: 'relative',
           zIndex: 1,
           fontFamily: fonts.display,
-          fontSize: 22,
+          fontSize: TYPE.display,
           lineHeight: 1,
           color: poster.ink,
           fontVariantNumeric: 'tabular-nums',
@@ -260,7 +260,7 @@ function BeatStrip({ beat, hue, words }: { beat: TurnBeat; hue: string; words: b
   const at = TURN_BEATS.indexOf(beat);
   const word = (b: TurnBeat, on: boolean) => ({
     fontFamily: fonts.display,
-    fontSize: words ? (on ? 12 : 10) : 10,
+    fontSize: words ? (on ? TYPE.small : TYPE.small) : TYPE.small,
     letterSpacing: words ? '0.14em' : '0.2em',
     paddingLeft: words ? '0.14em' : '0.2em',
     textTransform: 'uppercase' as const,

@@ -33,7 +33,7 @@
  */
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster, shopInk } from '../poster';
 import {
   dialLabel, dialReadiness, dialSegments, dialShade, framePath, segmentDash, type DialModel,
@@ -225,7 +225,7 @@ export function AbilityDial({ model, ink, size = 44, calm = false, memo, numeral
           animate={{ opacity: 1, scale: 1 }}
           transition={calm ? { duration: 0 } : { delay: LAND + 0.12, type: 'spring', stiffness: 520, damping: 24, mass: 0.6 }}
           style={{
-            fontFamily: fonts.display, fontSize: numeral > 9 ? 18 : 23, lineHeight: 1,
+            fontFamily: fonts.display, fontSize: numeral > TYPE.small ? TYPE.title : TYPE.display, lineHeight: 1,
             fill: poster.cream, stroke: poster.ink, strokeWidth: 3.5, strokeLinejoin: 'round', paintOrder: 'stroke',
             fontVariantNumeric: 'tabular-nums',
           }}

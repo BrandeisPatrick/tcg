@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CardData } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { fonts } from '../tokens';
+import { TYPE, fonts } from '../tokens';
 import { poster } from '../poster';
 import { rarityInk } from './RarityFX';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
@@ -188,7 +188,7 @@ export function RoundCardIcon({ cardId, size = 130 }: Props) {
             padding: '3px 8px', borderRadius: 2,
             background: poster.ink,
             color: poster.cream,
-            fontFamily: fonts.display, fontSize: 9.5, letterSpacing: '0.2em',
+            fontFamily: fonts.display, fontSize: TYPE.small, letterSpacing: '0.2em',
             textTransform: 'uppercase', lineHeight: 1,
             whiteSpace: 'nowrap',
           }}>

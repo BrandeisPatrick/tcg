@@ -26,7 +26,7 @@ import { heroAbilities, heroAttackRule, otherPlayer } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroPortraitArt } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
-import { fonts, spring, text } from '../tokens';
+import { TYPE, fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
@@ -177,7 +177,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           <span
             style={{
               fontFamily: fonts.display,
-              fontSize: isMobile ? 18 : 24,
+              fontSize: isMobile ? TYPE.title : TYPE.display,
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
               color: lobby.cream,
@@ -186,7 +186,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           >
             Draft
           </span>
-          <span style={{ ...text.label, fontSize: isMobile ? 10 : 11, letterSpacing: isMobile ? '0.18em' : '0.3em', color: lobby.dim, whiteSpace: 'nowrap' }}>
+          <span style={{ ...text.label, fontSize: isMobile ? TYPE.small : TYPE.small, letterSpacing: isMobile ? '0.18em' : '0.3em', color: lobby.dim, whiteSpace: 'nowrap' }}>
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
         </div>
@@ -534,7 +534,7 @@ function CardBack({ w, h, live, tone, numeral }: {
         style={{ position: 'absolute', inset: -2, border: `2px solid ${lobby.cream}`, opacity: 0, pointerEvents: 'none' }}
       />
       {numeral && (
-        <span style={{ position: 'absolute', top: 8, left: 0, right: 0, textAlign: 'center', fontFamily: fonts.display, fontSize: 15, color: lobby.dim, letterSpacing: '0.1em' }}>
+        <span style={{ position: 'absolute', top: 8, left: 0, right: 0, textAlign: 'center', fontFamily: fonts.display, fontSize: TYPE.title, color: lobby.dim, letterSpacing: '0.1em' }}>
           {numeral}
         </span>
       )}
@@ -637,7 +637,7 @@ function RosterGrid({
 function PreferredCluster({ ids, pool }: { ids: string[]; pool: string[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-      <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.22em', color: lobby.gold }}>Preferred</span>
+      <span style={{ ...text.label, fontSize: TYPE.small, letterSpacing: '0.22em', color: lobby.gold }}>Preferred</span>
       {ids.map((id) => (
         <img
           key={id}
@@ -671,7 +671,7 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
     // Nothing chosen yet: on the player's pick, say what to do in the dossier's place.
     return (
       <div style={{ minHeight: compact ? 40 : 48, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-        {hint && <span style={{ ...text.label, fontSize: compact ? 11 : 13, letterSpacing: '0.2em', color: lobby.dim }}>{hint}</span>}
+        {hint && <span style={{ ...text.label, fontSize: compact ? TYPE.small : TYPE.body, letterSpacing: '0.2em', color: lobby.dim }}>{hint}</span>}
       </div>
     );
   }
@@ -699,12 +699,12 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
         ...clipBoth(chamfer(6)),
       }}
     >
-      <span style={{ fontFamily: fonts.display, fontSize: compact ? 18 : 24, letterSpacing: '0.04em', textTransform: 'uppercase', color: lobby.cream, lineHeight: 1 }}>
+      <span style={{ fontFamily: fonts.display, fontSize: compact ? TYPE.title : TYPE.display, letterSpacing: '0.04em', textTransform: 'uppercase', color: lobby.cream, lineHeight: 1 }}>
         {data.name}
       </span>
       <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {identity.keywords.map((kw) => (
-          <span key={kw} style={{ padding: '3px 8px', background: identity.primary, color: identity.accent, ...text.label, fontSize: 10, letterSpacing: '0.18em' }}>
+          <span key={kw} style={{ padding: '3px 8px', background: identity.primary, color: identity.accent, ...text.label, fontSize: TYPE.small, letterSpacing: '0.18em' }}>
             {kw}
           </span>
         ))}
@@ -725,7 +725,7 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
         </span>
       </span>
       {[...heroAbilities(data).map(({ ability }) => ability), ...(heroAttackRule(data) ? [heroAttackRule(data)!] : [])].map((ability) => (
-        <span key={ability.id} style={{ ...text.body, fontSize: 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
+        <span key={ability.id} style={{ ...text.body, fontSize: TYPE.body, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
           <span style={{ color: lobby.cream, fontWeight: 700 }}>{ability.name}</span>
           {ability.text ? <> — <TypedText text={ability.text} dark /></> : ''}
         </span>
@@ -867,13 +867,13 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
           background: 'linear-gradient(to bottom, rgba(12, 15, 17, 0.85), transparent)',
         }}
       >
-        <span style={{ fontFamily: fonts.display, fontSize: 15, color, letterSpacing: '0.1em', flexShrink: 0 }}>{numeral}</span>
+        <span style={{ fontFamily: fonts.display, fontSize: TYPE.title, color, letterSpacing: '0.1em', flexShrink: 0 }}>{numeral}</span>
         <motion.span
           animate={preview ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
           transition={preview ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
           style={{
             ...text.label,
-            fontSize: 10,
+            fontSize: TYPE.small,
             letterSpacing: '0.2em',
             color,
             // On a phone-width card the tag used to wrap onto the numeral.
@@ -961,7 +961,7 @@ export function LockButton({ enabled, state, onClick, compact, word, name }: {
           color: enabled ? '#171410' : lobby.dim,
           ...clipBoth(chamfer(9)),
           fontFamily: fonts.display,
-          fontSize: compact ? 15 : 18,
+          fontSize: compact ? TYPE.title : TYPE.title,
           letterSpacing: '0.24em',
           textTransform: 'uppercase',
           lineHeight: 1,

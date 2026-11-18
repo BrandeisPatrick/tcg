@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { fonts, spring } from './tokens';
+import { TYPE, fonts, spring } from './tokens';
 import { poster, chamfer, posterButtonSkins, type PosterButtonVariant, clipBoth } from './poster';
 
 /**
@@ -51,7 +51,7 @@ export function PosterButton({
         ...(disabled ? disabledSkin : {}),
         ...clipBoth(chamfer(n)),
         fontFamily: fonts.display,
-        fontSize: size === 'sm' ? 13 : 17,
+        fontSize: size === 'sm' ? TYPE.body : TYPE.title,
         letterSpacing: '0.22em',
         textTransform: 'uppercase',
         lineHeight: 1,

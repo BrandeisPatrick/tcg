@@ -9,7 +9,7 @@ import type { CardId } from '@/engine/types';
 import type { FightReward, RewardChoice } from '@/story/types';
 import { cardName } from '@/cards';
 import { CardFrame, SIZES } from '../card/CardFrame';
-import { fonts, text } from '../tokens';
+import { TYPE, fonts, text } from '../tokens';
 import { poster, soulCoin, tileShadow, printEdge } from '../poster';
 
 /** One option of a 1-of-3 pick: a card (a hero), or a supply (an item or
@@ -101,7 +101,7 @@ export function SoulsFace({ souls, size = 'hand', glow = null }: {
       }}>
         <span style={{
           fontFamily: fonts.display,
-          fontSize: hand ? 30 : 64,
+          fontSize: hand ? TYPE.display : TYPE.display,
           lineHeight: 1,
           color: poster.soul,
           fontVariantNumeric: 'tabular-nums',
@@ -125,7 +125,7 @@ export function SoulsFace({ souls, size = 'hand', glow = null }: {
         background: poster.ink,
         color: poster.cream,
         fontFamily: fonts.display,
-        fontSize: 10,
+        fontSize: TYPE.small,
         letterSpacing: '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1.3,
@@ -145,7 +145,7 @@ export function SoulsFace({ souls, size = 'hand', glow = null }: {
       }}>
         <div style={{
           fontFamily: fonts.display,
-          fontSize: hand ? 12 : 14,
+          fontSize: hand ? TYPE.small : TYPE.body,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
           lineHeight: 1.15,
@@ -155,7 +155,7 @@ export function SoulsFace({ souls, size = 'hand', glow = null }: {
         <div style={{
           ...text.body,
           marginTop: hand ? 3 : 4,
-          fontSize: hand ? 11 : 12,
+          fontSize: hand ? TYPE.small : TYPE.small,
           lineHeight: hand ? 1.25 : 1.35,
           color: hand ? poster.ink : poster.inkDim,
           overflow: 'hidden',

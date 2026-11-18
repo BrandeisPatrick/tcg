@@ -21,7 +21,7 @@ import { heroPortraitArt } from '@/cards/art/heroArt';
 import { useCalmMotion } from '../effects/fx/FxMotionContext';
 import type { Rect } from '../effects/fx/geometry';
 import { useViewport } from '../hooks/useViewport';
-import { fonts, spring } from '../tokens';
+import { TYPE, fonts, spring } from '../tokens';
 import { poster, scrimStyle, chamfer, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 
@@ -88,7 +88,7 @@ export function OpeningPicker({ candidates, onPick }: Props) {
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 18 : 24 }}
       >
         <div style={{
-          fontFamily: fonts.display, fontSize: isMobile ? 18 : 22, letterSpacing: '0.16em',
+          fontFamily: fonts.display, fontSize: isMobile ? TYPE.title : TYPE.display, letterSpacing: '0.16em',
           textTransform: 'uppercase', color: poster.cream, textShadow: '0 2px 10px rgba(0, 0, 0, 0.6)',
         }}>
           Choose your Active
@@ -184,7 +184,7 @@ function PickCard({ card, width, chosen, transition, onTap, cardRef }: {
           position: 'absolute', left: 0, right: 0, bottom: 0,
           padding: width < 120 ? '6px 4px 7px' : '8px 8px 9px',
           background: poster.cream, color: poster.ink, textAlign: 'center',
-          fontFamily: fonts.display, fontSize: width < 120 ? 11 : 15,
+          fontFamily: fonts.display, fontSize: width < TYPE.display ? TYPE.small : TYPE.title,
           letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
