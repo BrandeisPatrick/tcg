@@ -811,9 +811,13 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
       return 22 + buildFit(G, pid, a) - (a.replaceIid !== undefined ? 2 : 0);
     }
     case 'discard': return 50_000;
-    // The deck draft: the deck of the heroes' builds, the one the AI's own
-    // seat brings (its items go on the heroes whose builds list them).
-    case 'chooseDeck': return 60_000 + (G.deckDraft?.offers[a.index]?.id === 'builds' ? 100 : 0) - a.index;
+    // The deck draft: the seat's own deck, "Your deck" (the one it saved, or
+    // the deck of its heroes' builds, which the AI's own seat brings: its
+    // items go on the heroes whose builds list them).
+    case 'chooseDeck': {
+      const id = G.deckDraft?.offers[a.index]?.id;
+      return 60_000 + (id === 'own' || id === 'builds' ? 100 : 0) - a.index;
+    }
     // The opening's first Active, from the drafted heroes in the deck: the
     // hero with the most HP, then attack.
     case 'chooseActive': {

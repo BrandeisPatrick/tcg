@@ -34,7 +34,7 @@ export type Action =
   | { type: 'useSkill'; heroIid: string; skillId?: AbilityId; targetIid?: string }   // no skillId = the hero's first skill
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
   // Owed choices, made from either seat.
-  | { type: 'chooseDeck'; index: number }                   // the deck draft: one of the decks offered for the drafted heroes
+  | { type: 'chooseDeck'; index: number; items?: CardId[] }  // the deck draft: one of the decks offered for the drafted heroes (`items`: a customized copy of it)
   | { type: 'chooseActive'; cardIid: string }               // the opening: a drafted hero from the deck into the lane
   | { type: 'promoteToActive'; benchIid: string }
   | { type: 'useTrigger'; heroIid: string; abilityId: AbilityId }   // a trigger prompt's yes: this one of its offers
@@ -50,7 +50,7 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
     case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.replaceIid);
     case 'placeHero': return placeHero(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard': return discard(G, pid, a.cardIids);
-    case 'chooseDeck': return chooseDeck(G, a.index);
+    case 'chooseDeck': return chooseDeck(G, a.index, a.items);
     case 'chooseActive': return chooseActive(G, a.cardIid);
     case 'attack': return attack(G, pid, a.targetIid);
     case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid, a.skillId);

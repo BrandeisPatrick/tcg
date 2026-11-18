@@ -15,7 +15,7 @@
 import '@/abilities';
 import type { AbilityId, CardId, CardInstance, GameState, PlayerID, PlayerState } from './types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
-import { evolvesFrom } from '@/cards/decks';
+import { evolvesFrom, isLegalDeck } from '@/cards/decks';
 import type { Action } from './engine';
 import { getAbility } from './registry';
 import { ULT_UNLOCK_LEVEL } from './constants';
@@ -479,10 +479,14 @@ export function chooseActiveBlocked(G: GameState, cardIid: string): ChooseActive
 
 /** Why the deck draft's offer `index` cannot be taken now, or null when it
  *  can: the deck draft is owed (`G.deckDraft`) and `index` names one of its
- *  offers. Either seat may make it, like the opening's Active. */
-export function chooseDeckBlocked(G: GameState, index: number): 'notOwed' | 'noOffer' | null {
+ *  offers. `items`, when given, is the deck played in the offer's place (the
+ *  player customized it, 2026-11-18): it must be a legal deck (`isLegalDeck`:
+ *  DECK_SIZE items, at most MAX_COPIES of one). Either seat may make it, like
+ *  the opening's Active. */
+export function chooseDeckBlocked(G: GameState, index: number, items?: readonly CardId[]): 'notOwed' | 'noOffer' | 'badDeck' | null {
   if (!G.deckDraft) return 'notOwed';
   if (!Number.isInteger(index) || index < 0 || index >= G.deckDraft.offers.length) return 'noOffer';
+  if (items !== undefined && !(Array.isArray(items) && items.every((id) => typeof id === 'string') && isLegalDeck(items))) return 'badDeck';
   return null;
 }
 
@@ -612,8 +616,8 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
  */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
-  if (G.deckDraft) return a.type === 'chooseDeck' ? chooseDeckBlocked(G, a.index) : 'deckOwed';
-  if (a.type === 'chooseDeck') return chooseDeckBlocked(G, a.index);
+  if (G.deckDraft) return a.type === 'chooseDeck' ? chooseDeckBlocked(G, a.index, a.items) : 'deckOwed';
+  if (a.type === 'chooseDeck') return chooseDeckBlocked(G, a.index, a.items);
   if (G.pendingActive) return a.type === 'chooseActive' ? chooseActiveBlocked(G, a.cardIid) : 'activeOwed';
   if (a.type === 'chooseActive') return chooseActiveBlocked(G, a.cardIid);
   // A trigger prompt owed (prompts.ts) is answered before anything else, from either seat.

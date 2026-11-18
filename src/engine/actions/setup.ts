@@ -261,15 +261,17 @@ export function openDraftedMatch(G: GameState, picks: Record<PlayerID, CardId[]>
   finishOpening(G);
 }
 
-/** The deck draft's answer: the offer `index` is `G.deckDraft`'s seat's deck.
- *  Its items join the drafted heroes in that seat's deck, and the opening goes
- *  on: the seat's first Active (`G.pendingActive`), or the rest of it. */
-export function chooseDeck(G: GameState, index: number) {
+/** The deck draft's answer: the offer `index` is `G.deckDraft`'s seat's deck,
+ *  or `items` in its place when the player customized it (Patrick,
+ *  2026-11-18: "we want full customizable playable deck"). The items join the
+ *  drafted heroes in that seat's deck, and the opening goes on: the seat's
+ *  first Active (`G.pendingActive`), or the rest of it. */
+export function chooseDeck(G: GameState, index: number, items?: readonly CardId[]) {
   const draft = G.deckDraft!;
   const offer = draft.offers[index];
   G.deckDraft = undefined;
-  stockDeck(G, draft.pid, offer.items);
-  pushLog(G, `P${draft.pid} drafted the deck ${offer.name}.`);
+  stockDeck(G, draft.pid, items ? [...items] : offer.items);
+  pushLog(G, `P${draft.pid} drafted the deck ${offer.name}${items ? ', customized' : ''}.`);
   if (openingPick(G.players[draft.pid])) G.pendingActive = draft.pid;
   else finishOpening(G);
 }

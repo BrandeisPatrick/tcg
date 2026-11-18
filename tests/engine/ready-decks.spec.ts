@@ -89,11 +89,17 @@ describe('ready decks', () => {
 describe('deck offers', () => {
   const offerIds = (heroes: CardId[], own?: CardId[]) => deckOffers(heroes, heroes.map(defaultBuild), own).map((o) => o.id);
 
-  it('the two best-fitting ready decks, best first, then the heroes\' builds; a legal saved deck beside them', () => {
+  it('the two best-fitting ready decks, best first, then "Your deck": the legal saved deck, else the heroes\' builds', () => {
     expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'])).toEqual(['crossfire', expect.any(String), 'builds']);
     expect(offerIds(['hero_graves', 'hero_abrams', 'hero_rem'])[0]).toBe('graveyard');
-    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'], [...READY_DECKS[0].items])).toHaveLength(DECK_OFFERS + 1);
-    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'], ['extra_spirit'])).toHaveLength(DECK_OFFERS); // not a legal deck
+    // A legal saved deck takes the builds deck's place (2026-11-18); one that is not legal does not.
+    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'], [...READY_DECKS[0].items])).toEqual(['crossfire', expect.any(String), 'own']);
+    expect(offerIds(['hero_haze', 'hero_mirage', 'hero_kelvin'], ['extra_spirit'])).toEqual(['crossfire', expect.any(String), 'builds']);
+    for (const own of [undefined, [...READY_DECKS[0].items]]) {
+      const offers = deckOffers(['hero_haze', 'hero_mirage', 'hero_kelvin'], [[], [], []].map(() => ['extra_spirit']), own);
+      expect(offers).toHaveLength(DECK_OFFERS);
+      expect(offers[DECK_OFFERS - 1].name).toBe('Your deck');
+    }
   });
 
   it('says why: the drafted heroes a ready deck was made for, by name', () => {

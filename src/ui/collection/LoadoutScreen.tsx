@@ -2,9 +2,10 @@
  * Loadout — the one screen you set yourself up on: a ready deck to take as
  * your own (ReadyDecks: its 16 items in one press), or your own — the squad
  * you want the draft to hand you, your deck (DeckEditor: the items you draw
- * from, offered in every match's deck draft beside the decks that fit your
- * drafted heroes), and each hero's build (BuildEditor: what the "Hero builds"
- * deck of the deck draft is made from).
+ * from, offered in every match's deck draft as "Your deck", beside the two
+ * ready decks that fit your drafted heroes, and customizable there too), and
+ * each hero's build (BuildEditor: with no deck saved, "Your deck" starts as
+ * the deck made from your drafted heroes' builds).
  *
  * Printed in the poster idiom — cream sheet on the blurred night scene, flat
  * ink, one red — so the menu reads as the same object as the title screen and
@@ -168,7 +169,7 @@ export function LoadoutScreen({ onBack }: Props) {
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: split ? 'clamp(24px, 3vw, 36px)' : 26, minWidth: 0 }}>
             <section aria-label="Deck">
-              <SectionHead title="Deck" note="16 items, up to 4 of each" />
+              <SectionHead title="Deck" note="16 items, up to 4 of each. Your deck in every deck draft" />
               <DeckEditor key={deckEpoch} squad={squad} onChange={() => setData(loadPlayerData())} />
             </section>
             <section aria-label="Builds">
