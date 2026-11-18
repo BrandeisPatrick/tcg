@@ -19,6 +19,7 @@ import type {
   PlayerID,
   PlayerState,
   StatusId,
+  StatusInstance,
   StructureKind,
   UltimateCard,
 } from './types';
@@ -730,6 +731,41 @@ export function itemResist(card: CardInstance, type: DamageType): number {
   let n = 0;
   for (const { ability } of abilitySources(card)) n = Math.max(n, ability.resist?.(card, type) ?? 0);
   return n;
+}
+
+/** A status as the board shows it; `worn` names the item (or passive) that
+ *  gives it, for one a worn item gives rather than a status on the hero. */
+export type ShownStatus = StatusInstance & { worn?: string };
+
+/** What a worn item gives that a status also gives: shown as that status. */
+const WORN_AS_STATUS: { id: StatusId; give: (ability: AbilityDef, card: CardInstance) => number }[] = [
+  { id: 'bullet_resist', give: (a, c) => a.resist?.(c, 'attack') ?? 0 },
+  { id: 'spirit_resist', give: (a, c) => a.resist?.(c, 'spirit') ?? 0 },
+  { id: 'healing_boost', give: (a, c) => a.healingBoost?.(c) ?? 0 },
+];
+
+/** `card`'s statuses as its tile and sheet show them (Patrick, 2026-11-18: a
+ *  hero wearing Bullet Resilience shows its Bullet Resist): its own, and what
+ *  its worn items give folded in as the status it matches — Bullet / Spirit
+ *  Resilience as Bullet / Spirit Resist, Healing Booster and Tempo as Healing
+ *  Boost. The engine counts the larger of the item's and the status's
+ *  (`itemResist`, `itemHealingBoost`), so the chip shows the larger: a worn one
+ *  has no turns (duration 0) and names its item. */
+export function statusesWithWorn(card: CardInstance): ShownStatus[] {
+  const out: ShownStatus[] = card.statuses.map((s) => ({ ...s }));
+  for (const { id, give } of WORN_AS_STATUS) {
+    let value = 0;
+    let worn: string | undefined;
+    for (const { ability, equip } of abilitySources(card)) {
+      const n = give(ability, card);
+      if (n > value) { value = n; worn = CARDS_BY_ID[(equip ?? card).cardId]?.name; }
+    }
+    if (value <= 0) continue;
+    const own = out.find((s) => s.id === id);
+    if (!own) out.push({ id, value, duration: 0, worn });
+    else if (value > own.value) Object.assign(own, { value, duration: 0, worn });
+  }
+  return out;
 }
 
 /** The Healing Boost what `card` wears gives it (Healing Booster, Healing

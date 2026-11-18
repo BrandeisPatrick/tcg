@@ -6,7 +6,7 @@ import { LIFT_VAR, TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from '../
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { CARDS_BY_ID } from '@/cards';
-import { effectiveAtk, hasSpike } from '@/engine/query';
+import { effectiveAtk, hasSpike, statusesWithWorn } from '@/engine/query';
 import { HeroBadge, HeroPortrait, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { STATUSES_BY_ID } from '@/statuses';
@@ -150,8 +150,9 @@ export function HeroSlot({
   // a badge instead of a chip; when it ends the card shows the hero again.
   const form = heroForm({ ...card, statuses: shownStatuses });
   // Shield is printed in the health bar and beside the HP number, so it takes
-  // no token of its own.
-  const chipStatuses = shownStatuses.filter((s) => s.id !== 'shield' && !(form && STATUSES_BY_ID[s.id]?.form));
+  // no token of its own. What a worn item gives as a status (Bullet
+  // Resilience's Bullet Resist) wears that status's token.
+  const chipStatuses = statusesWithWorn({ ...card, statuses: shownStatuses }).filter((s) => s.id !== 'shield' && !(form && STATUSES_BY_ID[s.id]?.form));
   const isCorpse = respawnLeft > 0;
   // The hero whose skill, or whose attack, is armed and waiting for a target.
   const isArmedSource = !!pending && (pending.kind === 'useSkill' || pending.kind === 'attack') && pending.iid === card.iid;
