@@ -153,6 +153,30 @@ describe('Equipment passives', () => {
     });
   }
 
+  it('every worn flat resist shows as its chip: Plated Armor, Battle Vest, Indomitable, Witchmail', () => {
+    for (const [itemId, want] of [
+      ['plated_armor', [['bullet_resist', 3]]],
+      ['battle_vest', [['bullet_resist', 1]]],
+      ['indomitable', [['bullet_resist', 2], ['spirit_resist', 2]]],
+      ['witchmail', [['spirit_resist', 3]]],
+    ] as const) {
+      const G = freshG();
+      const t = G.players['1'].bench[0]!;
+      giveItem(G, t, itemId);
+      const shown = statusesWithWorn(t);
+      for (const [id, value] of want) expect(shown.find((s) => s.id === id), `${itemId} ${id}`).toMatchObject({ value, duration: 0 });
+    }
+  });
+
+  it('the Ricochet item shows as Ricochet 2, added to a Ricochet status as the swing counts it', () => {
+    const G = freshG();
+    const t = G.players['1'].bench[0]!;
+    giveItem(G, t, 'ricochet');
+    expect(statusesWithWorn(t).find((s) => s.id === 'ricochet')).toEqual({ id: 'ricochet', value: 2, duration: 0, worn: 'Ricochet' });
+    t.statuses.push({ id: 'ricochet', value: 1, duration: 2 });
+    expect(statusesWithWorn(t).filter((s) => s.id === 'ricochet')).toEqual([{ id: 'ricochet', value: 3, duration: 2 }]);
+  });
+
   it('Resilience takes 2 more off a hit of its type only while below half HP', () => {
     const t = { hp: 10, hpMax: 10 } as Parameters<NonNullable<typeof ABILITIES_BY_ID['eff_bullet_resist']['incoming']>>[0];
     const bullet = ABILITIES_BY_ID['eff_bullet_resist'].incoming!;

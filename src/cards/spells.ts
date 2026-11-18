@@ -40,7 +40,8 @@ export const SPELLS: SpellCard[] = [
   // reduced cost; a spell should have the benefit of costing less"): Rusted
   // Barrel, Knockdown, Disarming Hex, Majestic Leap, Cursed Relic, Mystical
   // Piano, Echo Shard, Ethereal Shift, Divine Barrier, Infuser and Unstoppable
-  // (Transcendent Cooldown too, until it went back to equipment the same day).
+  // (Transcendent Cooldown too, until it went back to equipment the same day);
+  // Warp Stone since it became a hero draw (2026-11-18).
   // The tier stays the item's (docs/card-design.md,
   // "Changed 2026-11-16: spells priced for one play"). Since prices halved the
   // same day (SOUL_POINTS 2) that price is the play's value ÷ 2, to the whole
@@ -81,7 +82,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'counterspell',    name: 'Counterspell',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_counterspell'],    text: 'One of your heroes gains Counterspell for 2 turns: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 4. It triggers once.' },
   { id: 'debuff_remover',  name: 'Dispel Magic',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_debuff_remover'],  text: 'Remove every debuff from one of your heroes, delayed ones too, and it gains Shield 4. If any was removed, heal it 4.' },
   { id: 'silence_glyph',   name: 'Silence Wave',    type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_silence_glyph'], text: 'Deal {sp:2} spirit damage to the enemy Active. The rival plays no spells on its next 2 turns.' },
-  { id: 'warp_stone',      name: 'Warp Stone',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_warp_stone'],      text: 'A bench ally swaps into your Active slot and gains Bullet Resist 4 for 3 turns.' },
+  { id: 'warp_stone',      name: 'Warp Stone',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, price: 1, abilities: ['eff_warp_stone'],      text: 'Draw a hero from your deck.' },
   // Blood Tribute's price is paid in blood as well: 3 HP off your Active.
   { id: 'blood_tribute',   name: 'Blood Tribute',   type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_blood_tribute'],   text: 'Your Active pays 3 HP (never below 1) and gains Extra Attack 1 and +3 Bullet Power this turn.' },
   { id: 'healing_nova',    name: 'Healing Nova',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, upgradesFrom: 'healing_rite', abilities: ['eff_healing_nova'], text: 'Heal all allies 5.' },
@@ -91,7 +92,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'alchemical_fire', name: 'Alchemical Fire', type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_alchemical_fire'], text: 'Deal {sp:1} spirit damage to every enemy and apply Bullet Resist −2 to them for 2 turns.' },
   { id: 'heroic_aura',     name: 'Heroic Aura',     type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_heroic_aura'],     text: 'All allies gain +2 Bullet Power and Bullet Resist 1 for 2 turns.' },
   { id: 'shadow_weave',    name: 'Shadow Weave',    type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, upgradesFrom: 'sprint_boots', abilities: ['eff_shadow_weave'], text: 'Your Active gains Dome for 1 turn and +2 Bullet Power for 2 turns.' },
-  { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, price: 1, abilities: ['eff_majestic_leap'],   text: 'Your Active retreats free; the bench ally you pick steps in.' },
+  { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, price: 2, abilities: ['eff_majestic_leap'],   text: 'Draw 2 heroes from your deck, then discard a card.' },
 
   // ----- Tier 4 -----
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, price: 1, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },

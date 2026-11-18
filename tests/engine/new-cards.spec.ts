@@ -2,8 +2,8 @@
  * The cards added and moved in the card-design pass (docs/card-design.md):
  * movement / protection / cooldown active items (spells, used with `activate`
  * as the bearer's one ability of the turn), the passive items that were
- * spells, and the two bench target filters Warp Stone and Phantom Strike aim
- * with.
+ * spells, and the bench target filter Phantom Strike aims with (Warp Stone
+ * aimed with one too until it became a hero draw, 2026-11-18, as Majestic Leap).
  *
  * Board (freshReadyGame): P0 Haze (active) · Vindicta / Lash / Paige;
  *                         P1 Abrams (active) · Dynamo / Kelvin / Seven.
@@ -17,7 +17,7 @@ import { attackTargets, blocked, playBlocked } from '@/engine/legality';
 import { itemPrice, kitCharges, targetsFor } from '@/engine/query';
 import { fireTriggers } from '@/engine/triggers';
 import { PRICE } from '@/engine/constants';
-import { freshReadyGame, giveCard, giveItem, makeHero, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeHero, stackDeck, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const ids = (cards: CardInstance[]) => cards.map((c) => c.cardId);
@@ -79,22 +79,70 @@ describe('New active items', () => {
     expect(status(paige, 'shield')?.value).toBe(7);
   });
 
-  it('Warp Stone swaps a bench ally in with Bullet Resist 4 for 3 turns', () => {
+  // Hero draws (Patrick, 2026-11-18): Warp Stone draws a hero from the deck; Majestic
+  // Leap draws two, then the player discards a card. Each takes the first hero from the
+  // top, the rest of the deck left in its order; a unit (a Ghoul) is no hero.
+  it('Warp Stone draws the first hero from the top of the deck, the rest left in order', () => {
     const G = freshReadyGame();
-    const haze = G.players['0'].active!;
-    const lash = G.players['0'].bench[1]!;
-    useItem(G, '0', 'warp_stone', lash.iid);
-    expect(G.players['0'].active!.iid).toBe(lash.iid);
-    expect(G.players['0'].bench[1]!.iid).toBe(haze.iid);
-    expect(status(lash, 'bullet_resist')).toMatchObject({ value: 4, duration: 3 });
+    const me = G.players['0'];
+    me.deck = [];
+    const [egg, ghoul, mo, kelvin] = stackDeck(G, '0', ['golden_goose_egg', 'unit_ghoul', 'hero_mo_krill', 'hero_kelvin']);
+    const hand0 = me.hand.length;
+    useItem(G, '0', 'warp_stone');
+    expect(me.hand.map((c) => c.iid)).toContain(mo.iid);
+    expect(me.hand.length).toBe(hand0 + 1);
+    expect(mo.zone).toBe('hand');
+    expect(me.deck.map((c) => c.iid)).toEqual([kelvin.iid, ghoul.iid, egg.iid]); // top is last
+    expect(G.pendingDiscard).toBeUndefined();
   });
 
-  it('Warp Stone cannot be aimed at the Active or an enemy', () => {
+  it('Warp Stone and Majestic Leap are not cast with no hero in the deck (a Ghoul is none)', () => {
+    for (const id of ['warp_stone', 'majestic_leap']) {
+      const G = freshReadyGame();
+      G.players['0'].deck = [];
+      stackDeck(G, '0', ['golden_goose_egg', 'unit_ghoul']);
+      const card = giveCard(G, '0', id);
+      G.players['0'].souls = 20;
+      expect(playBlocked(G, '0', card.iid), id).toBe('nothing');
+      expect(perform(G, '0', { type: 'playCard', cardIid: card.iid }), id).toBe(INVALID);
+      stackDeck(G, '0', ['hero_kelvin']);
+      expect(playBlocked(G, '0', card.iid), id).toBeNull();
+    }
+  });
+
+  it('Majestic Leap draws 2 heroes, then its player owes a discard of 1 of their choice', () => {
     const G = freshReadyGame();
-    const card = giveCard(G, '0', 'warp_stone');
-    G.players['0'].souls = 20;
-    expect(playBlocked(G, '0', card.iid, G.players['0'].active!.iid)).toBe('target');
-    expect(playBlocked(G, '0', card.iid, G.players['1'].bench[0]!.iid)).toBe('target');
+    const me = G.players['0'];
+    me.deck = [];
+    const [mo, egg, kelvin, seven] = stackDeck(G, '0', ['hero_mo_krill', 'golden_goose_egg', 'hero_kelvin', 'hero_seven']);
+    const keep = giveCard(G, '0', 'extra_health');
+    useItem(G, '0', 'majestic_leap');
+    expect(me.hand.map((c) => c.iid)).toEqual(expect.arrayContaining([mo.iid, kelvin.iid, keep.iid]));
+    expect(me.deck.map((c) => c.iid)).toEqual([seven.iid, egg.iid]);
+    expect(G.pendingDiscard).toMatchObject({ pid: '0', count: 1, cardId: 'majestic_leap' });
+    expect(perform(G, '0', { type: 'discard', cardIids: [keep.iid] })).not.toBe(INVALID);
+    expect(G.pendingDiscard).toBeUndefined();
+    expect(me.discard.map((c) => c.iid)).toContain(keep.iid);
+  });
+
+  it('Majestic Leap with one hero left draws that one; a hero discarded goes back into the deck', () => {
+    const G = freshReadyGame();
+    const me = G.players['0'];
+    me.deck = [];
+    const [egg, kelvin] = stackDeck(G, '0', ['golden_goose_egg', 'hero_kelvin']);
+    useItem(G, '0', 'majestic_leap');
+    expect(kelvin.zone).toBe('hand');
+    expect(me.deck.map((c) => c.iid)).toEqual([egg.iid]);
+    expect(perform(G, '0', { type: 'discard', cardIids: [kelvin.iid] })).not.toBe(INVALID);
+    expect(kelvin.zone).toBe('deck');
+    expect(me.deck.map((c) => c.iid)).toContain(kelvin.iid);
+  });
+
+  it('Warp Stone and Majestic Leap are priced for one play (1 and 2 souls, Vitality tier 3)', () => {
+    expect(CARDS_BY_ID['warp_stone']).toMatchObject({ type: 'spell', slot: 'vitality', tier: 3 });
+    expect(CARDS_BY_ID['majestic_leap']).toMatchObject({ type: 'spell', slot: 'vitality', tier: 3 });
+    expect(itemPrice('warp_stone')).toBe(1);
+    expect(itemPrice('majestic_leap')).toBe(2);
   });
 
   it('Divine Barrier cleanses every debuff but Stun and shields 7, as Guardian Ward, its component, does', () => {

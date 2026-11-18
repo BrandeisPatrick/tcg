@@ -16,7 +16,7 @@ import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
 import { boardNeighbours, expandSkillHit } from '@/engine/expansion';
 import { pushFx } from '@/engine/fx';
-import { drawCards, millDeck, nextRandom, raiseIntoDeck } from '@/engine/deck';
+import { deckHasHero, drawCards, drawHeroes, millDeck, nextRandom, oweDiscard, raiseIntoDeck } from '@/engine/deck';
 import { GHOUL, GRAVESTONE } from '@/cards/units';
 
 export type { TargetFilter };
@@ -50,7 +50,7 @@ export interface AbilityDef {
     | 'onBearerDamagedByBullet' // bearer just took bullet (attack-type) damage
     | 'onBearerDamagedBySpirit' // bearer just took spirit damage
     // bearer just took the Active slot by a move its player chose: a Retreat or
-    // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
+    // a card's swap (Rescue Beam, Traveler) — never
     // a promotion off a fallen Active, nor a drag to the front by the rival.
     | 'onBearerStepIn'
     // the bearer's skill, ultimate or spell just healed a unit (itself too):
@@ -122,6 +122,10 @@ export interface AbilityDef {
   /** If true, the hero's Spirit adds to the skill's damage/heal/effect magnitude,
    *  counted SKILL_SPIRIT_RATE times (`spi`). */
   scalesSpirit?: boolean;
+  /** A spell only: false while casting it now would do nothing (a hero draw
+   *  with no hero left in the deck: Warp Stone, Majestic Leap). `playBlocked`
+   *  refuses the cast ('nothing'), so it is never wasted. */
+  castable?: (G: GameState, pid: PlayerID) => boolean;
   /** A draw card's draw: the cards it draws and the cards it then makes its
    *  player discard from the hand (the Cooldown family). Its `run` does it;
    *  this says it, for the AI's worth of the card (ai/heuristic.ts). */
@@ -477,17 +481,16 @@ const eff_guardian_ward: AbilityDef = {
   },
 };
 
-// Warp Stone (canon T3 vitality active): a short teleport that leaves you with
-// Bullet Resist. TCG: a bench ally swaps into the Active slot, free, and steps
-// in with Bullet Resist 3 for 2 turns.
+// Warp Stone (canon T3 vitality active): a short teleport. TCG (Patrick,
+// 2026-11-18): it warps a hero to you — draw a hero from the deck, the first one
+// from the top (`drawHeroes`). Cast only while the deck holds one.
 const eff_warp_stone: AbilityDef = {
-  id: 'eff_warp_stone', trigger: 'onPlay', target: 'allyBench',
-  prompt: 'Warp Stone — swap a bench ally into the Active slot.',
-  base: 4,
-  run: (G, ctx, { target }) => {
-    if (!target) return;
-    if (swapIntoActive(G, G.players[ctx.movingPlayer], target)) addStatus(G, target, 'bullet_resist', 4, 3);
-  },
+  id: 'eff_warp_stone', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Warp Stone — draw a hero from your deck.',
+  base: 2,
+  draw: { cards: 1, discard: 0 },
+  castable: (G, pid) => deckHasHero(G.players[pid]),
+  run: (G, ctx) => { drawHeroes(G, ctx.movingPlayer, 1); },
 };
 
 // Divine Barrier (canon T4 vitality active): purges every debuff but a stun and
@@ -739,8 +742,8 @@ const eff_healing_nova: AbilityDef = {
 };
 
 // Rescue Beam (canon T3 vitality active): pulls an ally to safety and heals
-// it. TCG: Warp Stone's defensive twin — a bench ally steps into your Active
-// slot, and the Active it rescues heals 4 on the bench.
+// it. TCG: a bench ally steps into your Active slot, free, and the Active it
+// rescues heals 10 on the bench.
 const eff_rescue_beam: AbilityDef = {
   id: 'eff_rescue_beam', trigger: 'onPlay', target: 'allyBench',
   prompt: 'Rescue Beam — swap a bench ally in; the hero it rescues heals 10.',
@@ -865,13 +868,19 @@ const eff_arctic_blast: AbilityDef = {
 // ----- Added 2026-11-03: the mobility active (docs/card-design.md) -----
 
 // Majestic Leap (canon T3 vitality active): a launch into the air that lands
-// you somewhere else. TCG: Warp Stone without the resist — your Active leaps
-// back to the bench, free, and the bench ally you pick steps in.
+// you somewhere else. TCG (Patrick, 2026-11-18): two heroes leap in — draw 2
+// heroes from the deck (`drawHeroes`; one if only one is left), then discard a
+// card of your choice from the hand (`oweDiscard`; a hero discarded goes back
+// into the deck). Cast only while the deck holds a hero.
 const eff_majestic_leap: AbilityDef = {
-  id: 'eff_majestic_leap', trigger: 'onPlay', target: 'allyBench',
-  prompt: 'Majestic Leap — your Active leaps out; a bench ally steps in.',
-  run: (G, ctx, { target }) => {
-    if (target) swapIntoActive(G, G.players[ctx.movingPlayer], target);
+  id: 'eff_majestic_leap', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Majestic Leap — draw 2 heroes from your deck, then discard a card.',
+  base: 3,
+  draw: { cards: 2, discard: 1 },
+  castable: (G, pid) => deckHasHero(G.players[pid]),
+  run: (G, ctx) => {
+    drawHeroes(G, ctx.movingPlayer, 2);
+    oweDiscard(G, ctx.movingPlayer, 1, 'majestic_leap');
   },
 };
 

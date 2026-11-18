@@ -262,6 +262,16 @@ export const ULT_GAIN = { dmg: 5, heal: 0.5, ccActive: 0.35, ccBench: 0.1 } as c
 /** A free swap of the Active, beyond the soul a Retreat costs: a move the
  *  turn's one Retreat does not spend, which saves a hurt Active from the kill. */
 export const SWAP_EXTRA = 0.5;
+/** A hero drawn from the deck (Warp Stone, Majestic Leap; 2026-11-18): of a
+ *  random card's 1.4, 0.5 is a hero found a turn or two sooner, and 4 cards in
+ *  20 are heroes, so a hero for sure is 0.5 / 0.2 (docs/card-design.md). */
+export const HERO_DRAWN = 2.5;
+/** A second hero drawn by the same card: a second is left in the deck about
+ *  half the time, and the board has less room for it. */
+export const SECOND_HERO = 0.5;
+/** A card discarded from the hand: the worst of it, one the side would not
+ *  have had the souls for. */
+export const DISCARD_COST = 0.3;
 /** A turn of Root on the enemy Active: it cannot Retreat or be swapped, so a
  *  hurt one stays to be finished (a side Retreats about one turn in five). On a
  *  bench hero, a quarter of that. */
@@ -348,9 +358,8 @@ export const BUDGET: Readonly<Record<CardId, BudgetEntry>> = {
     'Dispel Magic: Shield 2 on an ally; when it carried a debuff (P_DEBUFFED), the cleanse (CLEANSE) and a heal of 3.'),
   silence_glyph: active({ dmg: 2 + SPELL_SPIRIT, ccActive: 0.5 * (1 + P_STAY) },
     'Silence Wave: 2 + Spirit spirit damage and Silence 2 turns on the enemy Active, half a turn each, the second if it is still the Active.'),
-  warp_stone: active({ souls: RETREAT_COST, other: SWAP_EXTRA },
-    "A free swap (a Retreat's soul, and SWAP_EXTRA); the hero stepping in has Bullet Resist 3 for 2 enemy turns, about 0.9 of a swing stopped.",
-    { perSwing: { heal: 0.9 * SIDE_SWINGS * (1 + P_STAY) } }),
+  warp_stone: active({ other: HERO_DRAWN },
+    'Draw a hero from the deck (HERO_DRAWN); cast only while the deck holds one.'),
   blood_tribute: active({ extra: P_FOLLOW, dmg: 2 * P_FOLLOW, heal: -3 * HEAL_AIMED },
     'Extra Attack 1 and +1 Bullet Power on both swings this turn, for 3 HP off your Active (never below 1), counted as a heal lost.'),
   healing_nova: active({ heal: 3 * (1 + LIVE_BENCH) * HEAL_TEAM },
@@ -369,8 +378,8 @@ export const BUDGET: Readonly<Record<CardId, BudgetEntry>> = {
   shadow_weave: active({ dmg: 2 * (SWINGS * P_FOLLOW + SIDE_SWINGS * P_STAY_DOMED) },
     "Dome 1 turn and +2 Bullet Power for 2 turns on your Active: the enemy's next attack stopped (DOME, in swings); +2 on this turn's swings and next turn's (P_STAY_DOMED).",
     { perSwing: { heal: SIDE_SWINGS * DOME } }),
-  majestic_leap: active({ souls: RETREAT_COST, other: SWAP_EXTRA },
-    "A free swap: the Retreat's soul, and SWAP_EXTRA."),
+  majestic_leap: active({ other: HERO_DRAWN * (1 + SECOND_HERO) - DISCARD_COST },
+    'Draw 2 heroes from the deck (the second there about half the time: SECOND_HERO), then discard a card (DISCARD_COST).'),
 
   // ----- Actives, tier 4 -----
   echo_shard: active(times(AVG_SKILL, 0.75),

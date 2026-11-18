@@ -471,8 +471,8 @@ line still dearer than the spell it is built from (card-design.md, "Changed
 
 **What stays.**
 - **Retreat**: 0, 1 or 2 souls by hero, Patrick's call for now. Sprint Boots
-  (now 1), Swift Striker (2), Enduring Speed (2), Majestic Leap (1) and Swift
-  take it down, and with items cheap a deck that wants free Retreats has them
+  (now 1), Swift Striker (2), Enduring Speed (2) and Swift take it down (Majestic
+  Leap did, as a free swap, until it became a hero draw on 2026-11-18), and with items cheap a deck that wants free Retreats has them
   early.
 - The lane's 2 and the kill bounty; units' printed prices.
 

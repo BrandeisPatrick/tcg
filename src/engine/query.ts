@@ -737,32 +737,41 @@ export function itemResist(card: CardInstance, type: DamageType): number {
  *  gives it, for one a worn item gives rather than a status on the hero. */
 export type ShownStatus = StatusInstance & { worn?: string };
 
-/** What a worn item gives that a status also gives: shown as that status. */
-const WORN_AS_STATUS: { id: StatusId; give: (ability: AbilityDef, card: CardInstance) => number }[] = [
+/** What a worn item gives that a status also gives: shown as that status.
+ *  `adds`: the engine adds the item's to the status's (Ricochet,
+ *  `ricochetPower`); else it takes the larger (`itemResist`, `itemHealingBoost`). */
+const WORN_AS_STATUS: { id: StatusId; adds?: true; give: (ability: AbilityDef, card: CardInstance) => number }[] = [
   { id: 'bullet_resist', give: (a, c) => a.resist?.(c, 'attack') ?? 0 },
   { id: 'spirit_resist', give: (a, c) => a.resist?.(c, 'spirit') ?? 0 },
   { id: 'healing_boost', give: (a, c) => a.healingBoost?.(c) ?? 0 },
+  { id: 'ricochet', adds: true, give: (a, c) => a.ricochet?.(c) ?? 0 },
 ];
 
 /** `card`'s statuses as its tile and sheet show them (Patrick, 2026-11-18: a
- *  hero wearing Bullet Resilience shows its Bullet Resist): its own, and what
- *  its worn items give folded in as the status it matches — Bullet / Spirit
- *  Resilience as Bullet / Spirit Resist, Healing Booster and Tempo as Healing
- *  Boost. The engine counts the larger of the item's and the status's
- *  (`itemResist`, `itemHealingBoost`), so the chip shows the larger: a worn one
- *  has no turns (duration 0) and names its item. */
+ *  hero wearing Bullet Resilience shows its Bullet Resist, and every card like
+ *  it): its own, and what its worn items and passives give folded in as the
+ *  status it matches — a flat resist (Bullet / Spirit Resilience, Battle Vest,
+ *  Plated Armor, Witchmail, Indomitable…) as Bullet / Spirit Resist, Healing
+ *  Booster and Tempo as Healing Boost, the Ricochet item as Ricochet. The chip
+ *  shows what the engine counts: the larger of item and status, or for
+ *  Ricochet their sum. One shown from what is worn has no turns (duration 0)
+ *  and names its item, or its passive. */
 export function statusesWithWorn(card: CardInstance): ShownStatus[] {
   const out: ShownStatus[] = card.statuses.map((s) => ({ ...s }));
-  for (const { id, give } of WORN_AS_STATUS) {
+  for (const { id, adds, give } of WORN_AS_STATUS) {
     let value = 0;
     let worn: string | undefined;
     for (const { ability, equip } of abilitySources(card)) {
       const n = give(ability, card);
-      if (n > value) { value = n; worn = CARDS_BY_ID[(equip ?? card).cardId]?.name; }
+      if (n <= 0) continue;
+      const from = equip ? CARDS_BY_ID[equip.cardId]?.name : (ability as { name?: string }).name;
+      if (adds) { value += n; worn = worn ? `${worn} and ${from}` : from; }
+      else if (n > value) { value = n; worn = from; }
     }
     if (value <= 0) continue;
     const own = out.find((s) => s.id === id);
     if (!own) out.push({ id, value, duration: 0, worn });
+    else if (adds) own.value += value;
     else if (value > own.value) Object.assign(own, { value, duration: 0, worn });
   }
   return out;

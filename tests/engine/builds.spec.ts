@@ -34,7 +34,7 @@ describe('items', () => {
     // spell's, and always under the tier's — but for Metal Skin, which prints 6 over its tier's 4
     // (Patrick, 2026-11-18: "metal skin is too cheap now"). Prices halved on 2026-11-16 (Rusted
     // Barrel's 1 is its tier's now, so it prints none).
-    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['disarming_hex', 2], ['knockdown', 2], ['metal_skin', 6], ['majestic_leap', 1], ['echo_shard', 1], ['unstoppable', 2], ['curse', 3], ['divine_barrier', 3], ['ethereal_shift', 2], ['vortex_web', 3], ['infuser', 4], ['magic_carpet', 3], ['mystical_piano', 5]]); // Transcendent Cooldown printed 11 until it went back to equipment, 2026-11-16
+    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['disarming_hex', 2], ['knockdown', 2], ['metal_skin', 6], ['warp_stone', 1], ['majestic_leap', 2], ['echo_shard', 1], ['unstoppable', 2], ['curse', 3], ['divine_barrier', 3], ['ethereal_shift', 2], ['vortex_web', 3], ['infuser', 4], ['magic_carpet', 3], ['mystical_piano', 5]]); // Transcendent Cooldown printed 11 until it went back to equipment, 2026-11-16
     for (const item of ITEMS) if (item.price !== undefined) expect(item.type, item.id).toBe('spell');
     const OVER = ['metal_skin']; // Patrick's own exception, docs/card-design.md §2
     for (const item of ITEMS) if (item.price !== undefined && !OVER.includes(item.id)) expect(item.price, item.id).toBeLessThan(PRICE[item.tier]);

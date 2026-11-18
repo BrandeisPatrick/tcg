@@ -675,7 +675,8 @@ export function spellTargetsOracle(G: GameState, pid: PlayerID, cardId: unknown)
  *  bench).
  *
  *  A spell (docs/card-design.md §1, 2026-11-15): no hero of the side stands to
- *  cast it; `heroIid` is no target its card allows (a spell that takes none
+ *  cast it; a hero draw (Warp Stone, Majestic Leap, 2026-11-18) with no hero
+ *  card (a unit is none) left in the deck; `heroIid` is no target its card allows (a spell that takes none
  *  ignores it); a `replaceIid` (a spell replaces nothing); `souls` fall short
  *  of its price.
  *
@@ -686,6 +687,9 @@ export function spellTargetsOracle(G: GameState, pid: PlayerID, cardId: unknown)
  *  hero, or the card evolves an item it wears) or naming no item the hero
  *  wears (a merged Rem is none); `souls` (the player's, unless given) fall
  *  short of the cost. */
+/** The spells that draw heroes from the deck: cast only while it holds one. */
+const HERO_DRAWS = new Set(['warp_stone', 'majestic_leap']);
+
 export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, heroIid: unknown, souls = G.players[pid].souls, replaceIid?: unknown): string | null {
   const owed = owedOracle(G, 'playCard');
   if (owed) return owed;
@@ -698,6 +702,7 @@ export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown,
     // Silence Wave (2026-11-16): a side whose spell lock is running plays no spells.
     if ((G.players[pid].spellLock ?? 0) > 0) return 'spell-lock';
     if (!spellCasterOracle(G, pid)) return 'no-caster';
+    if (HERO_DRAWS.has(card.cardId) && !G.players[pid].deck.some((c) => isHeroCard(c) && !isUnitCard(c))) return 'no-hero-in-deck';
     const targets = spellTargetsOracle(G, pid, card.cardId);
     if (targets !== 'none' && !targets.some((t) => t.iid === heroIid)) return heroIid === undefined ? 'missing-target' : 'bad-target';
     if (replaceIid !== undefined) return 'replace-spell';

@@ -14,9 +14,10 @@ import { itemPrice } from '@/engine/query';
 import { PRICE } from '@/engine/constants';
 
 const PRINTED: Record<string, number> = {
-  knockdown: 2, disarming_hex: 2, majestic_leap: 1, curse: 3, mystical_piano: 5,
+  knockdown: 2, disarming_hex: 2, majestic_leap: 2, warp_stone: 1, curse: 3, mystical_piano: 5,
   echo_shard: 1, ethereal_shift: 2, divine_barrier: 3, infuser: 4, unstoppable: 2, vortex_web: 3, magic_carpet: 3,
-  // infuser 3 until its heal became lifesteal (2026-11-16); vortex_web and magic_carpet since 2026-11-16.
+  // infuser 3 until its heal became lifesteal (2026-11-16); vortex_web and magic_carpet since 2026-11-16;
+  // majestic_leap 1 and warp_stone its tier's 4 until both became hero draws (2026-11-18).
   // Before prices halved: knockdown 4, disarming_hex 3, majestic_leap 2, curse 6, mystical_piano 10,
   // echo_shard 3, ethereal_shift 3, divine_barrier 5, infuser 5, unstoppable 3. Rusted Barrel's
   // own 1 is its tier's price now, so it prints none.

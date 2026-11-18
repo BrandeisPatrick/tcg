@@ -42,7 +42,7 @@ A Deadlock player should recognise every card on sight.
 - **Canon name.** Use the item's current in-game name. No invented items, and
   no items the game has removed or renamed.
 - **Canon verb.** The effect translates what the item *does* in Deadlock, scaled
-  to the board: Cold Front blasts, Warp Stone teleports, Knockdown stuns, Healbane
+  to the board: Cold Front blasts, Knockdown stuns, Healbane
   cuts healing. Pick the item whose verb fits the effect, never the reverse.
 - **Canon slot.** The item's shop slot sets its lean: **Weapon** items work through
   attacks and Bullet Power, **Spirit** items through skills and spirit damage,
@@ -888,6 +888,46 @@ soul, a spell line still dearer than the spell it is built from:
 The ready decks' recipe halves with it: 16 items at most 28 souls, at most two
 over 2 (tier 3 and up at its tier's price), none over 8
 ([deck-plan.md](./deck-plan.md)).
+
+### Changed 2026-11-18: Warp Stone and Majestic Leap draw heroes
+
+Patrick: "Majestic Leap: draw two heroes and discard 1 card from hand. Warp
+Stone: draw a hero from deck." Both are Vitality T3 actives in Deadlock, so both
+stay spells of tier 3. The verbs now bring a hero to you: Warp Stone warps one
+into your hand, and with Majestic Leap two leap in. Both were swaps before
+(Warp Stone with Bullet Resist 4); Rescue Beam is the swap card now.
+
+- **A hero drawn is worth 2.5.** A random card is worth 1.4 ("The Cooldown
+  family" above). 0.5 of that is a hero found a turn or two sooner, and 4 of a
+  deck's 20 cards are heroes, so a hero for sure is 0.5 ÷ 0.2 = 2.5. Since a
+  fallen hero shuffles back into its deck (2026-11-18), it is also how a side
+  has one back at once.
+- **A second hero is worth half that, 1.25.** After the opening about two
+  heroes are left in the deck, fewer once the board fills, and a hand that
+  holds two waits for room for the second.
+- **A discard costs 0.3**, as before: the worst card of the hand. A hero
+  discarded goes back into the deck, never lost.
+
+| Card | Tab · tier | Text | One play (points) | Price |
+|---|---|---|---|---|
+| Warp Stone | Vitality T3 | Draw a hero from your deck. | 2.5 | **1** (2.5 ÷ 2 = 1.25) |
+| Majestic Leap | Vitality T3 | Draw 2 heroes from your deck, then discard a card. | 2.5 + 1.25 − 0.3 = 3.45 | **2** (1.7) |
+
+Both are far under half the tier's budget (8 of 16 points), so each prints a
+price of its own: its one play ÷ 2, to the whole soul (§2). Majestic Leap
+costs more than Warp Stone, as its extra hero is worth more than its discard
+costs.
+
+- **Rules.**
+  - Each takes the first hero from the top of the deck (a unit, a Ghoul, is
+    none) and leaves the rest of the deck in its order (`drawHeroes`).
+  - A full hand skips the draw, as any draw does.
+  - Majestic Leap draws one hero when only one is left. Its discard is the
+    player's choice (the discard step, `oweDiscard`).
+  - Neither is cast while the deck holds no hero. This uses `castable`, a new
+    spell hook, and the play block 'nothing' ("no hero is left in your deck").
+- **Left for testing:** whether a hero for 1 soul makes a deck with few items
+  too consistent.
 
 ### Changed 2026-11-18: Metal Skin costs 6
 

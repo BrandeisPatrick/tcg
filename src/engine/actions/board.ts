@@ -113,7 +113,7 @@ function swapWithActive(
 
 /**
  * A bench hero of `ps` steps into the Active slot, free: the Active takes the
- * slot it leaves (Warp Stone, Rescue Beam, Majestic Leap, Mirage's Traveler).
+ * slot it leaves (Rescue Beam, Mirage's Traveler).
  * `leaveActive` runs for the hero who steps out, the hero who steps in sets off
  * its `onBearerStepIn` gear (Kinetic Dash), and the log says "X steps in for
  * Y." — pass `quiet` when the card's own line already tells it. The swap is
