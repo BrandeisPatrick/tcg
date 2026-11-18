@@ -129,7 +129,7 @@ describe('hero leveling triggers', () => {
     expect(hero.exp).toBe(2);
   });
 
-  it('death PRESERVES level + exp (rank persists through respawn)', () => {
+  it('death PRESERVES level + exp (the hero goes into its deck at its rank)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     grantExp(G, target, 7); // Lv2 (cost 5), 2 exp
@@ -139,7 +139,7 @@ describe('hero leveling triggers', () => {
     const hero = G.players['0'].active!;
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
     reapDead(G, G.players['1']);
-    expect(target.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(target.zone).toBe('deck');
     expect(target.level).toBe(2); // level persists
     expect(target.exp).toBe(2);   // exp persists
   });
@@ -151,8 +151,8 @@ describe('LEVEL_THRESHOLDS exposed correctly', () => {
   });
 });
 
-describe('equipment persists through death', () => {
-  it('attached equipment stays on the bearer when they die and respawn', () => {
+describe('equipment goes into the deck with its fallen bearer', () => {
+  it('each worn item is shuffled in beside the hero as its own card, its bonus gone with it', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     // Put the item on directly: its +1 Bullet Power goes onto the bearer.
@@ -162,13 +162,12 @@ describe('equipment persists through death', () => {
     const hero = G.players['0'].active!;
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
     reapDead(G, G.players['1']);
-    expect(target.respawnTurnsLeft).toBeGreaterThan(0);
-    // Equipment is still on the bearer: nothing left the board with the fall.
-    expect(target.attached?.length).toBe(1);
-    expect(target.attached?.[0].cardId).toBe('extended_magazine');
-    expect(findWornItem(G, eq.iid, '1')?.bearer).toBe(target);
-    // atkMod persists since the equipment is still there.
-    expect(target.atkMod).toBe(1);
+    expect(target.zone).toBe('deck');
+    // Nothing is worn any more: the item is a card in the deck again.
+    expect(target.attached ?? []).toEqual([]);
+    expect(findWornItem(G, eq.iid, '1')).toBeNull();
+    expect(G.players['1'].deck.find((c) => c.iid === eq.iid)?.zone).toBe('deck');
+    expect(target.atkMod ?? 0).toBe(0);
   });
 });
 

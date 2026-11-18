@@ -350,10 +350,9 @@ describe('heal cannot revive a dead-but-unreaped unit', () => {
     ABILITIES_BY_ID['passive_abrams_heal'].run(G, { movingPlayer: '0' }, { source: abrams });
     expect(abrams.hp).toBe(0);              // refused: death is not undone
 
-    // The death now stands and the sweep puts the hero on the respawn timer.
+    // The death now stands and the sweep shuffles the hero into its deck.
     reapDead(G, G.players['0']);
-    expect(abrams.hp).toBe(0);
-    expect(abrams.respawnTurnsLeft ?? 0).toBeGreaterThan(0);
+    expect(abrams.zone).toBe('deck');
   });
 });
 

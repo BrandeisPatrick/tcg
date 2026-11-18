@@ -23,12 +23,12 @@ import { resolve } from '@/engine/death';
 import { addStatus } from '@/engine/statusOps';
 import { pushStructures, riseBoss } from '@/engine/map';
 import {
-  bossDue, checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
+  bossDue, checkWinner, findCardOnBoard, isRespawning, killPush, slotCap, standingVerdict, structureHp, structureOf,
   targetsFor,
 } from '@/engine/query';
 import { MATCH_TURNS, killBounty, round } from '@/engine/rounds';
 import {
-  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SPAWN_ROUND, MAX_ITEMS, MID_BOSS_ENABLED, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP,
+  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SPAWN_ROUND, MAX_ITEMS, MID_BOSS_ENABLED, REVIVE_CREDITS, ROUND_CAP,
 } from '@/engine/constants';
 import { DeadlockGame } from '@/engine/game';
 import { seededRandom } from '@/engine/rng';
@@ -147,17 +147,8 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
   });
 });
 
-describe('the wait before a fallen hero goes back to the hand', () => {
-  it('RESPAWN_TURNS (2) own turns, in every round, whatever the hero wears', () => {
-    expect(RESPAWN_TURNS).toBe(2);
-    for (const t of [1, 7, 10, 18, 30]) expect(respawnTimer(at(t), at(t).players['1'].active!), `turn ${t}`).toBe(RESPAWN_TURNS);
-    const G = at(10); // round 5
-    const rival = G.players['1'].active!;
-    giveItem(G, rival, 'extra_spirit');
-    expect(respawnTimer(G, rival)).toBe(RESPAWN_TURNS);
-  });
-
-  it('a fall arms it; when it runs out the hero is in its owner\'s hand at full HP, its level and items kept, its slot empty', () => {
+describe('a fallen hero is shuffled into its deck', () => {
+  it('at once, in any round: full HP, its level kept, what it wore shuffled in beside it, its slot empty', () => {
     const G = at(10);
     const p1 = G.players['1'];
     const rival = p1.active!;
@@ -165,24 +156,15 @@ describe('the wait before a fallen hero goes back to the hand', () => {
     const worn = giveItem(G, rival, 'extra_spirit');
     rival.hp = 1;
     perform(G, '0', { type: 'attack' });
-    expect(rival.respawnTurnsLeft).toBe(RESPAWN_TURNS);
-    // The AI seat promoted a bench hero; the corpse waits on the bench.
+    // The AI seat promoted a bench hero; the fallen one is on no slot.
     expect(p1.active).not.toBe(rival);
-    const slot = p1.bench.indexOf(rival);
-    expect(slot).toBeGreaterThanOrEqual(0);
-    endTurnEffects(G, '0');
-    beginTurn(G, '1', 11);
-    expect(rival.respawnTurnsLeft).toBe(1);
-    endTurnEffects(G, '1');
-    beginTurn(G, '0', 12);
-    endTurnEffects(G, '0');
-    beginTurn(G, '1', 13);
-    expect(p1.bench[slot]).toBeNull();
-    expect(p1.hand).toContain(rival);
-    expect(rival).toMatchObject({ zone: 'hand', hp: rival.hpMax, level: 3 });
+    expect(p1.bench).not.toContain(rival);
+    expect(p1.deck).toContain(rival);
+    expect(p1.deck).toContain(worn);
+    expect(rival).toMatchObject({ zone: 'deck', hp: rival.hpMax, level: 3 });
+    expect(rival.attached ?? []).toEqual([]);
     expect(rival.respawnTurnsLeft).toBeUndefined();
-    expect(rival.attached).toContain(worn);
-    expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toHand' && e.iid === rival.iid)).toBe(true);
+    expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toDeck' && e.iid === rival.iid)).toBe(true);
   });
 });
 

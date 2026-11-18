@@ -3,8 +3,7 @@ import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, PlayerID } from '@/engine/types';
 import { INVALID, perform } from '@/engine/engine';
 import { playBlocked } from '@/engine/legality';
-import { isRespawning, itemResist, slotCap, wornItems } from '@/engine/query';
-import { beginTurn } from '@/engine/actions/turn';
+import { itemResist, slotCap, wornItems } from '@/engine/query';
 import { resolve } from '@/engine/death';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
@@ -107,13 +106,13 @@ describe('Active items — tier 3 control and resist', () => {
 
 describe('Equipment passives', () => {
   // Resist 2 read off the item (the `resist` hook), not a status: a hit of its
-  // type deals 2 less while it is worn, and a death, which wipes the statuses,
-  // takes nothing away.
+  // type deals 2 less while it is worn. A fall shuffles the card into the
+  // deck beside its bearer (2026-11-18).
   for (const [itemId, name, type, other, status] of [
     ['bullet_resilience', 'Bullet', 'attack', 'spirit', 'bullet_resist'],
     ['spirit_resilience', 'Spirit', 'spirit', 'attack', 'spirit_resist'],
   ] as const) {
-    it(`${name} Resilience: a ${name.toLowerCase()} hit deals 2 less while worn — no status, and still after a death`, () => {
+    it(`${name} Resilience: a ${name.toLowerCase()} hit deals 2 less while worn — no status; a fall takes the card into the deck with its bearer`, () => {
       const G = freshG();
       const t = G.players['1'].bench[0]!;
       t.hpMax = 30; t.hp = 30; // above half HP: the resist alone
@@ -124,13 +123,12 @@ describe('Equipment passives', () => {
       expect(t.hp).toBe(27);
       damageUnit(G, t, 5, other); // the other type passes in full
       expect(t.hp).toBe(22);
+      const worn = wornItems(t).find((c) => c.cardId === itemId)!;
       damageUnit(G, t, 99, 'pure');
       resolve(G);
-      expect(isRespawning(t)).toBe(true);
-      for (let turn = 3; isRespawning(t) && turn < 20; turn += 2) beginTurn(G, '1', turn);
-      expect(t.hp).toBe(30);
-      damageUnit(G, t, 5, type);
-      expect(t.hp).toBe(27);
+      expect(t.zone).toBe('deck');
+      expect(itemResist(t, type)).toBe(0);
+      expect(G.players['1'].deck).toContain(worn);
     });
   }
 

@@ -16,7 +16,8 @@ import {
   attackPower, effectiveSpirit, hasSpike, heroWorth, netWorth, standingVerdict, tabCounts,
 } from '@/engine/query';
 import { detachItem, syncVitalitySpike } from '@/engine/instances';
-import { beginTurn } from '@/engine/actions/turn';
+import { damageUnit } from '@/engine/damage';
+import { resolve } from '@/engine/death';
 import { CATEGORY_SPIKE_ITEMS, PRICE } from '@/engine/constants';
 import { freshReadyGame, giveCard, giveItem, playNew } from './_helpers';
 
@@ -87,16 +88,15 @@ describe('the category spike', () => {
     expect([haze.hpMax, haze.hp]).toEqual([max, 2]);
   });
 
-  it('a corpse keeps 0 HP as the spike comes and goes, and goes back to the hand at the new max', () => {
+  it('a fallen hero\'s items go into the deck with it: the spike goes too, and it waits there at its own max', () => {
     const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
-    vindicta.hp = 0;
-    vindicta.respawnTurnsLeft = 1;
     const max = vindicta.hpMax;
     wear(G, vindicta, VITALITY);
-    expect([vindicta.hpMax, vindicta.hp]).toEqual([max + 1, 0]);
-    beginTurn(G, '0', G.turnNumber + 2);                          // its owner's next turn: the timer runs out
-    expect([vindicta.respawnTurnsLeft, vindicta.hp, vindicta.zone]).toEqual([undefined, max + 1, 'hand']);
+    expect(vindicta.hpMax).toBe(max + 1);
+    damageUnit(G, vindicta, 999, 'pure');
+    resolve(G);
+    expect([vindicta.zone, vindicta.hpMax, vindicta.hp]).toEqual(['deck', max, max]);
   });
 
   it('the spike follows the hand: playing the third item brings it, and an evolve that keeps the tab keeps it', () => {

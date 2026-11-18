@@ -6,8 +6,8 @@ import { levelGreen, poster } from './poster';
  *  yet aimed/committed. */
 export interface PendingPlay {
   /** What is armed: an item in the hand (equipment, to be put on one of your
-   *  heroes; a spell, to be played on its target or — one that takes none —
-   *  by a second tap on the card), a hero in the hand picked up (to be put in
+   *  heroes; a spell, to be played on its target — one that takes none is
+   *  never armed: the tap plays it), a hero in the hand picked up (to be put in
    *  a free slot of your board), a hero's skill (or ultimate), or the
    *  Active's basic attack (when it may name who it shoots: the hero has
    *  reach). */

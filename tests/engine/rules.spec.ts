@@ -7,7 +7,7 @@ import { findCardOnBoard, findWornItem, heroData, heroesOf, itemPrice, kitAbilit
 import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, giveCard, makeAttack, readyClient, passTurn, playNew } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeAttack, readyClient, passTurn, playNew } from './_helpers';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 // Client-based tests boot straight into a playable match (skip the draft).
@@ -117,38 +117,31 @@ describe('rule: a skill costs no souls; it waits', () => {
 });
 
 describe('rule: hero respawn after KO', () => {
-  it("a KO'd hero stays on the board as a corpse (it never leaves the board)", () => {
+  it("a KO'd hero leaves the board for its deck: its slot empty, full HP, its level kept", () => {
     const G = freshG();
-    // Use P0 so we don't trigger AI auto-promote (which moves the corpse to
-    // the bench). The "corpse stays on board" rule is what's under test here.
+    // P0, so no AI promotion fills the slot: the empty lane is what is under test.
     const hero = G.players['0'].active!;
-    const targetIid = hero.iid;
+    hero.level = 2;
+    const iid = hero.iid;
     damageUnit(G, hero, 9999, 'pure');
     reapDead(G, G.players['0']);
-    expect(findCardOnBoard(G, targetIid)).toEqual({ owner: '0', card: hero });
-    expect(G.players['0'].active?.iid).toBe(targetIid);
-    expect((G.players['0'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+    expect(findCardOnBoard(G, iid)).toBeNull();
+    expect(G.players['0'].active).toBeNull();
+    const inDeck = G.players['0'].deck.find((c) => c.iid === iid)!;
+    expect(inDeck).toBeDefined();
+    expect([inDeck.zone, inDeck.hp, inDeck.level, inDeck.respawnTurnsLeft]).toEqual(['deck', inDeck.hpMax, 2, undefined]);
+    expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toDeck' && e.iid === iid)).toBe(true);
   });
 
-  it('respawning hero returns to life when its timer runs out', () => {
+  it('what the fallen hero wore is shuffled in beside it, each its own card again', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
+    const worn = giveItem(G, hero, 'extra_health');
     damageUnit(G, hero, 9999, 'pure');
     reapDead(G, G.players['0']);
-    const corpse = G.players['0'].active!;
-    const start = corpse.respawnTurnsLeft ?? 0;
-    expect(start).toBeGreaterThan(0);
-    // Simulate tickRespawn: decrement until 0 and verify restoration.
-    while ((corpse.respawnTurnsLeft ?? 0) > 0) {
-      corpse.respawnTurnsLeft = (corpse.respawnTurnsLeft ?? 0) - 1;
-    }
-    if ((corpse.respawnTurnsLeft ?? 0) <= 0) {
-      corpse.respawnTurnsLeft = undefined;
-      corpse.hp = corpse.hpMax;
-      corpse.exhausted = false;
-    }
-    expect(corpse.hp).toBe(corpse.hpMax);
-    expect(corpse.respawnTurnsLeft).toBeUndefined();
+    const deck = G.players['0'].deck;
+    expect(deck.find((c) => c.iid === hero.iid)?.attached ?? []).toEqual([]);
+    expect(deck.find((c) => c.iid === worn.iid)?.zone).toBe('deck');
   });
 
   it("hero KO pushes the fallen hero's level + 1 into its structures (overflow discarded)", () => {
@@ -175,37 +168,33 @@ describe('rule: hero respawn after KO', () => {
 
     damageUnit(G, aiActive, 9999, 'pure');
     // Auto-promotion is part of the `resolve` state-based pass (not `reapDead`,
-    // which now only reaps); resolve reaps both players then auto-promotes the AI.
+    // which only reaps); resolve reaps both players then auto-promotes the AI.
     resolve(G);
 
-    // Active slot now holds the promoted hero, not the corpse.
+    // The Active slot holds the promoted hero; the fallen one is in the deck, not on the bench.
     expect(G.players['1'].active?.iid).toBe(expectedPromoted.iid);
-    expect((G.players['1'].active?.respawnTurnsLeft ?? 0)).toBe(0);
-    // The corpse moved to a bench slot and kept its respawn countdown.
-    const corpseOnBench = G.players['1'].bench.find((b) => b?.iid === aiActiveIid);
-    expect(corpseOnBench).toBeDefined();
-    expect((corpseOnBench!.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+    expect(G.players['1'].bench.some((b) => b?.iid === aiActiveIid)).toBe(false);
+    expect(G.players['1'].deck.some((c) => c.iid === aiActiveIid)).toBe(true);
   });
 
-  it("AI's Active stays a corpse when no bench hero can be promoted", () => {
+  it("AI's Active slot stays empty when no bench hero can be promoted", () => {
     const G = freshG();
     // Empty AI bench so no candidates remain.
     G.players['1'].bench = [null, null, null];
     const aiActive = G.players['1'].active!;
     damageUnit(G, aiActive, 9999, 'pure');
-    reapDead(G, G.players['1']);
-    // No swap — corpse stays in slot.
-    expect(G.players['1'].active?.iid).toBe(aiActive.iid);
-    expect((G.players['1'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+    resolve(G);
+    expect(G.players['1'].active).toBeNull();
+    expect(G.players['1'].deck.some((c) => c.iid === aiActive.iid)).toBe(true);
   });
 
   it("promoteToActive works during the OPPONENT's turn (cross-turn callable)", () => {
     const G = freshG();
-    // Kill P0's active so they're a corpse and need to promote.
+    // Kill P0's active: its slot is empty and a bench hero must step up.
     const p0Active = G.players['0'].active!;
     damageUnit(G, p0Active, 9999, 'pure');
     reapDead(G, G.players['0']);
-    expect((G.players['0'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+    expect(G.players['0'].active).toBeNull();
     const benchPick = G.players['0'].bench.find((b) => b)!;
     // Dispatch the promote move with playerID='1' (opponent's turn). It must
     // still act on P0's board — the owning player is derived from the iid.

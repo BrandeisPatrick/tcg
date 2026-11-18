@@ -19,7 +19,11 @@
  *             the rival's stays face down); the deck's count ticks as it leaves
  *   discard   a card flies from the hand (or off the hero that wore it) to
  *             the discard pile, face up; the pile's count ticks as it lands
- *   toHand    a fallen hero flies from its slot back to the hand
+ *   toHand    a hero lifted off the board (Lash's Death Slam) flies from its
+ *             slot back to the hand
+ *   toDeck    a fallen hero, once its knockout has played (`leaveAt`), leaves
+ *             its slot as a card back and flies into the deck, which riffles;
+ *             the items it wore ('raise') tick onto the deck after it
  *   rideOn    a hero riding on an ally (Rem's Tag Along) flies from its slot
  *             onto the bearer, shrinking into the chip it becomes among its
  *             items; the chip stays out of sight until it lands
@@ -156,6 +160,9 @@ export interface PlanInput {
   before: GameState | null | undefined;
   /** The game now — the heroes of the opening are read off it. */
   after: GameState;
+  /** ms after the batch that a fallen hero (by iid) leaves its slot for the
+   *  deck: once its knockout has played (board/fallenHold.ts). */
+  leaveAt?: Record<string, number>;
 }
 
 /** True when `batch` is the match's opening: the shuffle that follows the
@@ -296,6 +303,22 @@ export function planDeckMotion(batch: readonly FxEvent[], input: PlanInput): Dec
         });
         c.next = at + T.stagger;
         c.end = Math.max(c.end, at + T.flight);
+        break;
+      }
+      case 'toDeck': {
+        // Its knockout first; then a card back from where it stood into the
+        // deck, which riffles as it lands. What it wore follows ('raise').
+        const at = Math.max(c.next, input.leaveAt?.[ev.iid ?? ''] ?? 0);
+        flights.push({
+          key: `${ev.seq}`, what: 'toDeck', pid, cardId: ev.cardId, iid: ev.iid,
+          at, hold: 0, dur: T.flight,
+          from: { kind: 'slot', iid: ev.iid! }, to: deck,
+          faces: { start: 'back', end: 'back' },
+        });
+        ticks.push({ pile: 'deck', pid, at: at + T.flight, delta: 1 });
+        riffles.push({ pid, at: at + T.flight, dur: T.riffle });
+        c.next = at + T.flight;
+        c.end = Math.max(c.end, at + T.flight + T.riffle);
         break;
       }
       case 'rideOn':

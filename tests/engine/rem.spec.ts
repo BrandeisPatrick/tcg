@@ -297,17 +297,13 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     expect(lash.attached).toContain(rem);
     expect(rem.remMergeTurnsLeft).toBe(1);
     expect(G.log.some((l) => l.text === 'Rem has no free bench slot and rides on one more turn.')).toBe(true);
-    // A slot frees up: Vindicta falls, and her corpse goes back to the hand at her side's
-    // next turn start — after the ride is counted, so Rem rides that turn too, and is back
-    // on the bench the turn after.
+    // A slot frees up: Vindicta falls and is shuffled into the deck at once, so when
+    // the ride runs out at her side's next turn start Rem is back on the bench.
     const vindicta = me.bench[0]!;
     damageUnit(G, vindicta, 999, 'pure');
     resolve(G);
-    vindicta.respawnTurnsLeft = 1;
-    nextTurn(G, '0');
-    nextTurn(G, '1');
-    expect(me.hand).toContain(vindicta);
     expect(me.bench[0]).toBeNull();
+    expect(me.deck).toContain(vindicta);
     expect(lash.attached).toContain(rem);
     nextTurn(G, '0');
     nextTurn(G, '1');
@@ -322,12 +318,12 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     tagAlong(G, rem, haze);
     damageUnit(G, haze, 999, 'pure');
     resolve(G);
-    expect(haze.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(haze.zone).toBe('deck');
     expect(haze.attached ?? []).not.toContain(rem);
     expect(me.bench[1]).toBe(rem);
     expect(rem).toMatchObject({ zone: 'bench', slot: 2, remMergeTurnsLeft: undefined });
     expect(rem.hp).toBe(rem.hpMax);
-    // The lane is the corpse's: a promotion is owed, and Rem may take it.
+    // The lane is empty: a promotion is owed, and Rem may take it.
     expect(G.pendingPromotion).toBe('0');
     expect(stepInCandidates(me)).toContain(rem);
   });

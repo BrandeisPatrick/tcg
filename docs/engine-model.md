@@ -33,7 +33,7 @@ lock a skill. The engine fixes that by construction:
 
 | Module | Holds |
 |---|---|
-| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the kit's waits (`SKILL_COOLDOWN`, the ultimates' `ULT_WAIT` by size), levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss (`MID_BOSS_ENABLED`, off for now), the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
+| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the kit's waits (`SKILL_COOLDOWN`, the ultimates' `ULT_WAIT` by size), levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss (`MID_BOSS_ENABLED`, off for now), the Rejuvenator, `ROUND_CAP`) |
 | `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
 | `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skill, its ultimate; which one an action names), `kitCost` (what one costs in souls: a skill's `souls`, an ultimate's `ULT_COST` by its card's size — a charged one its own price less the hero's count, `ultPrice` / `chargedUlt`), the optional triggers (`optionalTriggers`, `triggerPrice`, `promptOwed`, `fallPending`), `abilityAim` (what one is aimed at: its `target`, or its `aim` read off the board), `heroRetreat` (a hero's printed Retreat), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `bossDue` (the round the board counts down to; null with no Mid-Boss), `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
 | `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), the hand (`playBlocked`, `replaceNeeded`, `playBlockedAny`, `playCost`, `playTargets`, `playNeedsTarget`, `spellCaster` / `spellTargets` (who casts a spell and on whom), `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions`, and the trigger prompt's (`triggerBlocked`: level, wait, souls; `answerBlocked`) |
@@ -215,10 +215,10 @@ rounds, so 1 in rounds 1–2 and 10 in rounds 19–20 since the cap went to 20; 
 the blow, a kill the Rejuvenator undoes included; a fall to the Mid-Boss pays
 nothing). It pushes the victim's level + 1 into the victim's side's structures
 (`killPush`) and goes on the record (`MapRecord.kills`, `.bounty`). The
-fallen hero waits `RESPAWN_TURNS` (2) of its owner's turns in its slot as a
-corpse (`respawnTimer`), then goes back to its owner's hand at full HP with its
-level and items (`heroToHand`), its slot left empty; with `RESPAWN_TURNS` 0 it
-goes straight there. An empty or fallen Active slot is filled from the bench
+fallen hero leaves the board at once (2026-11-18, `heroToDeck`): its slot is left
+empty and it is shuffled into its owner's deck at full HP, with no statuses and no
+skill waits, its level and exp kept; what it wore is shuffled in beside it, each
+item its own card (a 'toDeck' event, and a 'raise' for each item). An empty Active slot is filled from the bench
 (`laneOpen`: the promotion), or, empty, from the hand (`placeHero`). A board with
 every hero down is no loss by itself: at the End, if the rival has no standing
 hero, the ending player's standing Active pushes its bullet power into the
@@ -323,9 +323,9 @@ is live is pushed as usual, then comes straight back in place at
 full HP with its items and level (a `revive` event with `credit`), a credit
 spent. Credits lapse as their last round ends (`lapseRevives`).
 
-**The wait.** A fallen hero waits `RESPAWN_TURNS` own turns in every round,
-whatever it wears (`respawnTimer`), and then goes back to the hand. The
-Mid-Boss keeps its own return (`BOSS_RESPAWN_ROUNDS`).
+**The fall.** A fallen hero is shuffled into its owner's deck at once, in every
+round, whatever it wears (`heroToDeck`). The Mid-Boss keeps its own return
+(`BOSS_RESPAWN_ROUNDS`).
 
 **The end.** `checkWinner` (boardgame.io's `endIf`): a side whose Patron has
 fallen loses; both at once, and round `ROUND_CAP` ending (`G.capped`, set as

@@ -19,7 +19,7 @@ import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
   CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
-  MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT,
+  MAX_ITEMS, PRICE, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
@@ -529,8 +529,8 @@ export function wornWorth(hero: CardInstance): number {
 // 2r − 1 and 2r; a kill pushes the victim's level + 1 into its side's front
 // structure, an empty lane its pusher's bullet power, both doubled from round
 // 9 — and pays the killer's side the round's bounty, 1 soul and 1 more every
-// two rounds (docs/balance-model.md §7); a fallen hero waits RESPAWN_TURNS
-// of its owner's turns in its slot, then goes back to the hand; what stands
+// two rounds (docs/balance-model.md §7); a fallen hero leaves the board for its
+// owner's deck (2026-11-18); what stands
 // decides on more structure HP, then more net worth, then the second mover.
 // ---------------------------------------------------------------------------
 
@@ -555,11 +555,6 @@ export function killPushOracle(level: number, r: number): number {
   return (level + KILL_PUSH_BASE) * pushMultiplierOracle(r);
 }
 
-/** The wait of a hero that falls, own turns of its owner's, whatever the round
- *  and whatever it wears: RESPAWN_TURNS (0: straight to the hand). */
-export function respawnTimerOracle(_G: GameState, _hero: CardInstance, _r: number): number {
-  return RESPAWN_TURNS;
-}
 
 /** A side's standing structure HP. */
 export function structureHpOracle(ps: PlayerState): number {

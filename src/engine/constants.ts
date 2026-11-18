@@ -209,11 +209,11 @@ export const REVIVE_ROUNDS = 2;
 
 // ---------- Death ----------
 
-/** Own turns of its owner's a fallen hero waits in its slot (a corpse)
- *  before it goes back to its owner's hand, at full HP with its level and its
- *  items (Patrick, 2026-11-09). 0 sends it straight to the hand. (The
- *  Mid-Boss keeps its own return, BOSS_RESPAWN_ROUNDS.) */
-export const RESPAWN_TURNS = 2;
+// A fallen hero leaves the board at once and is shuffled into its owner's
+// deck with its items (Patrick, 2026-11-18; death.ts `heroToDeck`). Until
+// then it waited two of its owner's turns in its slot as a corpse
+// (RESPAWN_TURNS) and went back to the hand. (The Mid-Boss keeps its own
+// return, BOSS_RESPAWN_ROUNDS.)
 
 // ---------- Leveling ----------
 // Heroes start at Lv1, climb to Lv4 (cap). Step costs are 5 → 7 → 9 exp

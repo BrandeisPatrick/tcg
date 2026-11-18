@@ -89,10 +89,11 @@ function mergeRem(G: GameState, slot: 1 | 2 | 3, bearer: CardInstance): CardInst
 //     hero who is a corpse. Ricochet became a keyword on 2026-11-03 and no longer reaps
 //     mid-attack (the attack resolves once, at its end), so E1a and E1c now guard the outcome:
 //     the knocked-out hero comes back clean. (E1a was Shiv's on-hit Bleed; since the hero
-//     rebuild the status a swing puts on its target is Haze's Fixation.)
+//     rebuild the status a swing puts on its target is Haze's Fixation.) Since 2026-11-18 a
+//     fallen hero leaves the board for its deck; the same guards hold on the card there.
 // ===========================================================================
 describe('E1 a corpse carries no statuses', () => {
-  it('precondition: Shiv with Ricochet knocks the target out and the hero is a corpse afterwards', () => {
+  it('precondition: Shiv with Ricochet knocks the target out and the hero is shuffled into its deck', () => {
     const G = game();
     const shiv = makeHero('hero_shiv', '0', 'active', 0);
     giveItem(G, shiv, 'ricochet');
@@ -100,7 +101,7 @@ describe('E1 a corpse carries no statuses', () => {
     const foe = G.players['1'].active!;
     foe.hp = 1;
     expect(runMove('attack', G, '0')).not.toBe(INVALID_MOVE);
-    expect(foe.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(foe.zone).toBe('deck');
   });
 
   it('E1a a swing\'s on-hit status — Haze\'s Fixation stack — does not land on the Active she just knocked out (fuzz: heuristic-vs-heuristic seed 145 step 64 is the Weapon Shielding variant)', () => {
@@ -111,7 +112,7 @@ describe('E1 a corpse carries no statuses', () => {
     const foe = G.players['1'].active!;
     foe.hp = 1;
     expect(runMove('attack', G, '0')).not.toBe(INVALID_MOVE);
-    expect(foe.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(foe.zone).toBe('deck');
     expect(foe.statuses).toEqual([]);
   });
 
@@ -144,7 +145,7 @@ describe('E1 a corpse carries no statuses', () => {
     foe.hp = 1;
     const hpMax = foe.hpMax;
     runMove('attack', G, '0');
-    expect(foe.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(foe.zone).toBe('deck');
     expect(foe.statuses).toEqual([]);
     expect(foe.hpMax).toBe(hpMax); // it respawns at its true max HP
   });

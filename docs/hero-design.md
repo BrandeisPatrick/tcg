@@ -171,12 +171,10 @@ Patrick, 2026-11-09: Victor's revive should come from a separate system that oth
 ## 7. Decisions and open questions
 
 - **Decided:** the ultimate is a button on the hero, not a card. The other two options were a card in the deck, and a card made at Level 2.
-- **Decided: a fallen hero goes to your hand after 2 turns** (Patrick, 2026-11-09).
-  - It is a flat 2 all game, and the hero keeps its level.
-  - The 2 is one number in the rules (for example `RESPAWN_TURNS`), so it can change after play; 0 would mean straight to hand.
-  - Why: a knockout gives the enemy 2 turns to push, like a Deadlock respawn, and you know when the hero comes back.
-  - The other options were "back into the deck" and "straight to your hand".
-  - Victor's ultimate lets him skip the wait and get back up where he is.
+- **Decided: a fallen hero is shuffled back into your deck** (Patrick, 2026-11-18: "when hero die, just shuffle back to the deck").
+  - Its slot is left empty at once; no corpse stays on the board. It keeps its level, and what it wore is shuffled in beside it.
+  - It replaced "to your hand after 2 turns" (2026-11-09), which left a dead hero on the board for those turns.
+  - Victor's ultimate lets him skip the fall and get back up where he is.
 - **New engine rules the cards need:**
   - The Cube: the hero takes no damage until your next turn. The engine's dome may already do this.
   - Charged ultimates (Victor, Silver): the cost drops by 1 for each damage the hero takes or deals, and starts over after use.
@@ -731,7 +729,7 @@ Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way
 - **Shocking Reanimation** is an optional trigger at 'onFall' and has no button use: its plate reads
   "Asked when Victor falls". Used, he stands where he fell with half his max HP, rounded up, his
   items and statuses as they were. The knockout never happens: no push, no kill on the rival's
-  record, no Bloodscent knockout for a Drifter, no `RESPAWN_TURNS` wait, no kill exp. It shows as a
+  record, no Bloodscent knockout for a Drifter, no trip to the deck, no kill exp. It shows as a
   cast of his ultimate and a revive (`revive` with `cancelled`). Sinclair's Audience Participation
   cannot copy it (an optional trigger has nothing to cast at once).
 

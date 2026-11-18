@@ -278,10 +278,9 @@ export function discardFromHand(G: GameState, pid: PlayerID, iids: readonly stri
 // ---------- A fallen hero comes back ----------
 
 /**
- * `hero`, a corpse in one of `ps`'s slots whose wait is over (or, with
- * RESPAWN_TURNS 0, one that has just fallen), leaves the board for its
- * owner's hand: at full HP, its level, exp and items kept, its slot left
- * empty. A hero comes back even into a full hand (MAX_HAND limits draws).
+ * `hero`, standing in one of `ps`'s slots (lifted by Lash's Death Slam, or a
+ * riding Rem with nowhere to land), leaves the board for its owner's hand: at
+ * full HP, its level and exp kept, its slot left empty. A hero comes back even into a full hand (MAX_HAND limits draws).
  * `lifted`: no fall at all, but Lash's Death Slam (`bounceToHand`), which has
  * taken its items off first; the event says so.
  */

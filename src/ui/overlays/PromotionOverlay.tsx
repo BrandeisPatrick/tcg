@@ -1,14 +1,18 @@
 import { motion } from 'framer-motion';
-import type { CardInstance } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
-import { HeroPortrait } from '@/cards/art/heroArt';
-import { effectiveAtk } from '@/engine/query';
+import type { CardInstance, PlayerID } from '@/engine/types';
 import { fonts, spring, text } from '../tokens';
-import { atkInk, poster, sheetStyle, scrimStyle } from '../poster';
-import { HpSegments, PatronSigil, Souls, bandStyle, hpNumberStyle, scale } from '../hud';
-import { SwordIcon } from '../card/Icons';
+import { poster, sheetStyle, scrimStyle } from '../poster';
+import { PatronSigil, Souls, bandStyle, scale } from '../hud';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
+import { HeroSlot } from '../board/HeroSlot';
+
+/** A candidate's card: the board's Active card's measures (HeroSlot), a
+ *  step smaller on a phone. */
+const CARD_W = 150;
+const CARD_H = 206;
+const CARD_W_PHONE = 128;
+const CARD_H_PHONE = 176;
 
 interface Props {
   candidates: CardInstance[];
@@ -20,9 +24,6 @@ interface Props {
   /** Set at the match's opening: the candidates are the heroes in the
    *  opening hand, and the one picked is the side's first Active. */
   opening?: true;
-  /** The fallen hero's wait before it goes back to the hand, own turns
-   *  (RESPAWN_TURNS), for the promotion's footnote. */
-  backIn?: number;
   /** Set when the lane was left empty by a ride rather than a fall (Rem's Tag
    *  Along from the Active slot): `leavingName` rides on `bearerName`, and the
    *  sheet says so. */
@@ -37,10 +38,13 @@ interface Props {
  * interactions until a choice is made (no backdrop dismiss) — and when the
  * player retreats with more than one hero able to go in, where the backdrop
  * and a Cancel button back out. A cream sheet on the dark scrim; each
- * candidate is a tappable charcoal-framed portrait card. Board wraps this in
- * its own AnimatePresence, which drives the exit fade.
+ * candidate is the hero's own card as the board prints it (HeroSlot: its
+ * health, level, items, statuses and numbers; Patrick, 2026-11-18: "here we
+ * should just use normal card UI (card UI on board)"), and a tap on it picks
+ * it. Board wraps this in its own AnimatePresence, which drives the exit
+ * fade.
  */
-export function PromotionOverlay({ candidates, leavingName, retreat, opening, backIn, ride, onPick }: Props) {
+export function PromotionOverlay({ candidates, leavingName, retreat, opening, ride, onPick }: Props) {
   const { isMobile } = useViewport();
   return (
     <motion.div
@@ -95,7 +99,7 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
           display: 'grid',
           // 3-up on desktop; phones wrap to at most 2-up so the row never
           // exceeds the screen width.
-          gridTemplateColumns: `repeat(${Math.min(candidates.length, isMobile ? 2 : 3)}, ${isMobile ? 140 : 156}px)`,
+          gridTemplateColumns: `repeat(${Math.min(candidates.length, isMobile ? 2 : 3)}, ${isMobile ? CARD_W_PHONE : CARD_W}px)`,
           gap: isMobile ? 12 : 16,
           justifyContent: 'center',
         }}>
@@ -108,7 +112,18 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
               animate={{ y: 0, opacity: 1, scale: 1 }}
               transition={{ ...spring.default, delay: 0.1 + i * 0.07 }}
             >
-              <CandidateCard card={c} onPick={() => onPick(c.iid)} isMobile={isMobile} />
+              <div style={{ width: isMobile ? CARD_W_PHONE : CARD_W, height: isMobile ? CARD_H_PHONE : CARD_H }}>
+                <HeroSlot
+                  card={c}
+                  owner={c.ownerId as PlayerID}
+                  myId={c.ownerId as PlayerID}
+                  pending={null}
+                  isTargetable={false}
+                  tall={isMobile ? CARD_H_PHONE : CARD_H}
+                  offBoard
+                  onTap={() => onPick(c.iid)}
+                />
+              </div>
             </motion.div>
           ))}
         </div>
@@ -123,98 +138,12 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
               : `${leavingName} goes to the bench, free.`)
             : ride
             ? `Back on your bench when the ride ends.`
-            : backIn
-            ? `Back in your hand in ${backIn} turn${backIn === 1 ? '' : 's'}.`
-            : 'Back in your hand.'}
+            : `${leavingName} is shuffled into your deck.`}
         </span>
         {retreat && (
           <PosterButton variant="ink" size="sm" onClick={retreat.onCancel}>Cancel</PosterButton>
         )}
       </motion.div>
     </motion.div>
-  );
-}
-
-/**
- * A bench hero as a charcoal-framed print: art edge to edge, a cream label
- * band with the name and the live BP · HP readout. The whole card is the
- * button; hover lifts it and lights the frame.
- */
-function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick: () => void; isMobile: boolean }) {
-  const data = CARDS_BY_ID[card.cardId];
-  if (data?.type !== 'hero') return null;
-  return (
-    <motion.button
-      whileHover={{ y: -6, scale: 1.03, borderColor: poster.frameLit }}
-      whileTap={{ scale: 0.97 }}
-      onClick={onPick}
-      style={{
-        position: 'relative',
-        width: isMobile ? 140 : 156, height: isMobile ? 194 : 216,
-        padding: 0,
-        background: poster.frame,
-        border: `2px solid ${poster.edge}`,
-        borderRadius: 10,
-        boxShadow: '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)',
-        cursor: 'pointer',
-        overflow: 'hidden',
-        display: 'flex', flexDirection: 'column',
-        color: poster.ink,
-        textAlign: 'center',
-      }}
-    >
-      <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, background: '#0f1214' }}>
-        <HeroPortrait cardId={card.cardId} />
-        {/* Inner edge — the print sits slightly recessed in its frame. */}
-        <div aria-hidden style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)',
-        }} />
-      </div>
-      <div style={{
-        padding: '7px 8px 8px',
-        background: poster.paperBand,
-        borderTop: `1px solid ${poster.inkRule}`,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-      }}>
-        <span style={{
-          fontFamily: fonts.display,
-          fontSize: scale.body,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          lineHeight: 1.1,
-          color: poster.ink,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}>{data.name}</span>
-        {(() => {
-          const heroData: any = data;
-          const baseAtk: number = heroData.atk ?? 0;
-          const atk = effectiveAtk(card);
-          const shield = card.statuses?.find((st) => st.id === 'shield')?.value ?? 0;
-          // Health the same on every candidate: the plain ink number and the
-          // segmented bar, straight on the label. Bullet Power is an ink
-          // number with its icon.
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', boxSizing: 'border-box' }}>
-              <span role="img" aria-label={`${card.hp} of ${card.hpMax} HP`} style={{
-                flex: 1, minWidth: 0,
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '4px 0',
-              }}>
-                <span style={hpNumberStyle(scale.number)}>{card.hp}</span>
-                <HpSegments hp={card.hp} max={card.hpMax} shield={shield} width="100%" height={8} />
-              </span>
-              <span role="img" aria-label={`${atk} Bullet Power`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-                <SwordIcon size={12} color={atkInk(atk, baseAtk)} />
-                <span style={{ ...text.numeric, fontSize: scale.number, color: atkInk(atk, baseAtk) }}>{atk}</span>
-              </span>
-            </div>
-          );
-        })()}
-      </div>
-    </motion.button>
   );
 }

@@ -262,7 +262,7 @@ describe('Channeled board-wipe archetype (the channel statuses, set directly: no
     // Simulate three end-of-turn pulses (channel value stays flat at 3).
     for (let i = 0; i < 3; i++) tickCastingPulses(G, G.players['0']);
     expect(self.statuses.find((s) => s.id === 'casting')?.value).toBe(3); // no escalation
-    expect(enemies.every((e) => e.hp <= 0)).toBe(true);
+    expect(enemies.every((e) => e.hp <= 0 || e.zone === 'deck')).toBe(true); // felled (reaped: in the deck)
   });
 
   it('an escalating channel (ramp 1, set directly) climbs 2 → 3 → 4 each pulse', () => {

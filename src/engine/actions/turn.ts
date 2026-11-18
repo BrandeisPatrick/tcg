@@ -36,24 +36,6 @@ function fireBoardTriggers(G: GameState, pid: PlayerID, trigger: Trigger) {
   }
 }
 
-/**
- * Tick down the wait of `pid`'s heroes that are corpses in their slots. On
- * reaching 0 the hero leaves the board for the hand, at full HP, its level and
- * its items intact (`heroToHand`), and its slot is left empty — the state-based
- * pass then fills an empty Active slot from the bench.
- */
-function tickRespawn(G: GameState, pid: PlayerID) {
-  const ps = G.players[pid];
-  const corpses: CardInstance[] = [];
-  if (ps.active && isRespawning(ps.active)) corpses.push(ps.active);
-  for (const b of ps.bench) if (b && isRespawning(b)) corpses.push(b);
-
-  for (const hero of corpses) {
-    hero.respawnTurnsLeft = (hero.respawnTurnsLeft ?? 0) - 1;
-    if (hero.respawnTurnsLeft <= 0) heroToHand(G, ps, hero);
-  }
-}
-
 /** The start of `pid`'s turn — its Income and its draw. `ctxTurn` is
  *  boardgame.io's turn count, which includes the draft's turns; the engine
  *  turn is that minus the offset captured when the draft finished. In order:
@@ -85,10 +67,6 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   ps.souls += paid.total;
   ps.incomeBonus = 0; // Cultist Sacrifice's souls are paid once
   pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}${paid.trophy ? `, +${paid.trophy} Trophy Collector` : ''}${paid.bonus ? `, +${paid.bonus} Cultist Sacrifice` : ''}).`);
-  // The wait ticks ONLY for the player whose turn is starting, so a corpse
-  // counts down once per round (on its owner's turn): a timer of N is N of the
-  // owner's turns of downtime (RESPAWN_TURNS).
-  tickRespawn(G, pid);
   // Deck-out (2026-11-16): a side whose deck is empty when its draw comes
   // loses, as in the Pokémon TCG. The match ends here (`checkWinner`).
   if (G.deckOut && ps.deck.length === 0) {

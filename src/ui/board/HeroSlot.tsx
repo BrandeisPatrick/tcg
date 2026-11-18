@@ -86,11 +86,15 @@ interface Props {
   ready?: boolean;
   /** Its side has the flex slot (the enemy Walker fell): a fourth chip socket. */
   flexSlot?: boolean;
+  /** The card shown off the board, the same card (the promotion sheet's
+   *  candidates): it takes no part in the board's shared layout, so the hero
+   *  on the bench does not fly to it. */
+  offBoard?: boolean;
 }
 
 export function HeroSlot({
   card, owner, myId, pending, isTargetable, compact, tall,
-  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready, flexSlot,
+  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready, flexSlot, offBoard,
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
@@ -212,7 +216,7 @@ export function HeroSlot({
     <div data-fx-rest style={{ position: 'absolute', inset: 0, perspective: TILT_PERSPECTIVE }}>
     {ring && <Ring color={ring.color} pulse={!calm} soft={ring.soft} />}
     <motion.button
-      layoutId={`hero-${card.iid}`}
+      layoutId={offBoard ? undefined : `hero-${card.iid}`}
       ref={(el) => { tileRef.current = el; registerSlotRef?.(card.iid, el); }}
       aria-label={isCorpse
         ? `${data.name} — down, respawns in ${respawnLeft} turn${respawnLeft === 1 ? '' : 's'}`

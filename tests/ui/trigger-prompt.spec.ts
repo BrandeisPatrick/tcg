@@ -74,7 +74,7 @@ describe('the trigger prompt names the moment, the card and what it takes', () =
     victor.tally = { eff_ult_victor: 7 }; // and Haze's blow at a hurt hero, 1 + Fixation's 1: 9
     G.players['1'].active = victor;
     perform(G, '0', { type: 'attack' });
-    expect(victor.hp).toBe(0);
+    expect(victor.zone).toBe('deck'); // he fell: shuffled into his deck
     expect(promptOwed(G)).toBeFalsy();
   });
 });

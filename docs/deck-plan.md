@@ -235,9 +235,14 @@ them regularly; an upgrade costs much less").
 
 ## A fallen hero
 
-A fallen hero goes to your hand after 2 of your turns and keeps its level (Patrick, 2026-11-09).
-- The wait is one constant (`RESPAWN_TURNS = 2`), so it can change after play. 0 means straight to hand.
-- It replaces today's respawn-by-round for heroes. Bosses keep their own respawn.
+A fallen hero is shuffled back into your deck at once (Patrick, 2026-11-18: "when hero dies, the
+board is just empty, dont leave a dead hero on the board … just shuffle back to the deck").
+- Its slot is left empty: no corpse stays on the board. A fallen Active opens the lane, and the side
+  steps a bench hero up (the promotion).
+- It goes in at full HP, with no statuses and no skill waits, and keeps its level and exp: drawn and
+  put down again, it comes back at its rank. (Its ultimate's opening wait runs on.)
+- What it wore is shuffled in beside it, each item its own card again.
+- It replaces the 2-turn wait in the slot (2026-11-09 to 2026-11-18). Bosses keep their own respawn.
 
 ## Rival AI
 
@@ -261,10 +266,10 @@ where a lesson teaches the shop, change it to teach the deck.
 
 Built on `deck-and-heroes`. Where the build reads the plan one way of several:
 
-- A fallen hero waits as a corpse in its slot for `RESPAWN_TURNS`, then goes to
-  the hand with its level and its items still on it. Benched again, it brings them.
+- A fallen hero is shuffled into its deck at once, its items beside it as their own cards
+  (2026-11-18; until then it waited 2 turns as a corpse and went to the hand wearing them).
 - A returning hero goes to the hand even when it is full (the cap of 10 limits draws).
-- An empty lane (a fallen Active gone to the hand) can take a hero straight from
+- An empty lane (a fallen Active gone to the deck) can take a hero straight from
   the hand. A hero benched while the lane is open steps up, as a promotion.
 - The hero guarantee asks for a hero that can stand in the lane. Every hero can since Rem
   stands in the lane (2026-11-09); the rule stays for a bench-only card.

@@ -29,7 +29,7 @@ import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { heroForm } from '@/cards/art/heroArt';
-import { EXP_ON_KILL, RESPAWN_TURNS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
+import { EXP_ON_KILL, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame } from './_helpers';
 import { playGame } from './fuzz/driver';
 
@@ -89,7 +89,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
       expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
       expect(promptOwed(G)).toBeUndefined();
       expect(G.triggers).toBeUndefined();
-      expect(victor.respawnTurnsLeft).toBe(RESPAWN_TURNS);           // a corpse, waiting
+      expect(victor.zone).toBe('deck');                               // shuffled into his deck
       expect(structureHp(G.players['1'])).toBeLessThan(before);       // the push
       expect(G.record['0'].kills).toBe(1);
     }
@@ -149,7 +149,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     expect(blocked(G, '0', { type: 'endTurn' })).toBeNull();
   });
 
-  it('pass: the fall goes ahead as it would have — the push, the kill, the wait, and the blow\'s exp', () => {
+  it('pass: the fall goes ahead as it would have — the push, the kill, the deck, and the blow\'s exp', () => {
     const { G, victor, haze } = victorAtTheBrink();
     const before = structureHp(G.players['1']);
     const hazeExp = haze.exp ?? 0;
@@ -158,7 +158,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     expect(perform(G, '1', { type: 'passTrigger' })).not.toBe(INVALID);
     expect(G.triggers).toBeUndefined();
     expect(G.players['1'].souls).toBe(PURSE);
-    expect(victor.respawnTurnsLeft).toBe(RESPAWN_TURNS);
+    expect(victor.zone).toBe('deck');
     expect(structureHp(G.players['1'])).toBe(before - (ULT_UNLOCK_LEVEL + 1));
     expect(G.record['0'].kills).toBe(1);
     expect(haze.exp).toBe(hazeExp + EXP_ON_KILL);
@@ -236,7 +236,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     expect(promptOwed(s.G)).toMatchObject({ pid: '0', subjectIid: victor.iid });
     expect(s.ctx.activePlayers).toEqual({ '0': 'respond' });
     client.moves.passTrigger();
-    expect(client.getState()!.G.players['0'].active!.respawnTurnsLeft).toBe(RESPAWN_TURNS);
+    expect(client.getState()!.G.players['0'].deck.some((c) => c.iid === victor.iid)).toBe(true);
     expect(client.getState()!.ctx.activePlayers).toBeNull();
     client.stop();
   });

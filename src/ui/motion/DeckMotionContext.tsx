@@ -46,6 +46,8 @@ export interface DeckMotion {
   rivalPlaced: number;
   ticker: PileTicker;
   calm: boolean;
+  /** The game as it was before the batch (null at the first render). */
+  before: GameState | null;
 }
 
 /**
@@ -54,18 +56,22 @@ export interface DeckMotion {
  * render says where each card was before the batch. Under calm motion the plan
  * is empty: the piles and the hand just update.
  */
-export function useDeckMotion(freshFx: readonly FxEvent[], freshFxKey: number, G: GameState, me: PlayerID): DeckMotion {
+export function useDeckMotion(freshFx: readonly FxEvent[], freshFxKey: number, G: GameState, me: PlayerID, leaveAt?: Record<string, number>): DeckMotion {
   const calm = useCalmMotion();
   const ticker = useMemo(() => new PileTicker(), []);
   const beforeRef = useRef<GameState | null>(null);
   const plan = useMemo(
-    () => (calm || freshFxKey === 0 ? EMPTY_PLAN : planDeckMotion(freshFx, { me, before: beforeRef.current, after: G })),
+    () => (calm || freshFxKey === 0 ? EMPTY_PLAN : planDeckMotion(freshFx, { me, before: beforeRef.current, after: G, leaveAt })),
     // The batch is the dependency; G is the game it arrived with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [freshFxKey, calm],
   );
+  // The game before this batch, kept for the board (the fallen heroes it
+  // draws in their slots while their knockout plays): read before the effect
+  // below moves it on.
+  const before = beforeRef.current;
   useEffect(() => { beforeRef.current = G; }, [G]);
   useEffect(() => () => ticker.clear(), [ticker]);
   const arriving = useMemo(() => arrivingIids(plan, me), [plan, me]);
-  return { plan, arriving, openingDelay: plan.opening ? plan.total : 0, rivalPlaced: rivalPlacedBy(plan, me), ticker, calm };
+  return { plan, arriving, openingDelay: plan.opening ? plan.total : 0, rivalPlaced: rivalPlacedBy(plan, me), ticker, calm, before };
 }

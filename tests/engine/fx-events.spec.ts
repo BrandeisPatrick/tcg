@@ -105,7 +105,7 @@ describe("board FX stream — Djinn's Mark", () => {
     expect(marks).toHaveLength(0);
     expect(hits(G).some((h) => h.tag === 'djinns_mark')).toBe(false);
     expect(G.log.some((l) => /Djinn's Mark detonates/.test(l.text))).toBe(false);
-    expect(target.hp).toBe(0);
+    expect(target.zone).toBe('deck');
   });
 
   it('nor does it when Return Fire has dropped Mirage on his own swing', () => {

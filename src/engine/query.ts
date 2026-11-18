@@ -27,7 +27,7 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, START_LEVEL, ULT_WAIT,
+  CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, SKILL_COOLDOWN, START_LEVEL, ULT_WAIT,
 } from './constants';
 import { pushMultiplier, round, secondMover } from './rounds';
 
@@ -76,10 +76,13 @@ export function bossDue(G: Pick<GameState, 'midBoss' | 'boss' | 'bossRespawnRoun
   return G.midBoss && !G.boss ? G.bossRespawnRound : null;
 }
 
-/** True when a hero is currently a corpse waiting to respawn (greyed in UI,
- *  can't act / be targeted / take damage / receive statuses). */
+/** True when a card is down: off the board (it fell and was shuffled into
+ *  its deck, 2026-11-18, or is in the hand or the discard pile) — or, as
+ *  before then, a corpse waiting in its slot. It can't act, be targeted, take
+ *  damage or receive statuses. An effect that held a hero across the blow
+ *  that felled it reads this, so it does nothing to the hero in the deck. */
 export function isRespawning(card: CardInstance): boolean {
-  return (card.respawnTurnsLeft ?? 0) > 0;
+  return (card.respawnTurnsLeft ?? 0) > 0 || card.zone === 'deck' || card.zone === 'hand' || card.zone === 'discard';
 }
 
 /** A player's heroes in a slot, in board order — the Active, then bench
@@ -213,13 +216,6 @@ export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
  *  pays are `killBounty`, rounds.ts.) */
 export function killPush(G: GameState, hero: CardInstance): number {
   return ((hero.level ?? START_LEVEL) + KILL_PUSH_BASE) * pushMultiplier(G);
-}
-
-/** Own turns a hero that falls now waits in its slot before it goes back to
- *  its owner's hand: RESPAWN_TURNS, for every hero at every point of the
- *  match (0: it goes straight to the hand). */
-export function respawnTimer(_G: GameState, _hero: CardInstance): number {
-  return RESPAWN_TURNS;
 }
 
 /** True while `pid`'s Rejuvenator can bring a hero back: a credit left, in a
