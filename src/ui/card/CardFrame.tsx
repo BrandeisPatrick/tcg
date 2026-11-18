@@ -160,6 +160,26 @@ const ART_INNER_EDGE = 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px 
 // inset ring, never on outer glows.
 const CARD_SHADOW = '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)';
 
+/**
+ * Each kind of card wears its own frame (Patrick, 2026-11-18: "the card frame
+ * should be different for equipment and spell and hero"), told apart at a
+ * glance by its light and its corners:
+ *  - equipment, which stays on a hero: a cream plate with square corners, the
+ *    art set into it like a mounted print;
+ *  - a spell, played once: an ink ticket with round corners, its name in
+ *    cream on an ink band;
+ *  - a hero: the charcoal portrait frame (its level green once it has one).
+ */
+type FrameKind = 'hero' | 'equipment' | 'spell' | 'other';
+const FRAMES: Record<FrameKind, { radius: number; ground: string; edge: string; inset: number }> = {
+  hero: { radius: 10, ground: poster.frame, edge: poster.edge, inset: 0 },
+  equipment: { radius: 3, ground: poster.paperBand, edge: poster.ink, inset: 4 },
+  spell: { radius: 18, ground: poster.ink, edge: poster.ink, inset: 0 },
+  other: { radius: 10, ground: poster.frame, edge: poster.edge, inset: 0 },
+};
+const frameKindOf = (data: CardData | undefined): FrameKind =>
+  !data ? 'other' : data.type === 'hero' ? 'hero' : data.type === 'equipment' ? 'equipment' : data.type === 'spell' ? 'spell' : 'other';
+
 function typeLabel(data: CardData | undefined): string {
   if (!data) return '';
   switch (data.type) {
@@ -353,15 +373,19 @@ export function CardFrame({
   // A hero with a level wears its level green as its frame (the tile's rule);
   // a state colour still takes the frame over, as it does on every card.
   const leveled = isHero && level !== undefined && !stateColor;
+  const frame = FRAMES[frameKindOf(data)];
   const containerStyle: CSSProperties = {
-    width: sz.w,
-    height: sz.h,
-    borderRadius: 10,
-    background: poster.frame,
+    // A plate's inset comes out of the card, not on top of it: every kind is
+    // the same size.
+    width: sz.w - 2 * frame.inset,
+    height: sz.h - 2 * frame.inset,
+    padding: frame.inset,
+    borderRadius: frame.radius,
+    background: frame.ground,
     ...(leveled
       ? { ...levelFrame(level, 2), boxShadow: `${levelFrameKeylines}, ${CARD_SHADOW}` }
       : {
-          border: `2px solid ${stateColor ?? (lit ? poster.frameLit : poster.edge)}`,
+          border: `2px solid ${stateColor ?? (lit ? poster.frameLit : frame.edge)}`,
           boxShadow: stateColor ? `inset 0 0 0 2px ${stateColor}, ${CARD_SHADOW}` : CARD_SHADOW,
         }),
     position: 'relative',
@@ -400,7 +424,8 @@ export function CardFrame({
     // The name sits on the foot band, in the card's own case, on up to two
     // lines; under `nameMin` (a covered card's strip too narrow for its
     // longest word) it is dropped and the card shows its art and seal.
-    const room = (nameRoom ?? sz.w) - 12;
+    const room = (nameRoom ?? sz.w) - 12 - 2 * frame.inset;
+    const ticket = frameKindOf(data) === 'spell';
     const name = fitNameLines(data?.name ?? cardId, room, NAME_BASE, nameMin ?? NAME_FLOOR);
     const nameFits = name.size >= (nameMin ?? NAME_FLOOR) && name.lines.every((l) => measureName(l, name.size) <= room + 0.5);
     const item = itemCard(cardId);
@@ -419,7 +444,7 @@ export function CardFrame({
         onPointerMove={onPointerMove}
       >
         {/* The art, filling the card above the foot. */}
-        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: poster.ground, transition: 'filter 200ms ease', ...ghost }}>
+        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: poster.ground, borderRadius: frame.inset ? 2 : 0, transition: 'filter 200ms ease', ...ghost }}>
           <ArtWindow data={data} art={art} />
           <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
         </div>
@@ -449,8 +474,9 @@ export function CardFrame({
           boxSizing: 'border-box',
           display: 'flex', flexDirection: 'column', justifyContent: 'center',
           padding: '0 6px',
-          background: poster.paperBand,
-          color: dimmed ? poster.inkDim : poster.ink,
+          // A spell's name is cream on its ink ticket; the rest print in ink on paper.
+          background: ticket ? poster.ink : poster.paperBand,
+          color: ticket ? (dimmed ? poster.creamDim : poster.cream) : dimmed ? poster.inkDim : poster.ink,
           borderTop: `3px solid ${rule}`,
           fontFamily: fonts.display,
           fontSize: name.size,
